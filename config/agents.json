@@ -1,0 +1,79 @@
+{
+  "$schema": "./agents.schema.json",
+  "agents": [
+    {
+      "id": "sallie",
+      "name": "Sallie",
+      "kind": "openclaw",
+      "customer": "KnowAll AI",
+      "environment": "prod",
+      "description": "AI sales agent on Azure — Teams chat, email and voice calls with a lip-synced avatar.",
+      "portalUrl": "https://sallie.knowall.ai",
+      "healthUrl": "https://sallie.knowall.ai/health",
+      "repo": "knowall-ai/sallie-openclaw",
+      "skillsPath": ".claude/skills",
+      "resourceGroups": ["ka-agents"]
+    },
+    {
+      "id": "zaplie",
+      "name": "Zaplie",
+      "kind": "botframework",
+      "customer": "KnowAll AI",
+      "environment": "prod",
+      "description": "Microsoft Teams bot that rewards teammates, copilots and customers with Bitcoin sats.",
+      "portalUrl": "https://zaplie-prod-webapp.azurewebsites.net",
+      "repo": "knowall-ai/zaplie-bot",
+      "resourceGroups": ["ka-zaplie-prod"],
+      "healthUrl": "https://zaplie-prod-webapp.azurewebsites.net"
+    },
+    {
+      "id": "zaplie-test",
+      "name": "Zaplie (Test)",
+      "kind": "botframework",
+      "customer": "KnowAll AI",
+      "environment": "test",
+      "description": "Test deployment of the Zaplie Teams bot with its Azure AI Foundry agents.",
+      "repo": "knowall-ai/zaplie-bot",
+      "resourceGroups": ["ka-zaplie-test"],
+      "portalUrl": "https://zaplie-test-webapp.azurewebsites.net"
+    },
+    {
+      "id": "winnie",
+      "name": "Winnie",
+      "kind": "foundry",
+      "customer": "Irish FA",
+      "environment": "dev",
+      "description": "Irish FA ticketing assistant — drafts replies to ticket enquiries for human review. In development on the KnowAll tenant.",
+      "resourceGroups": ["rg-winnie-dev"]
+    },
+    {
+      "id": "allie",
+      "name": "Allie",
+      "kind": "foundry",
+      "customer": "Cairn Homes",
+      "environment": "dev",
+      "description": "Cairn Homes agent — not yet built.",
+      "planned": true
+    },
+    {
+      "id": "pennie",
+      "name": "Pennie",
+      "kind": "botframework",
+      "customer": "KnowAll AI",
+      "environment": "prod",
+      "description": "AI business analyst that joins Microsoft Teams meetings as a real-time participant (T-Minus-15).",
+      "repo": "knowall-ai/preppie-bot",
+      "resourceGroups": ["tminus15agents"]
+    },
+    {
+      "id": "pennie-test",
+      "name": "Pennie (Test)",
+      "kind": "botframework",
+      "customer": "KnowAll AI",
+      "environment": "test",
+      "description": "Test deployment of Pennie on a spot VM.",
+      "repo": "knowall-ai/preppie-bot",
+      "resourceGroups": ["tminus15agents-test"]
+    }
+  ]
+}

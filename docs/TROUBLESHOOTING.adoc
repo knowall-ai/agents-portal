@@ -1,0 +1,49 @@
+= Agent Dashboard Troubleshooting Guide
+:toc: left
+:icons: font
+
+== Common Issues
+
+[cols="2,3"]
+|===
+|Problem |Solution
+
+|**"Sign in failed" after Microsoft login**
+|Verify the redirect URI on the app registration matches exactly: `https://agents.knowall.ai/api/auth/callback/azure-ad` (or `http://localhost:3103/...`). Check `AZURE_AD_CLIENT_ID` and `AZURE_AD_CLIENT_SECRET`.
+
+|**"Sign-in is not configured" on the login page**
+|`AZURE_AD_CLIENT_ID` / `AZURE_AD_CLIENT_SECRET` are missing. Copy `.env.example` to `.env` and fill them in.
+
+|**"Need admin approval" when signing in from a customer tenant**
+|An admin in that tenant must consent once: `https://login.microsoftonline.com/common/adminconsent?client_id=<AZURE_AD_CLIENT_ID>`.
+
+|**"Could not load agents from Azure" (ARM 403)**
+|The signed-in user needs *Reader* on the agents' subscriptions or resource groups. Resource Graph only returns resources the user can read.
+
+|**An agent is missing**
+|Its resources have no `agent` / `project` tag and no registry entry claims the resource group. Tag them or add an entry to `config/agents.json` (see docs/ONBOARDING.adoc). Remember tags on a resource group are not inherited by resources.
+
+|**Customer agent not visible from the KnowAll tenant**
+|Lighthouse delegation is missing or grants the wrong principal. Run `az managedservices assignment list` in the customer subscription. The delegated group must include the signed-in user.
+
+|**Agent shows Degraded although the VM is running**
+|The reachability probe to `healthUrl` / `portalUrl` failed. Check the URL answers from the internet (a `302` to sign-in is fine). Remove `healthUrl` if the portal is intentionally private.
+
+|**Skills list is empty for an OpenClaw agent**
+|Set `repo` and `skillsPath` in `config/agents.json`. For private repos set `GITHUB_TOKEN` on the server. Check the server log for `GitHub 404`.
+
+|**No AI Foundry assistants shown**
+|The token exchange for `https://ai.azure.com/.default` failed — the app registration needs the *Azure Machine Learning Services / user_impersonation* delegated permission with admin consent, and the user needs *Azure AI User* on the AI Services account.
+
+|**Activity feed is empty**
+|The Azure Activity Log only keeps 90 days and the dashboard shows 7. Only Succeeded/Failed events are listed. GitHub commits need `repo` in the registry.
+
+|**Tenant switcher shows only one tenant**
+|`GET https://management.azure.com/tenants` lists tenants where the user has an account (member or guest). Invite the user as a guest to the customer tenant first.
+
+|**Stale data after fixing something in Azure**
+|Results are cached for `CACHE_TTL_SECONDS` (default 60). Wait a minute or restart the app.
+
+|**Dev server errors after switching branches**
+|`rm -rf .next && bun run dev`.
+|===

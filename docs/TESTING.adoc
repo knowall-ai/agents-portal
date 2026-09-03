@@ -1,0 +1,35 @@
+= Testing Guide
+:toc: left
+:icons: font
+
+== Unit tests (Vitest)
+
+Pure logic in `src/lib/agents/discover.ts` — grouping, status derivation, Lighthouse detection — is covered by `src/lib/agents/discover.test.ts`.
+
+[source,bash]
+----
+bun run test:unit
+bun run test:unit:watch
+----
+
+== End-to-end tests (Playwright)
+
+Tests in `tests/` run against the dev server on port 3103 (started automatically). They cover the unauthenticated surface: landing page, login page, metadata and API auth guards. They do not need Azure credentials.
+
+[source,bash]
+----
+bunx playwright install chromium   # first time
+bun run test
+bun run test:ui
+----
+
+Screenshots are written to `test-results/` and console errors fail the login-page test.
+
+== Manual checks (signed in)
+
+. Sign in with a KnowAll account.
+. *Home*: stat tiles show counts; Sallie, Zaplie, Winnie and Allie are listed.
+. *Agents*: filters by customer, status and kind work; search matches resource groups.
+. *Agent → Sallie*: VM shown as running, reachability *Responding (HTTP 302)*, skills listed from GitHub, commits in activity.
+. *Agent → Winnie*: AI Foundry assistants table lists the Winnie assistants with models and tools; runs appear in activity.
+. *Tenant switcher*: lists your tenants; switching re-signs-in and changes the agent list.

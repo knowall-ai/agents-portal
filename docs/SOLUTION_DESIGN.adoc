@@ -1,0 +1,221 @@
+= Agent Dashboard Solution Design
+:toc: left
+:toclevels: 3
+:icons: font
+
+== Overview
+
+Agent Dashboard is a read-only operations portal for the AI agents KnowAll AI builds and runs. It answers three questions for every agent: *Is it up?*, *What can it do?* and *What has it been doing?* — across KnowAll's own tenant and customer tenants.
+
+It stores nothing. Everything is read live from Azure, GitHub and Azure AI Foundry using the signed-in user's own permissions, then cached in memory for a minute.
+
+== Architecture
+
+[mermaid]
+....
+flowchart LR
+    Browser["Browser"] --> App["Agent Dashboard<br/>(Next.js on App Service)"]
+    App --> Entra["Microsoft Entra ID<br/>(multi-tenant app)"]
+    App --> ARM["Azure Resource Manager<br/>Resource Graph · Activity Log"]
+    App --> Foundry["Azure AI Foundry<br/>Assistants API"]
+    App --> GitHub["GitHub REST API<br/>skills · commits"]
+    App --> Portal["Agent portals<br/>(health probe)"]
+
+    subgraph KnowAll["KnowAll tenant"]
+        Sallie["Sallie · VM (OpenClaw)"]
+        Zaplie["Zaplie · App Service + Bot Service"]
+        Winnie["Winnie (dev) · AI Foundry"]
+    end
+    subgraph Customer["Customer tenant (Azure Lighthouse)"]
+        Allie["Allie · AI Foundry"]
+    end
+    ARM -.-> KnowAll
+    ARM -.->|delegated| Customer
+....
+
+=== Technology Stack
+
+[cols="1,2"]
+|===
+|Component |Technology
+
+|Frontend
+|Next.js 16 (App Router), React 19, TypeScript
+
+|Styling
+|Tailwind CSS 4 with CSS variables (shared palette with ZapDesk)
+
+|Authentication
+|NextAuth.js with Azure AD provider, multi-tenant
+
+|Discovery
+|Azure Resource Graph (`Resources`, `ResourceContainers`)
+
+|Activity
+|Azure Activity Log (`Microsoft.Insights/eventtypes/management`), GitHub commits, AI Foundry runs
+
+|Skills
+|GitHub `SKILL.md` folders, AI Foundry assistant tools
+
+|Deployment
+|Azure App Service (Node.js 20, standalone build)
+|===
+
+== Authentication and Tokens
+
+=== Sign-in
+
+. User clicks *Sign in with Microsoft*
+. NextAuth redirects to `https://login.microsoftonline.com/<tenant>/oauth2/v2.0/authorize` — `<tenant>` is `common` by default or the tenant chosen in the tenant switcher
+. Requested scopes: `openid profile email offline_access https://management.azure.com/user_impersonation`
+. The ARM access token, refresh token and the `tid` claim are stored in the encrypted NextAuth JWT
+
+=== Additional resources
+
+Entra issues one access token per resource. For AI Foundry (`https://ai.azure.com/.default`) and Microsoft Graph (`User.Read`) the server exchanges the refresh token for a resource-specific access token (`src/lib/tokens.ts`). These are cached for five minutes per user.
+
+=== Required app permissions (delegated)
+
+[cols="2,1,3"]
+|===
+|API |Permission |Used for
+
+|Microsoft Graph
+|`User.Read`, `openid`, `profile`, `email`, `offline_access`
+|Sign-in, profile photo
+
+|Azure Service Management
+|`user_impersonation`
+|Resource Graph, subscriptions, tenants, Activity Log
+
+|Azure Machine Learning Services (`https://ai.azure.com`)
+|`user_impersonation`
+|AI Foundry Assistants API (assistants, threads, runs)
+|===
+
+== Agent Discovery
+
+=== Resource Graph query
+
+One query returns every agent-shaped resource the user can read, across all subscriptions — including subscriptions delegated from other tenants through Azure Lighthouse:
+
+[source]
+----
+Resources
+| where type in~ ('microsoft.compute/virtualmachines', 'microsoft.web/sites',
+                  'microsoft.botservice/botservices', 'microsoft.cognitiveservices/accounts',
+                  'microsoft.machinelearningservices/workspaces',
+                  'microsoft.app/containerapps', 'microsoft.containerinstance/containergroups')
+| project id, name, type, kind, location, resourceGroup, subscriptionId, tenantId, tags,
+    powerState = tostring(properties.extended.instanceView.powerState.code),
+    siteState = tostring(properties.state),
+    provisioningState = tostring(properties.provisioningState),
+    hostName = tostring(properties.defaultHostName)
+----
+
+=== Grouping rules
+
+Resources are grouped into agents by `groupResources()` in `src/lib/agents/discover.ts`:
+
+. A registry entry in `config/agents.json` whose `resourceGroups` contains the resource's group claims it.
+. Otherwise the first tag found from `AGENT_TAG_KEYS` (default `agent`, then `project`) names the agent; the value is slugified (`Zaplie Test` → `zaplie-test`).
+. Anything else is ignored.
+
+Registry entries without resources are still listed — as *Planned* when `planned: true`, otherwise *Unknown*.
+
+=== Status derivation
+
+[cols="1,3"]
+|===
+|Status |Rule
+
+|Online
+|All compute resources (VMs, App Services, container apps) are running, or the agent has only managed resources (Bot Service, AI Services)
+
+|Degraded
+|Some compute is stopped, *or* compute is running but the agent's `healthUrl` / `portalUrl` did not answer with a 2xx/3xx
+
+|Offline
+|All compute is stopped or deallocated
+
+|Planned
+|Registry entry with `planned: true` and no resources
+
+|Unknown
+|No resources and not planned, or compute state could not be read
+|===
+
+The reachability probe uses `redirect: 'manual'`; agent portals behind Entra SSO answer `302` to the login page, which still proves the host is serving.
+
+=== Lighthouse detection
+
+Every Resource Graph row carries `tenantId` — the tenant that owns the resource. When it differs from the tenant in the user's session, the agent is flagged `delegated` and shows a *Lighthouse* badge.
+
+== Data Sources per Agent Kind
+
+[cols="1,2,2,2"]
+|===
+|Kind |Status |Skills |Activity
+
+|`openclaw` (e.g. Sallie)
+|VM power state + portal probe
+|`SKILL.md` folders in the agent's repo (`skillsPath`, symlinks followed)
+|Azure Activity Log for the resource group + GitHub commits
+
+|`foundry` (e.g. Winnie)
+|AI Services account + any function app
+|Tools declared on each Foundry assistant
+|Azure Activity Log + recent runs across the latest threads
+
+|`botframework` (e.g. Zaplie)
+|App Service state + Bot Service
+|Foundry assistants attached to the bot's AI Services account (if any)
+|Azure Activity Log + GitHub commits
+|===
+
+== API
+
+All routes require a session unless noted; they return `401` when unauthenticated.
+
+[cols="2,3"]
+|===
+|Route |Returns
+
+|`GET /api/agents`
+|`{ tenantId, agents: AgentSummary[] }`
+
+|`GET /api/agents/:id`
+|`{ agent: AgentDetail, assistants: FoundryAssistant[] }` — includes resources, Foundry projects and the reachability probe
+
+|`GET /api/agents/:id/skills`
+|`{ skills: Skill[] }`
+
+|`GET /api/agents/:id/activity`
+|`{ events: ActivityEvent[] }` (last 7 days, max 50)
+
+|`GET /api/activity?limit=60`
+|Merged feed across all agents
+
+|`GET /api/tenants`
+|Tenants the user belongs to, with the current one flagged
+
+|`POST /api/tenants/select`
+|Sets the tenant cookie for the next sign-in
+
+|`GET /api/me/photo`
+|Profile photo via Microsoft Graph
+
+|`GET /api/health`
+|Public liveness endpoint
+|===
+
+== Caching
+
+`src/lib/cache.ts` is a per-process TTL cache keyed by tenant and user, so users never see each other's data. Defaults: 60 s for Azure lookups (`CACHE_TTL_SECONDS`), 10 min for skills, 5 min for exchanged tokens. The UI polls agents every 60 s and activity every 2 min.
+
+== Security Considerations
+
+* The dashboard never holds credentials with more access than the signed-in user; Azure RBAC decides what is visible.
+* Only `GITHUB_TOKEN` is a server-held secret, and it needs Contents: read only.
+* Tokens are never logged; NextAuth logging is redacted.
+* The tenant cookie is `httpOnly`, `sameSite=lax`, validated against a GUID pattern.

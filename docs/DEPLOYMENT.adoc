@@ -1,0 +1,83 @@
+= Deployment Guide
+:toc: left
+:icons: font
+
+== Overview
+
+Agent Dashboard deploys to Azure App Service as a Next.js standalone build, the same way as ZapDesk. Pushing a `v*` tag runs `.github/workflows/deploy.yml`.
+
+[cols="1,2"]
+|===
+|Item |Value
+
+|App Service
+|`agent-dashboard-knowallai` (Linux, Node 20 LTS, same plan as ZapDesk)
+
+|Production URL
+|https://agents.knowall.ai
+
+|Local port
+|3103 (Thyme uses 3101, ZapDesk 3102)
+|===
+
+== One-time setup
+
+=== 1. Entra app registration
+
+Follow the *Entra ID App Registration* section in the README. Add the production redirect URI `https://agents.knowall.ai/api/auth/callback/azure-ad`.
+
+=== 2. App Service
+
+[source,bash]
+----
+az webapp create -g KnowAllAIRG -p devdesk-plan -n agent-dashboard-knowallai --runtime "NODE:20-lts"
+az webapp config set -g KnowAllAIRG -n agent-dashboard-knowallai --startup-file "node server.js"
+az webapp config appsettings set -g KnowAllAIRG -n agent-dashboard-knowallai --settings WEBSITE_HEALTHCHECK_MAXPINGFAILURES=5
+az webapp config set -g KnowAllAIRG -n agent-dashboard-knowallai --generic-configurations '{"healthCheckPath": "/api/health"}'
+----
+
+=== 3. Custom domain and TLS
+
+[source,bash]
+----
+# CNAME agents.knowall.ai -> agent-dashboard-knowallai.azurewebsites.net (in DNS)
+az webapp config hostname add -g KnowAllAIRG --webapp-name agent-dashboard-knowallai --hostname agents.knowall.ai
+az webapp config ssl create -g KnowAllAIRG -n agent-dashboard-knowallai --hostname agents.knowall.ai
+----
+
+=== 4. GitHub secrets
+
+[cols="1,2"]
+|===
+|Secret |Value
+
+|`AZURE_CREDENTIALS`
+|Service principal JSON with Contributor on the App Service (`az ad sp create-for-rbac --sdk-auth`)
+
+|`NEXTAUTH_SECRET`
+|`openssl rand -hex 32`
+
+|`AZURE_AD_CLIENT_ID`
+|App registration client ID
+
+|`AZURE_AD_CLIENT_SECRET`
+|App registration client secret
+
+|`AGENT_REPOS_GITHUB_TOKEN`
+|Fine-grained token, Contents: read on agent repos (for private repos)
+|===
+
+== Releasing
+
+[source,bash]
+----
+bun run check
+bun pm version patch    # or minor / major — updates package.json and tags
+git push --follow-tags  # tag triggers the deploy workflow
+----
+
+The version appears in the sidebar footer.
+
+== Environment Variables
+
+See `.env.example`. All runtime settings are written by the deploy workflow as App Service application settings.

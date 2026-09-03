@@ -1,0 +1,72 @@
+name: Deploy to Azure App Service
+
+on:
+  # Deploy when a release tag is created (e.g. v1.0.0)
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+env:
+  AZURE_WEBAPP_NAME: agent-dashboard-knowallai
+  APP_URL: https://agents.knowall.ai
+  BUN_VERSION: '1.2'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      - name: Build application
+        run: bun run build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+          NEXTAUTH_URL: ${{ env.APP_URL }}
+          APP_URL: ${{ env.APP_URL }}
+      - name: Prepare standalone deployment
+        run: |
+          cp -r public .next/standalone/
+          cp -r .next/static .next/standalone/.next/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nextjs-app
+          include-hidden-files: true
+          path: .next/standalone
+          retention-days: 1
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    environment:
+      name: production
+      url: https://agents.knowall.ai
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: nextjs-app
+      - uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          package: .
+          startup-command: 'node server.js'
+      - uses: azure/appservice-settings@v1
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          mask-inputs: true
+          app-settings-json: |
+            [
+              {"name": "NEXTAUTH_URL", "value": "${{ env.APP_URL }}"},
+              {"name": "NEXTAUTH_SECRET", "value": "${{ secrets.NEXTAUTH_SECRET }}"},
+              {"name": "AZURE_AD_CLIENT_ID", "value": "${{ secrets.AZURE_AD_CLIENT_ID }}"},
+              {"name": "AZURE_AD_CLIENT_SECRET", "value": "${{ secrets.AZURE_AD_CLIENT_SECRET }}"},
+              {"name": "AZURE_AD_TENANT_ID", "value": "common"},
+              {"name": "GITHUB_TOKEN", "value": "${{ secrets.AGENT_REPOS_GITHUB_TOKEN }}"},
+              {"name": "APP_URL", "value": "${{ env.APP_URL }}"}
+            ]

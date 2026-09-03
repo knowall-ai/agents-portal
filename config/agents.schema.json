@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Agent Dashboard registry",
+  "type": "object",
+  "required": ["agents"],
+  "properties": {
+    "agents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+          "name": { "type": "string" },
+          "kind": { "enum": ["openclaw", "foundry", "botframework", "unknown"] },
+          "customer": { "type": "string" },
+          "description": { "type": "string" },
+          "environment": { "enum": ["prod", "test", "dev", "unknown"] },
+          "portalUrl": { "type": "string", "format": "uri" },
+          "healthUrl": { "type": "string", "format": "uri" },
+          "repo": { "type": "string", "pattern": "^[^/]+/[^/]+$" },
+          "skillsPath": { "type": "string" },
+          "resourceGroups": { "type": "array", "items": { "type": "string" } },
+          "planned": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

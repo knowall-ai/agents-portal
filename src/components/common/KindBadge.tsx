@@ -1,0 +1,27 @@
+'use client';
+
+import { Bot, Brain, Server, HelpCircle } from 'lucide-react';
+import type { AgentKind } from '@/types';
+
+export const kindLabels: Record<AgentKind, string> = {
+  openclaw: 'OpenClaw',
+  foundry: 'AI Foundry',
+  botframework: 'Bot Framework',
+  unknown: 'Unknown',
+};
+
+const icons: Record<AgentKind, React.ReactNode> = {
+  openclaw: <Server size={12} />,
+  foundry: <Brain size={12} />,
+  botframework: <Bot size={12} />,
+  unknown: <HelpCircle size={12} />,
+};
+
+export default function KindBadge({ kind }: { kind: AgentKind }) {
+  return (
+    <span className="kind-badge" style={{ color: `var(--kind-${kind})` }}>
+      {icons[kind]}
+      {kindLabels[kind]}
+    </span>
+  );
+}

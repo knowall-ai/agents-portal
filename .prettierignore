@@ -1,0 +1,17 @@
+node_modules/
+.next/
+out/
+build/
+dist/
+next-env.d.ts
+*.min.js
+*.min.css
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+bun.lock
+coverage/
+playwright-report/
+test-results/
+.idea/
+.vscode/

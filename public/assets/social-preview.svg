@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0a0a0a" />
+      <stop offset="100%" stop-color="#1a1a2e" />
+    </linearGradient>
+    <linearGradient id="metalGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4ade80" />
+      <stop offset="50%" stop-color="#22c55e" />
+      <stop offset="100%" stop-color="#16a34a" />
+    </linearGradient>
+    <linearGradient id="shineGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.3" />
+      <stop offset="50%" stop-color="#ffffff" stop-opacity="0" />
+    </linearGradient>
+    <linearGradient id="glowGradient" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#22c55e" stop-opacity="0.2" />
+      <stop offset="100%" stop-color="#22c55e" stop-opacity="0" />
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bgGradient)" />
+  <ellipse cx="600" cy="250" rx="400" ry="200" fill="url(#glowGradient)" />
+
+  <!-- Icon (120x120 centred at 600,200) -->
+  <rect x="540" y="140" width="120" height="120" rx="16" ry="16" fill="url(#metalGradient)" />
+  <rect x="540" y="140" width="120" height="120" rx="16" ry="16" fill="url(#shineGradient)" />
+  <polyline points="556.9,203.8 575.6,203.8 586.9,173.8 601.9,230 615,188.8 624.4,203.8 643.1,203.8" fill="none" stroke="#ffffff" stroke-width="10.3" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <text x="600" y="340" text-anchor="middle" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="72" font-weight="700">
+    <tspan fill="#22c55e">Agent</tspan><tspan fill="#f3f4f6">&#160;Dashboard</tspan>
+  </text>
+
+  <text x="600" y="400" text-anchor="middle" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="28" fill="#9ca3af">AI Agent Monitoring Across Azure Tenants</text>
+
+  <text x="600" y="540" text-anchor="middle" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="18" fill="#6b7280">Built by KnowAll</text>
+</svg>
