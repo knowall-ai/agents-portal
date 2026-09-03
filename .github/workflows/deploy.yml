@@ -10,7 +10,7 @@ on:
 env:
   AZURE_WEBAPP_NAME: agent-dashboard-knowallai
   APP_URL: https://agents.knowall.ai
-  BUN_VERSION: '1.2'
+  BUN_VERSION: 'latest'
 
 jobs:
   build:

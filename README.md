@@ -54,7 +54,7 @@ Azure Lighthouse delegates **Azure resources** (subscriptions or resource groups
 ### Prerequisites
 
 - [Node.js](https://nodejs.org/) 20+ (runtime for the server)
-- [Bun](https://bun.sh) 1.2+ (package manager)
+- [Bun](https://bun.sh) 1.4+ (package manager)
 - An Azure subscription with Reader access to the agents' resource groups
 - A Microsoft Entra ID app registration (see below)
 
