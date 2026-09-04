@@ -20,6 +20,7 @@ test.describe('API routes', () => {
     '/api/agents/sallie',
     '/api/agents/sallie/skills',
     '/api/agents/sallie/soul',
+    '/api/agents/sallie/licenses',
     '/api/agents/sallie/activity',
     '/api/agents/sallie/costs',
     '/api/costs',

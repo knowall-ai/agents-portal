@@ -38,6 +38,9 @@
 |**SOUL.md section missing on an agent page**
 |The agent needs `repo` in the registry and a `workspace/SOUL.md` or `SOUL.md` in that repo (or `soulPath` set). Check the server log for `GitHub 404`.
 
+|**Licences card says User.Read.All is not consented**
+|Reading another user's licences needs the *User.Read.All* delegated Graph permission on the app registration with admin consent (see the README setup step). After granting it, sign out and in again so the refresh token carries the new scope.
+
 |**No AI Foundry assistants shown**
 |The token exchange for `https://ai.azure.com/.default` failed — the app registration needs the *Azure Machine Learning Services / user_impersonation* delegated permission with admin consent, and the user needs *Azure AI User* on the AI Services account.
 

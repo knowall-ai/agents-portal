@@ -84,6 +84,31 @@ export interface AgentRegistryEntry {
   fixedCosts?: FixedCost[];
 }
 
+/** A Microsoft licence (SKU) assigned to the agent's Entra account. */
+export interface AgentLicense {
+  skuId: string;
+  skuPartNumber: string;
+  name: string;
+  /** Capabilities from the provisioned service plans (Teams, Exchange mailbox, …) */
+  capabilities: string[];
+  /** Provisioned service plans not listed as a capability */
+  otherPlans: number;
+}
+
+/** Licences and subscriptions behind an agent. */
+export interface AgentLicensing {
+  /** The agent's own Entra account, when it has one */
+  upn?: string;
+  displayName?: string;
+  accountEnabled?: boolean;
+  usageLocation?: string;
+  licenses: AgentLicense[];
+  /** Flat-fee subscriptions from the registry (ChatGPT, ElevenLabs, …) */
+  subscriptions: FixedCost[];
+  /** Why Microsoft licences could not be read, when they could not */
+  licenseError?: string;
+}
+
 export interface FixedCost {
   label: string;
   amount: number;

@@ -6,6 +6,7 @@ import { useSession } from 'next-auth/react';
 import { formatDistanceToNow } from 'date-fns';
 import {
   ArrowLeft,
+  BadgeCheck,
   Boxes,
   Building2,
   ExternalLink,
@@ -33,6 +34,7 @@ import {
   ActivityFeed,
   CostBreakdown,
   FoundryAssistants,
+  LicenseList,
   ResourceTable,
   SkillList,
   SoulPanel,
@@ -42,6 +44,7 @@ import type {
   ActivityEvent,
   AgentCosts,
   AgentDetail,
+  AgentLicensing,
   AgentSoul,
   FoundryAssistant,
   Skill,
@@ -63,6 +66,9 @@ export default function AgentPage({ params }: { params: Promise<{ id: string }> 
     120_000
   );
   const costs = useApi<AgentCosts>(ready ? `/api/agents/${id}/costs` : null, 15 * 60_000);
+  const licensing = useApi<{ licensing: AgentLicensing }>(
+    ready ? `/api/agents/${id}/licenses` : null
+  );
 
   const agent = detail.data?.agent;
 
@@ -164,6 +170,7 @@ export default function AgentPage({ params }: { params: Promise<{ id: string }> 
                     soul.refetch();
                     activity.refetch();
                     costs.refetch();
+                    licensing.refetch();
                   }}
                   className="btn-secondary flex items-center gap-2 text-sm"
                 >
@@ -303,6 +310,25 @@ export default function AgentPage({ params }: { params: Promise<{ id: string }> 
                     costs={costs.data}
                     isLoading={costs.isLoading}
                     error={costs.error}
+                  />
+                </section>
+
+                <section className="card">
+                  <h2
+                    className="flex items-center gap-2 border-b p-4 text-lg font-semibold"
+                    style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                  >
+                    <BadgeCheck size={18} style={{ color: 'var(--primary)' }} /> Licences
+                    {licensing.data && licensing.data.licensing.licenses.length > 0 && (
+                      <span className="text-sm font-normal" style={{ color: 'var(--text-muted)' }}>
+                        ({licensing.data.licensing.licenses.length})
+                      </span>
+                    )}
+                  </h2>
+                  <LicenseList
+                    licensing={licensing.data?.licensing ?? null}
+                    isLoading={licensing.isLoading}
+                    error={licensing.error}
                   />
                 </section>
 

@@ -86,7 +86,7 @@ For richer metadata (skills repo, portal URL, health URL) or for resources you c
 * `soulPath` points at the agent's `SOUL.md`; leave it out for the OpenClaw default (`workspace/SOUL.md`, then `SOUL.md`). It renders on the agent page.
 * Agents appear automatically once their Azure resources are tagged — a registry entry is only needed for metadata. Set `"planned": true` only when you deliberately want an agent listed before anything is deployed.
 * `avatarUrl` points at a file in `public/agents/` (256 px square PNG works well) or an `https` URL.
-* `teamsUpn` is the agent's own Entra account (e.g. `sallie@knowall.ai`); it powers the *Chat in Teams* button. Bots do not need it — their Bot Service app ID is used instead.
+* `teamsUpn` is the agent's own Entra account (e.g. `sallie@knowall.ai`); it powers the *Chat in Teams* button and the *Licences* card (account state and Microsoft licences read from Graph). `fixedCosts` entries are listed there too as subscriptions. Bots do not need it — their Bot Service app ID is used instead.
 * Registry values override tag values.
 
 Private repos need `GITHUB_TOKEN` set on the server (fine-grained token, Contents: read).
