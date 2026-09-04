@@ -1,8 +1,15 @@
 // Agent service: composes Azure discovery, the registry, Foundry, GitHub and
 // health probes into the shapes the API routes return.
-import { cached } from '@/lib/cache';
+import { cached, invalidate } from '@/lib/cache';
 import { getRegistry, getRegistryEntry } from '@/lib/registry';
-import { listActivityLog, listAgentResources, listSubscriptions } from '@/lib/providers/azure';
+import {
+  findVm,
+  listActivityLog,
+  listAgentResources,
+  listRoleAssignments,
+  listSubscriptions,
+  runVmScript,
+} from '@/lib/providers/azure';
 import {
   assistantsToSkills,
   listAssistants,
@@ -11,18 +18,21 @@ import {
 } from '@/lib/providers/foundry';
 import { getRepoMarkdown, listRepoCommits, listRepoSkills } from '@/lib/providers/github';
 import { probeUrl } from '@/lib/providers/health';
-import { getUserLicensing } from '@/lib/providers/graph';
+import { getAppAccess, getUserAccess, getUserLicensing } from '@/lib/providers/graph';
 import {
   FOUNDRY_SCOPE,
+  GRAPH_DIRECTORY_READ_ALL_SCOPE,
   GRAPH_DIRECTORY_SCOPE,
   getResourceToken,
   type UserContext,
 } from '@/lib/tokens';
 import type {
   ActivityEvent,
+  AgentBoost,
   AgentCosts,
   AgentDetail,
   AgentLicensing,
+  AgentPermissions,
   AgentSoul,
   CostSourceStatus,
   CostsSummary,
@@ -183,6 +193,225 @@ export async function getLicensing(ctx: UserContext, agent: AgentDetail): Promis
     // Keep successes for a while; retry failures (missing consent, Graph errors) quickly
     (value) => (value.licenseError ? DIRECTORY_ERROR_TTL : DIRECTORY_TTL)
   );
+}
+
+const NO_DIRECTORY_CONSENT =
+  'Microsoft Graph Directory.Read.All is not consented for this app — see docs/DEPLOYMENT.adoc';
+
+/**
+ * What the agent can do: directory roles, groups and Azure RBAC roles of its
+ * own account, and the API permissions of its app registrations (registry
+ * `appRegistrations` plus any Bot Service app IDs) with consent state.
+ * Read-only; needs Directory.Read.All (delegated, admin consent). Never
+ * throws: failures come back as `error` and are cached only briefly.
+ */
+export async function getPermissions(
+  ctx: UserContext,
+  agent: AgentDetail
+): Promise<AgentPermissions> {
+  const entry = getRegistryEntry(agent.id);
+  const apps = new Map<string, { appId: string; label?: string }>();
+  for (const app of entry?.appRegistrations ?? []) apps.set(app.appId.toLowerCase(), app);
+  for (const r of agent.resources) {
+    if (
+      r.type === 'microsoft.botservice/botservices' &&
+      r.botAppId &&
+      !apps.has(r.botAppId.toLowerCase())
+    ) {
+      apps.set(r.botAppId.toLowerCase(), { appId: r.botAppId, label: `Bot Service ${r.name}` });
+    }
+  }
+  if (!entry?.teamsUpn && apps.size === 0) return { apps: [] };
+
+  const upn = entry?.teamsUpn;
+  const skeleton = (error: string): AgentPermissions => ({
+    account: upn ? { upn, directoryRoles: [], groups: [], azureRoles: [] } : undefined,
+    apps: [...apps.values()].map((a) => ({
+      appId: a.appId,
+      displayName: a.label ?? a.appId,
+      label: a.label,
+      permissions: [],
+      azureRoles: [],
+    })),
+    error,
+  });
+
+  return cached(
+    `permissions:${scope(ctx)}:${agent.id}`,
+    async (): Promise<AgentPermissions> => {
+      let token: string | null;
+      try {
+        token = await getResourceToken(ctx, GRAPH_DIRECTORY_READ_ALL_SCOPE);
+      } catch (error) {
+        return skeleton(error instanceof Error ? error.message : String(error));
+      }
+      if (!token) return skeleton(NO_DIRECTORY_CONSENT);
+      const graph = token;
+
+      const subscriptionIds = await listSubscriptions(ctx.armToken)
+        .then((subs) => subs.map((s) => s.subscriptionId))
+        .catch((error) => {
+          console.warn('Subscription list failed for role assignments:', error);
+          return [] as string[];
+        });
+      const roles = (principalId?: string) =>
+        principalId
+          ? listRoleAssignments(ctx.armToken, subscriptionIds, principalId).catch((error) => {
+              console.warn(`Role assignments failed for ${principalId}:`, error);
+              return [];
+            })
+          : Promise.resolve([]);
+
+      const account = upn
+        ? await getUserAccess(graph, upn)
+            .then(async (access) => ({ upn, ...access, azureRoles: await roles(access.objectId) }))
+            .catch((error) => {
+              console.warn(`User access lookup failed for ${agent.id}:`, error);
+              return { upn, directoryRoles: [], groups: [], azureRoles: [] };
+            })
+        : undefined;
+
+      const appAccess = await Promise.all(
+        [...apps.values()].map((a) =>
+          getAppAccess(graph, a.appId, a.label)
+            .then(async (access) => ({
+              ...access,
+              azureRoles: await roles(access.servicePrincipalId),
+            }))
+            .catch((error) => ({
+              appId: a.appId,
+              displayName: a.label ?? a.appId,
+              label: a.label,
+              permissions: [],
+              azureRoles: [],
+              error: error instanceof Error ? error.message : String(error),
+            }))
+        )
+      );
+      return { account, apps: appAccess };
+    },
+    (value) => (value.error ? DIRECTORY_ERROR_TTL : DIRECTORY_TTL)
+  );
+}
+
+// ---------------------------------------------------------------------------
+// BOOST mode
+// ---------------------------------------------------------------------------
+
+const BOOST_WARNING =
+  'Boost switches the agent to OpenAI Fast mode (service_tier fast): about 2.5× faster ' +
+  'generation at twice the standard token price ($8 / $40 per million). It bills the ' +
+  'metered API and never uses the ChatGPT subscription: the agent is moved to API-first ' +
+  'while Boost is on, then switched back automatically by the VM.';
+
+const BOOST_CACHE_TTL = 12 * 60 * 60 * 1000;
+
+interface BoostScriptState {
+  active?: boolean;
+  model?: string;
+  since?: string;
+  until?: string;
+  hours?: number;
+  error?: string;
+}
+
+/** Parse the JSON line the boost script prints last. Exported for tests. */
+export function parseBoostOutput(stdout: string): BoostScriptState {
+  const line = stdout
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.startsWith('{'))
+    .pop();
+  if (!line) throw new Error(`Boost script returned no JSON: ${stdout.slice(0, 200)}`);
+  return JSON.parse(line) as BoostScriptState;
+}
+
+function boostShape(agent: AgentDetail): {
+  base: AgentBoost;
+  script?: string;
+  vm?: ReturnType<typeof findVm>;
+} {
+  const entry = getRegistryEntry(agent.id);
+  const vm = findVm(agent.resources);
+  return {
+    base: {
+      supported: Boolean(entry?.boost?.script && vm),
+      active: false,
+      source: 'none',
+      defaultHours: entry?.boost?.defaultHours ?? 2,
+      maxHours: entry?.boost?.maxHours ?? 8,
+      warning: BOOST_WARNING,
+    },
+    script: entry?.boost?.script,
+    vm,
+  };
+}
+
+/** VM state is global, not per viewer, so the cache key is the agent alone. */
+function boostKey(agent: AgentDetail): string {
+  return `boost:${agent.id}:state`;
+}
+
+async function runBoost(ctx: UserContext, agent: AgentDetail, args: string): Promise<AgentBoost> {
+  const { base, script, vm } = boostShape(agent);
+  if (!script || !vm) return base;
+  const { stdout, stderr } = await runVmScript(ctx.armToken, vm, [`${script} ${args}`]);
+  let state: BoostScriptState;
+  try {
+    state = parseBoostOutput(stdout);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(stderr ? `${reason} (${stderr.slice(0, 200)})` : reason);
+  }
+  if (state.error) throw new Error(state.error);
+  const result: AgentBoost = {
+    ...base,
+    active: Boolean(state.active),
+    model: state.model,
+    since: state.since,
+    until: state.until,
+    hours: state.hours,
+    source: 'vm',
+    checkedAt: new Date().toISOString(),
+  };
+  invalidate(boostKey(agent));
+  await cached(boostKey(agent), async () => result, BOOST_CACHE_TTL);
+  return result;
+}
+
+/** Last known Boost state; `refresh` asks the VM (a run-command round trip, ~30 s). */
+export async function getBoost(
+  ctx: UserContext,
+  agent: AgentDetail,
+  refresh = false
+): Promise<AgentBoost> {
+  const { base, script, vm } = boostShape(agent);
+  if (!script || !vm) return base;
+  if (refresh) return runBoost(ctx, agent, 'status');
+  const known = await cached<AgentBoost | null>(boostKey(agent), async () => null, 0);
+  if (!known) return base;
+  // Past `until`, the VM's own timer has already switched the agent back
+  if (known.active && known.until && new Date(known.until).getTime() < Date.now()) {
+    return { ...known, active: false, source: 'cache' };
+  }
+  return { ...known, source: 'cache' };
+}
+
+/** Turn Boost on for `hours` (bounded by the registry) or off, as the signed-in user. */
+export async function setBoost(
+  ctx: UserContext,
+  agent: AgentDetail,
+  on: boolean,
+  hours?: number
+): Promise<AgentBoost> {
+  const { base } = boostShape(agent);
+  if (!base.supported) throw new Error('Boost is not configured for this agent');
+  if (!on) return runBoost(ctx, agent, 'off');
+  const requested = hours ?? base.defaultHours;
+  if (!Number.isFinite(requested) || requested <= 0 || requested > base.maxHours) {
+    throw new Error(`Hours must be between 0 and ${base.maxHours}`);
+  }
+  return runBoost(ctx, agent, `on ${requested}`);
 }
 
 export async function getActivity(ctx: UserContext, agent: AgentDetail): Promise<ActivityEvent[]> {

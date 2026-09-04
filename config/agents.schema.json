@@ -34,6 +34,28 @@
             }
           },
           "soulPath": { "type": "string" },
+          "boost": {
+            "type": "object",
+            "required": ["script"],
+            "additionalProperties": false,
+            "properties": {
+              "script": { "type": "string" },
+              "defaultHours": { "type": "number", "minimum": 0.25 },
+              "maxHours": { "type": "number", "minimum": 0.25 }
+            }
+          },
+          "appRegistrations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["appId"],
+              "additionalProperties": false,
+              "properties": {
+                "appId": { "type": "string", "format": "uuid" },
+                "label": { "type": "string" }
+              }
+            }
+          },
           "resourceGroups": { "type": "array", "items": { "type": "string" } },
           "planned": { "type": "boolean" },
           "avatarUrl": { "type": "string" },

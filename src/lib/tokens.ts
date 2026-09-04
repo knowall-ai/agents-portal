@@ -13,6 +13,8 @@ export const FOUNDRY_SCOPE = 'https://ai.azure.com/.default';
 export const GRAPH_SCOPE = 'https://graph.microsoft.com/User.Read';
 /** Reading another user's account and licences (agents' own Entra accounts). Needs admin consent. */
 export const GRAPH_DIRECTORY_SCOPE = 'https://graph.microsoft.com/User.Read.All';
+/** Reading groups, directory roles, applications and consent grants. Needs admin consent. */
+export const GRAPH_DIRECTORY_READ_ALL_SCOPE = 'https://graph.microsoft.com/Directory.Read.All';
 
 export interface UserContext {
   /** ARM access token from the session */
