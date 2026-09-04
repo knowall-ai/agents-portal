@@ -6,6 +6,8 @@
 interface Entry<T> {
   value: T;
   expiresAt: number;
+  /** Set on the first failed refresh: the last moment this value may still be served */
+  staleUntil?: number;
 }
 
 const store = new Map<string, Entry<unknown>>();
@@ -35,12 +37,14 @@ export async function cached<T>(
   } catch (error) {
     // Serve the last good value while the upstream is throttled or flaky, and
     // hold off retrying for a short while so we do not make the throttle worse
-    if (hit) {
+    const staleUntil = hit?.staleUntil ?? now + STALE_MAX_MS;
+    if (hit && now < staleUntil) {
       const message = error instanceof Error ? error.message : String(error);
       console.warn(`cache: serving stale ${key} after failure: ${message.slice(0, 160)}`);
-      store.set(key, { value: hit.value, expiresAt: now + STALE_RETRY_MS });
+      store.set(key, { value: hit.value, expiresAt: now + STALE_RETRY_MS, staleUntil });
       return hit.value;
     }
+    store.delete(key);
     throw error;
   }
   const ttl = typeof ttlMs === 'function' ? ttlMs(value) : ttlMs;
@@ -50,6 +54,8 @@ export async function cached<T>(
 
 /** How long a stale value is served before the loader is tried again. */
 const STALE_RETRY_MS = 30_000;
+/** Stale values are never served for longer than this after the first failure. */
+const STALE_MAX_MS = 5 * 60_000;
 
 export function invalidate(prefix: string): void {
   for (const key of store.keys()) {

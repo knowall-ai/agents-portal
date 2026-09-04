@@ -1,7 +1,8 @@
 // Agent service: composes Azure discovery, the registry, Foundry, GitHub and
 // health probes into the shapes the API routes return.
 import { cached, invalidate } from '@/lib/cache';
-import { getRegistry, getRegistryEntry } from '@/lib/registry';
+import { getRegistry, getRegistryEntry as lookupRegistryEntry } from '@/lib/registry';
+import type { AgentRegistryEntry } from '@/types';
 import {
   findVm,
   listActivityLog,
@@ -59,6 +60,25 @@ function scope(ctx: UserContext): string {
   return `${ctx.tenantId}:${ctx.userId}`;
 }
 
+/**
+ * The registry entry behind an agent, but only when the caller can see at least
+ * one of its Azure resources and, if the entry claims resource groups, one of
+ * those. Registry-only agents (nothing visible, or a tag-derived slug that
+ * merely matches an entry id) get nothing, because server-held tokens
+ * (REVERIE_TOKEN, GITHUB_TOKEN) are spent on the entry's URLs.
+ */
+function getRegistryEntry(agent: AgentDetail): AgentRegistryEntry | undefined {
+  const entry = lookupRegistryEntry(agent.id);
+  if (!entry || agent.resources.length === 0) return undefined;
+  const claimed = (entry.resourceGroups ?? []).map((g) => g.toLowerCase());
+  if (
+    claimed.length > 0 &&
+    !agent.resources.some((r) => claimed.includes(r.resourceGroup.toLowerCase()))
+  )
+    return undefined;
+  return entry;
+}
+
 /** All agents visible to the user (cached per user for CACHE_TTL_SECONDS). */
 export async function listAgents(ctx: UserContext): Promise<AgentDetail[]> {
   return cached(`agents:${scope(ctx)}`, async () => {
@@ -77,7 +97,7 @@ export async function getAgent(ctx: UserContext, id: string): Promise<AgentDetai
   if (!agent) return null;
 
   return cached(`agent:${scope(ctx)}:${agent.id}`, async () => {
-    const entry = getRegistryEntry(agent.id);
+    const entry = getRegistryEntry(agent);
     const [foundryProjects, reachability] = await Promise.all([
       listFoundryProjects(ctx.armToken, agent.resources),
       entry?.healthUrl || agent.portalUrl
@@ -112,7 +132,7 @@ export async function getSkills(ctx: UserContext, agent: AgentDetail): Promise<S
   return cached(
     `skills:${scope(ctx)}:${agent.id}`,
     async () => {
-      const sources = skillSourcesFor(getRegistryEntry(agent.id));
+      const sources = skillSourcesFor(getRegistryEntry(agent));
       const [repoLists, assistants] = await Promise.all([
         Promise.all(
           sources.map((source) =>
@@ -145,7 +165,7 @@ const SOUL_CANDIDATES = ['workspace/SOUL.md', 'SOUL.md'];
  * arbitrary repositories.
  */
 export async function getSoul(ctx: UserContext, agent: AgentDetail): Promise<AgentSoul | null> {
-  const entry = getRegistryEntry(agent.id);
+  const entry = getRegistryEntry(agent);
   const repo = entry?.repo;
   if (!repo) return null;
   return cached(
@@ -172,7 +192,7 @@ const DIRECTORY_TTL = 30 * 60 * 1000;
 const DIRECTORY_ERROR_TTL = 60 * 1000;
 
 export async function getLicensing(ctx: UserContext, agent: AgentDetail): Promise<AgentLicensing> {
-  const entry = getRegistryEntry(agent.id);
+  const entry = getRegistryEntry(agent);
   const base: AgentLicensing = {
     upn: agent.teamsUpn,
     licenses: [],
@@ -218,7 +238,7 @@ export async function getPermissions(
   ctx: UserContext,
   agent: AgentDetail
 ): Promise<AgentPermissions> {
-  const entry = getRegistryEntry(agent.id);
+  const entry = getRegistryEntry(agent);
   const apps = new Map<string, { appId: string; label?: string }>();
   for (const app of entry?.appRegistrations ?? []) apps.set(app.appId.toLowerCase(), app);
   for (const r of agent.resources) {
@@ -340,7 +360,7 @@ function boostShape(agent: AgentDetail): {
   script?: string;
   vm?: ReturnType<typeof findVm>;
 } {
-  const entry = getRegistryEntry(agent.id);
+  const entry = getRegistryEntry(agent);
   const vm = findVm(agent.resources);
   return {
     base: {
@@ -435,7 +455,7 @@ export type BrainSource = { kind: 'fixture' } | { kind: 'reverie'; url: string; 
  */
 export function brainSource(agent: AgentDetail): BrainSource | null {
   if (process.env.BRAIN_FIXTURE === '1') return { kind: 'fixture' };
-  const url = getRegistryEntry(agent.id)?.brainUrl;
+  const url = getRegistryEntry(agent)?.brainUrl;
   const token = process.env.REVERIE_TOKEN;
   if (!url || !token || !isValidBrainUrl(url)) return null;
   return { kind: 'reverie', url, token };
@@ -448,7 +468,7 @@ export function brainSource(agent: AgentDetail): BrainSource | null {
 export async function getBrain(agent: AgentDetail): Promise<AgentBrain> {
   const source = brainSource(agent);
   if (!source) {
-    const entry = getRegistryEntry(agent.id);
+    const entry = getRegistryEntry(agent);
     return {
       available: false,
       error: !entry?.brainUrl
@@ -635,16 +655,14 @@ async function loadCostInputs(ctx: UserContext, agents: AgentDetail[]): Promise<
 
 export async function getAgentCosts(ctx: UserContext, agent: AgentDetail): Promise<AgentCosts> {
   const inputs = await loadCostInputs(ctx, [agent]);
-  return buildAgentCosts(agent, getRegistryEntry(agent.id), inputs);
+  return buildAgentCosts(agent, getRegistryEntry(agent), inputs);
 }
 
 /** Month-to-date and last-month totals for every visible agent. */
 export async function getCostsSummary(ctx: UserContext): Promise<CostsSummary> {
   const agents = await listAgents(ctx);
   const inputs = await loadCostInputs(ctx, agents);
-  const perAgent = agents.map((agent) =>
-    buildAgentCosts(agent, getRegistryEntry(agent.id), inputs)
-  );
+  const perAgent = agents.map((agent) => buildAgentCosts(agent, getRegistryEntry(agent), inputs));
   const totals = { monthToDate: {}, lastMonth: {} };
   for (const costs of perAgent) {
     addTotals(totals.monthToDate, costs.monthToDate.totals);

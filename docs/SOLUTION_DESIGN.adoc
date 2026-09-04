@@ -290,7 +290,7 @@ All routes require a session unless noted; they return `401` when unauthenticate
 
 == Caching
 
-`src/lib/cache.ts` is a per-process TTL cache keyed by tenant and user, so users never see each other's data. Defaults: 60 s for Azure lookups (`CACHE_TTL_SECONDS`), 10 min for skills, 5 min for exchanged tokens. The UI polls agents every 60 s and activity every 2 min.
+`src/lib/cache.ts` is a per-process TTL cache keyed by tenant and user for anything read with the user's token, so users never see each other's data; agent-global facts read with server tokens (Boost state, brain snapshots, repo skills, provider cost reports) are keyed by agent alone. Defaults: 60 s for Azure lookups (`CACHE_TTL_SECONDS`), 10 min for skills, 5 min for exchanged tokens. The UI polls agents every 60 s and activity every 2 min.
 
 == Security Considerations
 

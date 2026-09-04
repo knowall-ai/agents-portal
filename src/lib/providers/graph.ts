@@ -287,18 +287,32 @@ export function buildAppPermissionItems(
 
 const resourceSpCache = new Map<string, { value: ResourceServicePrincipal; expires: number }>();
 
+/** The `tid` claim of a Graph access token, or 'unknown' (never verified here; Graph verifies). */
+function tenantOfToken(token: string): string {
+  try {
+    const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8')) as {
+      tid?: string;
+    };
+    return claims.tid ?? 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
 async function getResourceServicePrincipal(
   token: string,
   appId: string
 ): Promise<ResourceServicePrincipal | undefined> {
-  const hit = resourceSpCache.get(appId);
+  // Service principal ids differ per tenant, so the cache is scoped by the token's tenant
+  const cacheKey = `${tenantOfToken(token)}:${appId}`;
+  const hit = resourceSpCache.get(cacheKey);
   if (hit && hit.expires > Date.now()) return hit.value;
   const result = await graphJson<{ value: ResourceServicePrincipal[] }>(
     token,
     `/servicePrincipals?$filter=appId eq '${appId}'&$select=id,appId,displayName,oauth2PermissionScopes,appRoles`
   );
   const sp = result.value[0];
-  if (sp) resourceSpCache.set(appId, { value: sp, expires: Date.now() + 60 * 60 * 1000 });
+  if (sp) resourceSpCache.set(cacheKey, { value: sp, expires: Date.now() + 60 * 60 * 1000 });
   return sp;
 }
 
@@ -332,17 +346,11 @@ export async function getAppAccess(
   const required = app?.requiredResourceAccess ?? [];
   const [grants, assignments, resourceList] = await Promise.all([
     sp
-      ? graphJson<{ value: Oauth2Grant[] }>(
-          token,
-          `/servicePrincipals/${sp.id}/oauth2PermissionGrants`
-        )
-      : Promise.resolve({ value: [] as Oauth2Grant[] }),
+      ? graphList<Oauth2Grant>(token, `/servicePrincipals/${sp.id}/oauth2PermissionGrants`)
+      : Promise.resolve([] as Oauth2Grant[]),
     sp
-      ? graphJson<{ value: AppRoleAssignment[] }>(
-          token,
-          `/servicePrincipals/${sp.id}/appRoleAssignments`
-        )
-      : Promise.resolve({ value: [] as AppRoleAssignment[] }),
+      ? graphList<AppRoleAssignment>(token, `/servicePrincipals/${sp.id}/appRoleAssignments`)
+      : Promise.resolve([] as AppRoleAssignment[]),
     Promise.all(
       [...new Set(required.map((r) => r.resourceAppId))].map((id) =>
         getResourceServicePrincipal(token, id)
@@ -355,6 +363,6 @@ export async function getAppAccess(
     ...base,
     displayName: app?.displayName ?? sp?.displayName ?? base.displayName,
     servicePrincipalId: sp?.id,
-    permissions: buildAppPermissionItems(required, resources, grants.value, assignments.value),
+    permissions: buildAppPermissionItems(required, resources, grants, assignments),
   };
 }

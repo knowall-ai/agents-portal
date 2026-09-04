@@ -123,20 +123,21 @@ bun run lint:fix       # Auto-fix lint
 
 ## Environment Variables
 
-| Variable                 | Description                                               | Required                      |
-| ------------------------ | --------------------------------------------------------- | ----------------------------- |
-| `NEXTAUTH_URL`           | Base URL of the application                               | Yes                           |
-| `NEXTAUTH_SECRET`        | Secret for NextAuth encryption                            | Yes                           |
-| `AZURE_AD_CLIENT_ID`     | Entra app registration client ID                          | Yes                           |
-| `AZURE_AD_CLIENT_SECRET` | Entra app registration client secret                      | Yes                           |
-| `AZURE_AD_TENANT_ID`     | Default sign-in tenant (`common` for multi-tenant)        | No (default: `common`)        |
-| `GITHUB_TOKEN`           | Token with Contents: read on agent + skill-pack repos     | For private repos             |
-| `REVERIE_TOKEN`          | Bearer token for each agent's `reverie serve` (Brain tab) | For the Brain tab             |
-| `BRAIN_FIXTURE`          | `1` serves a built-in graph instead of Reverie (dev only) | No                            |
-| `OPENAI_ADMIN_KEY`       | OpenAI organisation admin key (cost report)               | For OpenAI API spend          |
-| `ANTHROPIC_ADMIN_KEY`    | Anthropic organisation admin key (cost report)            | For Anthropic API spend       |
-| `AGENT_TAG_KEYS`         | Comma-separated tag keys that name an agent               | No (default: `agent,project`) |
-| `CACHE_TTL_SECONDS`      | Cache TTL for Azure / GitHub / Foundry lookups            | No (default: 60)              |
+| Variable                   | Description                                                                                                | Required                      |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| `NEXTAUTH_URL`             | Base URL of the application                                                                                | Yes                           |
+| `NEXTAUTH_SECRET`          | Secret for NextAuth encryption                                                                             | Yes                           |
+| `AZURE_AD_CLIENT_ID`       | Entra app registration client ID                                                                           | Yes                           |
+| `AZURE_AD_CLIENT_SECRET`   | Entra app registration client secret                                                                       | Yes                           |
+| `AZURE_AD_ALLOWED_TENANTS` | Comma-separated tenant ids allowed to sign in (default: `AZURE_AD_TENANT_ID` alone; with `common`, anyone) | Yes in production             |
+| `AZURE_AD_TENANT_ID`       | Default sign-in tenant (`common` for multi-tenant)                                                         | No (default: `common`)        |
+| `GITHUB_TOKEN`             | Token with Contents: read on agent + skill-pack repos                                                      | For private repos             |
+| `REVERIE_TOKEN`            | Bearer token for each agent's `reverie serve` (Brain tab)                                                  | For the Brain tab             |
+| `BRAIN_FIXTURE`            | `1` serves a built-in graph instead of Reverie (dev only)                                                  | No                            |
+| `OPENAI_ADMIN_KEY`         | OpenAI organisation admin key (cost report)                                                                | For OpenAI API spend          |
+| `ANTHROPIC_ADMIN_KEY`      | Anthropic organisation admin key (cost report)                                                             | For Anthropic API spend       |
+| `AGENT_TAG_KEYS`           | Comma-separated tag keys that name an agent                                                                | No (default: `agent,project`) |
+| `CACHE_TTL_SECONDS`        | Cache TTL for Azure / GitHub / Foundry lookups                                                             | No (default: 60)              |
 
 ## Deployment
 

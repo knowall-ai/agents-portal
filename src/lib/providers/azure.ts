@@ -21,9 +21,13 @@ export const AGENT_RESOURCE_TYPES = [
   'microsoft.containerinstance/containergroups',
 ];
 
+/** ARM answers in seconds; a hung socket must not stall a whole page */
+const ARM_TIMEOUT_MS = 30_000;
+
 async function armFetch<T>(token: string, path: string, init?: RequestInit): Promise<T> {
   const url = path.startsWith('http') ? path : `${ARM}${path}`;
   const response = await fetch(url, {
+    signal: AbortSignal.timeout(ARM_TIMEOUT_MS),
     ...init,
     headers: {
       Authorization: `Bearer ${token}`,
