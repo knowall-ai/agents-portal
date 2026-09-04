@@ -18,7 +18,7 @@ flowchart LR
     App --> Entra["Microsoft Entra ID<br/>(multi-tenant app)"]
     App --> ARM["Azure Resource Manager<br/>Resource Graph · Activity Log"]
     App --> Foundry["Azure AI Foundry<br/>Assistants API"]
-    App --> GitHub["GitHub REST API<br/>skills · commits"]
+    App --> GitHub["GitHub REST API<br/>skills · SOUL.md · commits"]
     App --> Portal["Agent portals<br/>(health probe)"]
 
     subgraph KnowAll["KnowAll tenant"]
@@ -27,7 +27,7 @@ flowchart LR
         Winnie["Winnie (dev) · AI Foundry"]
     end
     subgraph Customer["Customer tenant (Azure Lighthouse)"]
-        Allie["Allie · AI Foundry"]
+        CustomerAgents["Customer agents · tagged resources"]
     end
     ARM -.-> KnowAll
     ARM -.->|delegated| Customer
@@ -229,7 +229,7 @@ Billing APIs are rate limited and slow-moving, so results are cached for 30 minu
 
 |`openclaw` (e.g. Sallie)
 |VM power state + portal probe
-|`SKILL.md` folders in the agent's repo (`skillsPath`, symlinks followed)
+|`SKILL.md` folders in the agent's repo (`skillsPath`, symlinks followed) plus shared skill packs (`skillSources`); local skills shadow plugin ones. `SOUL.md` rendered from the repo
 |Azure Activity Log for the resource group + GitHub commits
 
 |`foundry` (e.g. Winnie)

@@ -9,13 +9,14 @@ import {
   listFoundryProjects,
   listRecentRuns,
 } from '@/lib/providers/foundry';
-import { listRepoCommits, listRepoSkills } from '@/lib/providers/github';
+import { getRepoMarkdown, listRepoCommits, listRepoSkills } from '@/lib/providers/github';
 import { probeUrl } from '@/lib/providers/health';
 import { FOUNDRY_SCOPE, getResourceToken, type UserContext } from '@/lib/tokens';
 import type {
   ActivityEvent,
   AgentCosts,
   AgentDetail,
+  AgentSoul,
   CostSourceStatus,
   CostsSummary,
   FoundryAssistant,
@@ -23,6 +24,7 @@ import type {
 } from '@/types';
 import { buildAgent, groupResources, sortAgents } from './discover';
 import { addTotals, buildAgentCosts, type CostInputs } from './costs';
+import { mergeSkillSources, skillSourcesFor } from './skills';
 import {
   fetchAnthropicCosts,
   fetchOpenAICosts,
@@ -90,17 +92,40 @@ export async function getSkills(ctx: UserContext, agent: AgentDetail): Promise<S
   return cached(
     `skills:${scope(ctx)}:${agent.id}`,
     async () => {
-      const entry = getRegistryEntry(agent.id);
-      const [repoSkills, assistants] = await Promise.all([
-        entry?.repo && entry.skillsPath
-          ? listRepoSkills(entry.repo, entry.skillsPath).catch((error) => {
-              console.warn(`GitHub skills lookup failed for ${agent.id}:`, error);
+      const sources = skillSourcesFor(getRegistryEntry(agent.id));
+      const [repoLists, assistants] = await Promise.all([
+        Promise.all(
+          sources.map((source) =>
+            listRepoSkills(source.repo, source.path).catch((error) => {
+              console.warn(`GitHub skills lookup failed for ${agent.id} (${source.repo}):`, error);
               return [] as Skill[];
             })
-          : Promise.resolve([] as Skill[]),
+          )
+        ),
         getAssistants(ctx, agent),
       ]);
-      return [...repoSkills, ...assistantsToSkills(assistants)];
+      return [...mergeSkillSources(repoLists), ...assistantsToSkills(assistants)];
+    },
+    10 * 60 * 1000
+  );
+}
+
+const SOUL_CANDIDATES = ['workspace/SOUL.md', 'SOUL.md'];
+
+/** The agent's SOUL.md from its repo (registry `soulPath`, else the OpenClaw defaults). */
+export async function getSoul(ctx: UserContext, agent: AgentDetail): Promise<AgentSoul | null> {
+  const repo = agent.repo;
+  if (!repo) return null;
+  return cached(
+    `soul:${scope(ctx)}:${agent.id}`,
+    async () => {
+      const entry = getRegistryEntry(agent.id);
+      const candidates = entry?.soulPath ? [entry.soulPath] : SOUL_CANDIDATES;
+      for (const path of candidates) {
+        const soul = await getRepoMarkdown(repo, path);
+        if (soul) return soul;
+      }
+      return null;
     },
     10 * 60 * 1000
   );

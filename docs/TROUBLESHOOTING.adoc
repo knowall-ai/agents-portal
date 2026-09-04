@@ -32,6 +32,12 @@
 |**Skills list is empty for an OpenClaw agent**
 |Set `repo` and `skillsPath` in `config/agents.json`. For private repos set `GITHUB_TOKEN` on the server. Check the server log for `GitHub 404`.
 
+|**Plugin / shared skills (T-Minus-15, KnowAll AI) missing for an OpenClaw agent**
+|The portal only reads the repos in the registry. Add each shared skill pack to `skillSources` in `config/agents.json` (e.g. `knowall-ai/claude-plugins` and `T-Minus-15/claude-plugins`, path `skills`) and make sure `GITHUB_TOKEN` has Contents: read on them — `knowall-ai/claude-plugins` is private.
+
+|**SOUL.md section missing on an agent page**
+|The agent needs `repo` in the registry and a `workspace/SOUL.md` or `SOUL.md` in that repo (or `soulPath` set). Check the server log for `GitHub 404`.
+
 |**No AI Foundry assistants shown**
 |The token exchange for `https://ai.azure.com/.default` failed — the app registration needs the *Azure Machine Learning Services / user_impersonation* delegated permission with admin consent, and the user needs *Azure AI User* on the AI Services account.
 

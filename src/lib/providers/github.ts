@@ -1,5 +1,5 @@
-// GitHub: skills (SKILL.md folders) and recent commits for an agent's repo.
-import type { ActivityEvent, Skill } from '@/types';
+// GitHub: skills (SKILL.md folders), SOUL.md and recent commits for an agent's repo.
+import type { ActivityEvent, AgentSoul, Skill } from '@/types';
 
 const API = 'https://api.github.com';
 
@@ -95,7 +95,7 @@ export async function listRepoSkills(repo: string, skillsPath: string): Promise<
   const dirs = listing.filter((item) => item.type === 'dir');
   const skills = await mapWithConcurrency(dirs, 6, async (dir): Promise<Skill> => {
     const fallback: Skill = {
-      id: `github:${dir.name}`,
+      id: `github:${repo}:${dir.name}`,
       name: dir.name,
       source: 'github',
       sourceLabel: repo,
@@ -120,6 +120,25 @@ export async function listRepoSkills(repo: string, skillsPath: string): Promise<
   });
 
   return skills.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Fetch a markdown file from the repo, or null when it does not exist. */
+export async function getRepoMarkdown(repo: string, path: string): Promise<AgentSoul | null> {
+  if (!isValidRepo(repo)) throw new Error(`Invalid repo slug: ${repo}`);
+  if (path.includes('..')) throw new Error(`Invalid path: ${path}`);
+  let file: ContentItem | ContentItem[];
+  try {
+    file = await ghJson<ContentItem | ContentItem[]>(`/repos/${repo}/contents/${path}`);
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('GitHub 404 ')) return null;
+    throw error;
+  }
+  if (Array.isArray(file) || !file.content || file.encoding !== 'base64') return null;
+  return {
+    path,
+    markdown: Buffer.from(file.content, 'base64').toString('utf8'),
+    url: file.html_url,
+  };
 }
 
 interface RawCommit {

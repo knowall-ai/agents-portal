@@ -37,6 +37,14 @@ export interface AzureSubscription {
   managedByTenants: string[];
 }
 
+/** A repo folder holding <skill>/SKILL.md folders. */
+export interface SkillSource {
+  /** GitHub repo in owner/name form */
+  repo: string;
+  /** Path inside the repo, e.g. "skills" */
+  path: string;
+}
+
 /** Static registry entry from config/agents.json. */
 export interface AgentRegistryEntry {
   id: string;
@@ -53,6 +61,13 @@ export interface AgentRegistryEntry {
   repo?: string;
   /** Path inside the repo holding <skill>/SKILL.md folders */
   skillsPath?: string;
+  /**
+   * Shared skill packs the agent also loads at runtime (e.g. the T-Minus-15 and
+   * KnowAll plugin repos). A same-named skill in the agent's own repo shadows these.
+   */
+  skillSources?: SkillSource[];
+  /** Path to the agent's SOUL.md. Defaults to workspace/SOUL.md, then SOUL.md. */
+  soulPath?: string;
   /** Resource groups whose resources belong to this agent (case-insensitive) */
   resourceGroups?: string[];
   /** Agent not yet built or deployed — shown as "planned" */
@@ -124,6 +139,13 @@ export interface Skill {
   description?: string;
   source: 'github' | 'foundry';
   sourceLabel: string;
+  url?: string;
+}
+
+/** The agent's SOUL.md (identity / values) as committed to its repo. */
+export interface AgentSoul {
+  path: string;
+  markdown: string;
   url?: string;
 }
 

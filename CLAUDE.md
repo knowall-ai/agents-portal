@@ -4,7 +4,7 @@ This document provides guidance for AI assistants (like Claude) working on the A
 
 ## Project Overview
 
-Agents Portal monitors the AI agents KnowAll AI builds and runs for itself and its customers (Sallie, Zaplie, Winnie for the Irish FA, Allie for Cairn Homes). It discovers agents from Azure, derives their status, and shows skills and recent activity. It is a sibling of ZapDesk and Thyme and shares their stack and branding.
+Agents Portal monitors the AI agents KnowAll AI builds and runs for itself and its customers (Sallie, Zaplie, Winnie for the Irish FA, and whatever gets tagged next). It discovers agents from Azure, derives their status, and shows skills and recent activity. It is a sibling of ZapDesk and Thyme and shares their stack and branding.
 
 ## Architecture
 
@@ -23,7 +23,8 @@ Agents Portal monitors the AI agents KnowAll AI builds and runs for itself and i
 - **Agent** = a group of Azure resources (VM, App Service, Bot Service, AI Services account, …) that share an `agent` tag or a resource group claimed in `config/agents.json`
 - **Kind** = how the agent is built: `openclaw` (VM-hosted OpenClaw gateway), `foundry` (Azure AI Foundry assistants), `botframework` (Teams bot)
 - **Status** = derived from compute state (`src/lib/agents/discover.ts` → `deriveStatus`) and downgraded to `degraded` if the portal probe fails
-- **Skills** = `SKILL.md` folders in the agent's GitHub repo + tools on its Foundry assistants
+- **Skills** = `SKILL.md` folders in the agent's GitHub repo, plus shared skill packs listed in `skillSources` (local skills shadow same-named plugin skills), plus tools on its Foundry assistants
+- **Soul** = the agent's `SOUL.md` (`soulPath`, default `workspace/SOUL.md` then `SOUL.md`) rendered on its page
 - **Activity** = Azure Activity Log + GitHub commits + Foundry runs, merged and sorted
 - **Costs** = Azure Cost Management by resource group (user token) + OpenAI/Anthropic admin cost APIs by project/workspace mapping + `fixedCosts` from the registry; aggregation is pure in `src/lib/agents/costs.ts`
 - **Tenant** = the Entra tenant the user signed in to. Azure Resource Graph returns every subscription the user's ARM token can read, which includes subscriptions delegated via Azure Lighthouse
@@ -118,18 +119,18 @@ bun run lint:fix       # Auto-fix lint
 
 ## Environment Variables
 
-| Variable                 | Description                                        | Required                      |
-| ------------------------ | -------------------------------------------------- | ----------------------------- |
-| `NEXTAUTH_URL`           | Base URL of the application                        | Yes                           |
-| `NEXTAUTH_SECRET`        | Secret for NextAuth encryption                     | Yes                           |
-| `AZURE_AD_CLIENT_ID`     | Entra app registration client ID                   | Yes                           |
-| `AZURE_AD_CLIENT_SECRET` | Entra app registration client secret               | Yes                           |
-| `AZURE_AD_TENANT_ID`     | Default sign-in tenant (`common` for multi-tenant) | No (default: `common`)        |
-| `GITHUB_TOKEN`           | Token with Contents: read on agent repos           | For private agent repos       |
-| `OPENAI_ADMIN_KEY`       | OpenAI organisation admin key (cost report)        | For OpenAI API spend          |
-| `ANTHROPIC_ADMIN_KEY`    | Anthropic organisation admin key (cost report)     | For Anthropic API spend       |
-| `AGENT_TAG_KEYS`         | Comma-separated tag keys that name an agent        | No (default: `agent,project`) |
-| `CACHE_TTL_SECONDS`      | Cache TTL for Azure / GitHub / Foundry lookups     | No (default: 60)              |
+| Variable                 | Description                                           | Required                      |
+| ------------------------ | ----------------------------------------------------- | ----------------------------- |
+| `NEXTAUTH_URL`           | Base URL of the application                           | Yes                           |
+| `NEXTAUTH_SECRET`        | Secret for NextAuth encryption                        | Yes                           |
+| `AZURE_AD_CLIENT_ID`     | Entra app registration client ID                      | Yes                           |
+| `AZURE_AD_CLIENT_SECRET` | Entra app registration client secret                  | Yes                           |
+| `AZURE_AD_TENANT_ID`     | Default sign-in tenant (`common` for multi-tenant)    | No (default: `common`)        |
+| `GITHUB_TOKEN`           | Token with Contents: read on agent + skill-pack repos | For private repos             |
+| `OPENAI_ADMIN_KEY`       | OpenAI organisation admin key (cost report)           | For OpenAI API spend          |
+| `ANTHROPIC_ADMIN_KEY`    | Anthropic organisation admin key (cost report)        | For Anthropic API spend       |
+| `AGENT_TAG_KEYS`         | Comma-separated tag keys that name an agent           | No (default: `agent,project`) |
+| `CACHE_TTL_SECONDS`      | Cache TTL for Azure / GitHub / Foundry lookups        | No (default: 60)              |
 
 ## Deployment
 

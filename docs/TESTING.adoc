@@ -28,7 +28,7 @@ Screenshots are written to `test-results/` and console errors fail the login-pag
 == Manual checks (signed in)
 
 . Sign in with a KnowAll account.
-. *Home*: KPI tiles show counts and filter the list when clicked; Sallie, Zaplie, Winnie, Allie and Pennie are listed with avatars and status dots.
+. *Home*: KPI tiles show counts and filter the list when clicked; Sallie, Zaplie, Winnie and Pennie are listed with avatars and status dots.
 . *List / card toggle*: the choice survives a reload.
 . *Filters*: customer, status and kind narrow the list; header search matches resource groups.
 . *Agent → Sallie*: VM state and reachability shown (a `302` to sign-in counts as responding), *Chat in Teams* opens a chat with sallie@…, skills listed from GitHub, VM start/deallocate and commits in activity.

@@ -72,13 +72,19 @@ For richer metadata (skills repo, portal URL, health URL) or for resources you c
   "healthUrl": "https://sallie.knowall.ai/health",
   "repo": "knowall-ai/sallie-openclaw",
   "skillsPath": ".claude/skills",
+  "skillSources": [
+    { "repo": "knowall-ai/claude-plugins", "path": "skills" },
+    { "repo": "T-Minus-15/claude-plugins", "path": "skills" }
+  ],
   "resourceGroups": ["ka-agents"]
 }
 ----
 
 * `resourceGroups` claims every agent-shaped resource in those groups, tagged or not.
 * `skillsPath` is the folder containing `<skill>/SKILL.md`; symlinks (e.g. `workspace/skills → ../.claude/skills`) are followed.
-* Set `"planned": true` for agents that are not built yet (Allie) so they show as *Planned*.
+* `skillSources` lists shared skill packs the agent also loads at runtime (for OpenClaw, the repos in `skills.load.extraDirs`). A skill in the agent's own repo shadows a same-named plugin skill, exactly as it does at runtime. `GITHUB_TOKEN` must be able to read these repos too.
+* `soulPath` points at the agent's `SOUL.md`; leave it out for the OpenClaw default (`workspace/SOUL.md`, then `SOUL.md`). It renders on the agent page.
+* Agents appear automatically once their Azure resources are tagged — a registry entry is only needed for metadata. Set `"planned": true` only when you deliberately want an agent listed before anything is deployed.
 * `avatarUrl` points at a file in `public/agents/` (256 px square PNG works well) or an `https` URL.
 * `teamsUpn` is the agent's own Entra account (e.g. `sallie@knowall.ai`); it powers the *Chat in Teams* button. Bots do not need it — their Bot Service app ID is used instead.
 * Registry values override tag values.
@@ -158,7 +164,7 @@ Azure costs need no setup beyond the user having *Cost Management Reader* on the
 * [ ] `agent-customer` / `customer` set
 * [ ] `environment` set
 * [ ] Portal / health URL set
-* [ ] GitHub repo and `skillsPath` set (OpenClaw agents)
+* [ ] GitHub repo, `skillsPath` and `skillSources` set (OpenClaw agents); `SOUL.md` present in the repo
 * [ ] `avatarUrl` and, for agents with their own account, `teamsUpn` set
 * [ ] `openaiProjectId` / `anthropicWorkspaceId` / `fixedCosts` set so the cost breakdown is complete
 * [ ] Lighthouse delegation in place (customer-hosted agents)

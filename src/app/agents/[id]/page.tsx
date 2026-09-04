@@ -11,6 +11,7 @@ import {
   ExternalLink,
   Github,
   Globe,
+  Heart,
   MessageSquare,
   Receipt,
   RefreshCw,
@@ -34,9 +35,17 @@ import {
   FoundryAssistants,
   ResourceTable,
   SkillList,
+  SoulPanel,
 } from '@/components/agents';
 import { useApi } from '@/hooks';
-import type { ActivityEvent, AgentCosts, AgentDetail, FoundryAssistant, Skill } from '@/types';
+import type {
+  ActivityEvent,
+  AgentCosts,
+  AgentDetail,
+  AgentSoul,
+  FoundryAssistant,
+  Skill,
+} from '@/types';
 
 export default function AgentPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -48,6 +57,7 @@ export default function AgentPage({ params }: { params: Promise<{ id: string }> 
     60_000
   );
   const skills = useApi<{ skills: Skill[] }>(ready ? `/api/agents/${id}/skills` : null);
+  const soul = useApi<{ soul: AgentSoul | null }>(ready ? `/api/agents/${id}/soul` : null);
   const activity = useApi<{ events: ActivityEvent[] }>(
     ready ? `/api/agents/${id}/activity` : null,
     120_000
@@ -151,6 +161,7 @@ export default function AgentPage({ params }: { params: Promise<{ id: string }> 
                   onClick={() => {
                     detail.refetch();
                     skills.refetch();
+                    soul.refetch();
                     activity.refetch();
                     costs.refetch();
                   }}
@@ -232,6 +243,33 @@ export default function AgentPage({ params }: { params: Promise<{ id: string }> 
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
               <div className="space-y-6 lg:col-span-2">
+                {agent.repo && (soul.isLoading || soul.error || soul.data?.soul) && (
+                  <section className="card">
+                    <h2
+                      className="flex items-center gap-2 border-b p-4 text-lg font-semibold"
+                      style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                    >
+                      <Heart size={18} style={{ color: 'var(--primary)' }} /> Soul
+                      {soul.data?.soul?.url && (
+                        <a
+                          href={soul.data.soul.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="ml-auto flex items-center gap-1 font-mono text-xs font-normal hover:underline"
+                          style={{ color: 'var(--text-muted)' }}
+                        >
+                          {soul.data.soul.path} <ExternalLink size={11} />
+                        </a>
+                      )}
+                    </h2>
+                    <SoulPanel
+                      soul={soul.data?.soul ?? null}
+                      isLoading={soul.isLoading}
+                      error={soul.error}
+                    />
+                  </section>
+                )}
+
                 <section className="card">
                   <h2
                     className="flex items-center gap-2 border-b p-4 text-lg font-semibold"
