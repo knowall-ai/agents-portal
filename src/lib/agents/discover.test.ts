@@ -59,9 +59,10 @@ describe('groupResources', () => {
     const buckets = groupResources(
       [
         resource({ name: 'ka-sallie-vm', resourceGroup: 'ka-agents' }),
-        resource({ name: 'ka-poppie-vm', resourceGroup: 'ka-agents', tags: { agent: 'poppie' } }),
+        resource({ name: 'ka-poppie-vm', resourceGroup: 'KA-Agents', tags: { agent: 'poppie' } }),
       ],
-      registry
+      registry,
+      ['agent', 'project']
     );
     expect(buckets.find((b) => b.id === 'sallie')?.resources.map((r) => r.name)).toEqual([
       'ka-sallie-vm',

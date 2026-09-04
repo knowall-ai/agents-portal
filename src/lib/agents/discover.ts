@@ -167,7 +167,7 @@ export function groupResources(
       bucket.fromTags = true;
       continue;
     }
-    const claimed = byGroup.get(resource.resourceGroup);
+    const claimed = byGroup.get(resource.resourceGroup.toLowerCase());
     if (claimed) bucketFor(claimed.id).resources.push(resource);
   }
 
