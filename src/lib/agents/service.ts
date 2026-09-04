@@ -136,8 +136,18 @@ export async function getAllActivity(ctx: UserContext, limit = 60): Promise<Acti
   const feeds = await Promise.all(
     details.filter((a): a is AgentDetail => Boolean(a)).map((a) => getActivity(ctx, a))
   );
+  // Agents that share a repo (e.g. prod and test) report the same commits;
+  // keep the first occurrence so the merged feed lists each event once.
+  const seen = new Set<string>();
   return feeds
     .flat()
     .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+    .filter((event) => {
+      const [source, , ...rest] = event.id.split(':');
+      const key = `${source}:${rest.join(':')}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
     .slice(0, limit);
 }

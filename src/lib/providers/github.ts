@@ -127,7 +127,7 @@ export async function listRepoCommits(
 ): Promise<ActivityEvent[]> {
   const commits = await ghJson<RawCommit[]>(`/repos/${repo}/commits?per_page=${limit}`);
   return commits.map((c) => ({
-    id: `github:${c.sha}`,
+    id: `github:${agent.id}:${c.sha}`,
     agentId: agent.id,
     agentName: agent.name,
     timestamp: c.commit.author.date,

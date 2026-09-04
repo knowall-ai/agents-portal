@@ -175,7 +175,7 @@ export async function listRecentRuns(
               const finished = run.completed_at ?? run.failed_at ?? run.created_at;
               const failed = run.status === 'failed' || run.status === 'expired';
               events.push({
-                id: `foundry:${run.id}`,
+                id: `foundry:${agent.id}:${run.id}`,
                 agentId: agent.id,
                 agentName: agent.name,
                 timestamp: new Date(finished * 1000).toISOString(),

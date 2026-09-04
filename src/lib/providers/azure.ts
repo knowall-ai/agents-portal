@@ -227,7 +227,7 @@ export async function listActivityLog(
 
     const resourceName = entry.resourceId?.split('/').pop();
     events.push({
-      id: `azure:${entry.id}`,
+      id: `azure:${agent.id}:${entry.id}`,
       agentId: agent.id,
       agentName: agent.name,
       timestamp: entry.eventTimestamp,
