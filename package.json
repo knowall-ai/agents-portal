@@ -1,6 +1,6 @@
 {
   "name": "agent-dashboard",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Monitor KnowAll AI and customer AI agents across Azure tenants — status, skills and recent activity.",
   "private": true,
   "license": "MIT",
