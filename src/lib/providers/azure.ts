@@ -281,11 +281,9 @@ export function shortenScope(scope: string): string {
   if (rg !== -1 && parts.length === rg + 2) return `Resource group ${parts[rg + 1]}`;
   const providers = parts.indexOf('providers');
   if (providers !== -1 && parts.length > providers + 2) {
-    const type = parts[providers + 2];
-    return `${parts
-      .slice(providers + 3)
-      .filter((_, i) => i % 2 === 1)
-      .join('/')} (${type})`;
+    const namespace = parts[providers + 1];
+    const names = parts.slice(providers + 3).filter((_, i) => i % 2 === 0);
+    return `${names.join('/')} (${namespace})`;
   }
   return scope;
 }
