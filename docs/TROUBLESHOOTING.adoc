@@ -47,6 +47,12 @@
 |**Licences card shows `Graph 403` for some viewers**
 |Reading another user's licence details also needs the *viewer* to hold an Entra role with `microsoft.directory/users/licenseDetails/read` (Global Reader, User Administrator, License Administrator, or a custom role). Assign the role and reload; failures are only cached for a minute.
 
+|**Brain tab missing or says no brain connected**
+|Set `brainUrl` in `config/agents.json` and `REVERIE_TOKEN` on the server; the agent VM must run `reverie serve` behind Caddy (`/reverie/*`). `BRAIN_FIXTURE=1` shows a built-in graph for development.
+
+|**Brain shows "stream offline"**
+|The SSE proxy to `<brainUrl>/brain/events` dropped. Check `reverie-serve` on the VM and that the proxy does not buffer event streams.
+
 |**Boost button says Azure refused (403)**
 |Boost runs a command on the VM as *you*. You need *Virtual Machine Contributor* (or Owner/Contributor) on the agent's VM or resource group.
 

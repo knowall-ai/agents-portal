@@ -72,6 +72,8 @@ export interface AgentRegistryEntry {
   appRegistrations?: AppRegistrationRef[];
   /** BOOST mode: run a script on the agent's VM to switch OpenAI Fast mode on/off */
   boost?: BoostConfig;
+  /** Reverie brain API base URL (https://<agent-domain>/reverie); the portal's REVERIE_TOKEN is sent to it */
+  brainUrl?: string;
   /** Resource groups whose resources belong to this agent (case-insensitive) */
   resourceGroups?: string[];
   /** Agent not yet built or deployed — shown as "planned" */
@@ -86,6 +88,84 @@ export interface AgentRegistryEntry {
   anthropicWorkspaceId?: string;
   /** Flat monthly fees not visible in any API (e.g. ChatGPT subscription, ElevenLabs plan) */
   fixedCosts?: FixedCost[];
+}
+
+/** A node of the agent's graph memory (Reverie). */
+export interface BrainNode {
+  id: string;
+  label: string;
+  labels: string[];
+  name: string;
+  degree: number;
+  updatedAt: number;
+  createdAt: number;
+  props: Record<string, string | number | boolean | null | (string | number)[]>;
+}
+
+export interface BrainRel {
+  id: string;
+  type: string;
+  source: string;
+  target: string;
+  updatedAt: number;
+}
+
+export interface BrainStats {
+  nodeCount: number;
+  relCount: number;
+  labels: Record<string, number>;
+  relTypes: Record<string, number>;
+  shown: number;
+}
+
+/** Awake / dreaming signals from the agent's activation log and dream diary. */
+export interface BrainState {
+  dreaming: boolean;
+  lastActivityAt: number | null;
+  lastDreamAt: number | null;
+  lastDreamName: string | null;
+  recentReads: number;
+  recentWrites: number;
+  eventsAvailable: boolean;
+}
+
+export interface BrainSnapshot {
+  nodes: BrainNode[];
+  rels: BrainRel[];
+  stats: BrainStats;
+  state: BrainState;
+  generatedAt: number;
+}
+
+/** One line of the activation log: what the agent just read or wrote. */
+export interface BrainActivation {
+  ts: number;
+  kind: 'recall' | 'remember' | 'connect' | 'forget' | 'dream.start' | 'dream.end' | string;
+  ids?: string[];
+  names?: (string | null)[];
+  id?: string;
+  name?: string;
+  label?: string;
+  type?: string;
+  terms?: string[];
+}
+
+export interface BrainDiff {
+  nodesAdded: BrainNode[];
+  nodesUpdated: BrainNode[];
+  nodesRemoved: string[];
+  relsAdded: BrainRel[];
+  relsRemoved: string[];
+  stats?: BrainStats;
+}
+
+/** What the brain route returns: the snapshot when available, else why not. */
+export interface AgentBrain {
+  available: boolean;
+  /** true when served from the built-in fixture (BRAIN_FIXTURE=1) */
+  fixture?: boolean;
+  snapshot?: BrainSnapshot;
+  error?: string;
 }
 
 /** Registry config for BOOST mode (OpenAI Fast mode with auto-revert), run on the agent's VM. */

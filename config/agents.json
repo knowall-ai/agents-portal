@@ -27,7 +27,8 @@
         "script": "/home/sallie/sallie-openclaw/workspace/scripts/boost.sh",
         "defaultHours": 2,
         "maxHours": 8
-      }
+      },
+      "brainUrl": "https://sallie.knowall.ai/reverie"
     },
     {
       "id": "zaplie",

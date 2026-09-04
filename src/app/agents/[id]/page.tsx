@@ -39,6 +39,7 @@ import {
 import {
   ActivityFeed,
   BoostControl,
+  BrainView,
   CostBreakdown,
   FoundryAssistants,
   LicenseList,
@@ -51,6 +52,7 @@ import { useApi } from '@/hooks';
 import type {
   ActivityEvent,
   AgentBoost,
+  AgentBrain,
   AgentCosts,
   AgentDetail,
   AgentLicensing,
@@ -60,7 +62,15 @@ import type {
   Skill,
 } from '@/types';
 
-const TAB_IDS = ['overview', 'costs', 'licences', 'permissions', 'skills', 'activity'] as const;
+const TAB_IDS = [
+  'overview',
+  'brain',
+  'costs',
+  'licences',
+  'permissions',
+  'skills',
+  'activity',
+] as const;
 type TabId = (typeof TAB_IDS)[number];
 const RECENT_ACTIVITY = 8;
 
@@ -115,6 +125,7 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
     ready ? `/api/agents/${id}/permissions` : null
   );
   const boost = useApi<{ boost: AgentBoost }>(ready ? `/api/agents/${id}/boost` : null, 60_000);
+  const brain = useApi<{ brain: AgentBrain }>(ready ? `/api/agents/${id}/brain` : null);
 
   const agent = detail.data?.agent;
   const permissionCount = permissions.data
@@ -130,6 +141,16 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
     : undefined;
   const tabs: TabDef[] = [
     { id: 'overview', label: 'Overview', icon: <LayoutGrid size={14} /> },
+    ...(brain.data?.brain.available
+      ? [
+          {
+            id: 'brain',
+            label: 'Brain',
+            icon: <Brain size={14} />,
+            count: brain.data.brain.snapshot?.stats.nodeCount,
+          },
+        ]
+      : []),
     { id: 'costs', label: 'Costs', icon: <Receipt size={14} /> },
     {
       id: 'licences',
@@ -432,6 +453,28 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
                     />
                   </section>
                 </div>
+              )}
+
+              {tab === 'brain' && (
+                <section className="card overflow-hidden">
+                  <h2
+                    className="flex items-center gap-2 border-b p-4 text-lg font-semibold"
+                    style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                  >
+                    <Brain size={18} style={{ color: 'var(--primary)' }} /> Brain
+                    <span className="text-sm font-normal" style={{ color: 'var(--text-muted)' }}>
+                      Reverie graph memory, live
+                    </span>
+                  </h2>
+                  <BrainView
+                    agentId={agent.id}
+                    agentName={agent.name}
+                    agentStatus={agent.status}
+                    brain={brain.data?.brain ?? null}
+                    isLoading={brain.isLoading}
+                    error={brain.error}
+                  />
+                </section>
               )}
 
               {tab === 'costs' && (

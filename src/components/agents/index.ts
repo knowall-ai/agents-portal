@@ -3,6 +3,7 @@ export { default as AgentCard } from './AgentCard';
 export { default as AgentTable } from './AgentTable';
 export { default as AgentsView } from './AgentsView';
 export { default as BoostControl } from './BoostControl';
+export { default as BrainView } from './BrainView';
 export { default as CostBreakdown } from './CostBreakdown';
 export { default as FoundryAssistants } from './FoundryAssistants';
 export { default as LicenseList } from './LicenseList';

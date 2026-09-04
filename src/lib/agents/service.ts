@@ -19,6 +19,8 @@ import {
 import { getRepoMarkdown, listRepoCommits, listRepoSkills } from '@/lib/providers/github';
 import { probeUrl } from '@/lib/providers/health';
 import { getAppAccess, getUserAccess, getUserLicensing } from '@/lib/providers/graph';
+import { fetchBrainSnapshot, isValidBrainUrl } from '@/lib/providers/reverie';
+import { fixtureSnapshot } from '@/lib/brain-fixture';
 import {
   FOUNDRY_SCOPE,
   GRAPH_DIRECTORY_READ_ALL_SCOPE,
@@ -29,6 +31,7 @@ import {
 import type {
   ActivityEvent,
   AgentBoost,
+  AgentBrain,
   AgentCosts,
   AgentDetail,
   AgentLicensing,
@@ -412,6 +415,52 @@ export async function setBoost(
     throw new Error(`Hours must be between 0 and ${base.maxHours}`);
   }
   return runBoost(ctx, agent, `on ${requested}`);
+}
+
+// ---------------------------------------------------------------------------
+// Brain (Reverie graph memory)
+// ---------------------------------------------------------------------------
+
+export type BrainSource = { kind: 'fixture' } | { kind: 'reverie'; url: string; token: string };
+
+/**
+ * Where an agent's brain view reads from. Only the registry's `brainUrl` is
+ * honoured (never a tag) because the server-side REVERIE_TOKEN is sent to it.
+ */
+export function brainSource(agent: AgentDetail): BrainSource | null {
+  if (process.env.BRAIN_FIXTURE === '1') return { kind: 'fixture' };
+  const url = getRegistryEntry(agent.id)?.brainUrl;
+  const token = process.env.REVERIE_TOKEN;
+  if (!url || !token || !isValidBrainUrl(url)) return null;
+  return { kind: 'reverie', url, token };
+}
+
+/** Snapshot of the agent's graph memory; short-lived cache, failures not cached. */
+export async function getBrain(agent: AgentDetail): Promise<AgentBrain> {
+  const source = brainSource(agent);
+  if (!source) {
+    const entry = getRegistryEntry(agent.id);
+    return {
+      available: false,
+      error: entry?.brainUrl
+        ? 'REVERIE_TOKEN is not set on the server'
+        : 'No brainUrl in the registry for this agent',
+    };
+  }
+  if (source.kind === 'fixture')
+    return { available: true, fixture: true, snapshot: fixtureSnapshot() };
+  try {
+    const snapshot = await cached(
+      `brain:${agent.id}`,
+      () => fetchBrainSnapshot(source.url, source.token),
+      15 * 1000
+    );
+    return { available: true, snapshot };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`Brain snapshot failed for ${agent.id}:`, message);
+    return { available: true, error: message };
+  }
 }
 
 export async function getActivity(ctx: UserContext, agent: AgentDetail): Promise<ActivityEvent[]> {
