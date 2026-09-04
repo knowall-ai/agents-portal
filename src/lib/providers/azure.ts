@@ -209,7 +209,10 @@ export async function listActivityLog(
   days = 7
 ): Promise<ActivityEvent[]> {
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-  const filter = `eventTimestamp ge '${since}' and resourceGroupName eq '${resourceGroup}'`;
+  // Resource group names come from Resource Graph, but escape quotes anyway so the
+  // OData filter cannot be broken out of.
+  const safeGroup = resourceGroup.replace(/'/g, "''");
+  const filter = `eventTimestamp ge '${since}' and resourceGroupName eq '${safeGroup}'`;
   const select =
     'eventTimestamp,operationName,status,subStatus,category,level,caller,resourceId,correlationId,description';
   const path = `/subscriptions/${subscriptionId}/providers/Microsoft.Insights/eventtypes/management/values?api-version=2015-04-01&$filter=${encodeURIComponent(filter)}&$select=${select}`;

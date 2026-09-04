@@ -5,6 +5,8 @@ import {
   deriveStatus,
   groupResources,
   normaliseEnvironment,
+  safeAvatarUrl,
+  safeHttpsUrl,
   slugify,
   teamsChatUrl,
 } from './discover';
@@ -181,5 +183,27 @@ describe('teamsChatUrl', () => {
   });
   it('returns nothing when the agent cannot be reached in Teams', () => {
     expect(teamsChatUrl(undefined, [resource({})])).toBeUndefined();
+  });
+});
+
+describe('url guards', () => {
+  it('accepts https only for portal URLs', () => {
+    expect(safeHttpsUrl('https://sallie.knowall.ai')).toBe('https://sallie.knowall.ai/');
+    expect(safeHttpsUrl('http://169.254.169.254/metadata')).toBeUndefined();
+    expect(safeHttpsUrl('javascript:alert(1)')).toBeUndefined();
+    expect(safeHttpsUrl('not a url')).toBeUndefined();
+  });
+  it('accepts local paths or https for avatars', () => {
+    expect(safeAvatarUrl('/agents/sallie.png')).toBe('/agents/sallie.png');
+    expect(safeAvatarUrl('/../etc/passwd')).toBeUndefined();
+    expect(safeAvatarUrl('data:image/png;base64,AAAA')).toBeUndefined();
+  });
+  it('drops malformed repo slugs from tags', () => {
+    const buckets = groupResources(
+      [resource({ tags: { agent: 'evil', 'agent-repo': '../../rate_limit' } })],
+      [],
+      ['agent']
+    );
+    expect(buildAgent(buckets[0], [], 'tenant-a').repo).toBeUndefined();
   });
 });

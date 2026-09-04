@@ -20,7 +20,6 @@ const SIGN_IN_SCOPES = ['openid', 'profile', 'email', 'offline_access', ARM_SCOP
 
 declare module 'next-auth' {
   interface Session {
-    accessToken?: string;
     tenantId?: string;
     error?: string;
     user: {
@@ -116,7 +115,8 @@ export function getAuthOptions(tenantId?: string): NextAuthOptions {
         return refreshAccessToken(token);
       },
       async session({ session, token }) {
-        session.accessToken = token.accessToken;
+        // Tokens stay server-side (read from the JWT in API routes via getUserContext);
+        // only non-sensitive claims reach the browser.
         session.tenantId = token.tenantId;
         session.error = token.error;
         if (token.id) session.user.id = token.id;

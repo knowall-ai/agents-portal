@@ -11,7 +11,7 @@ Agent Dashboard deploys to Azure App Service as a Next.js standalone build, the 
 |Item |Value
 
 |App Service
-|`agent-dashboard-knowallai` (Linux, Node 20 LTS, same plan as ZapDesk)
+|`agent-dashboard-knowallai` (Linux, Node 22 LTS, `devdesk-plan` B1 in KnowAllAIRG — same plan as ZapDesk)
 
 |Production URL
 |https://agents.knowall.ai
@@ -30,20 +30,39 @@ Follow the *Entra ID App Registration* section in the README. Add the production
 
 [source,bash]
 ----
-az webapp create -g KnowAllAIRG -p devdesk-plan -n agent-dashboard-knowallai --runtime "NODE:20-lts"
-az webapp config set -g KnowAllAIRG -n agent-dashboard-knowallai --startup-file "node server.js"
-az webapp config appsettings set -g KnowAllAIRG -n agent-dashboard-knowallai --settings WEBSITE_HEALTHCHECK_MAXPINGFAILURES=5
-az webapp config set -g KnowAllAIRG -n agent-dashboard-knowallai --generic-configurations '{"healthCheckPath": "/api/health"}'
+az webapp create -g KnowAllAIRG -p devdesk-plan -n agent-dashboard-knowallai --runtime "NODE:22-lts" --https-only true
+az webapp config set -g KnowAllAIRG -n agent-dashboard-knowallai --startup-file "node server.js" \
+  --min-tls-version 1.2 --ftps-state Disabled --http20-enabled true \
+  --generic-configurations '{"healthCheckPath": "/api/health"}'
+----
+
+Runtime settings live in App Service configuration (the deploy workflow does not touch them):
+
+[source,bash]
+----
+az webapp config appsettings set -g KnowAllAIRG -n agent-dashboard-knowallai --settings \
+  NEXTAUTH_URL=https://agents.knowall.ai APP_URL=https://agents.knowall.ai \
+  NEXTAUTH_SECRET=$(openssl rand -hex 32) \
+  AZURE_AD_TENANT_ID=common AZURE_AD_CLIENT_ID=<app-id> AZURE_AD_CLIENT_SECRET=<production-secret> \
+  GITHUB_TOKEN=<fine-grained token, Contents: read on agent repos> \
+  SCM_DO_BUILD_DURING_DEPLOYMENT=false WEBSITE_HEALTHCHECK_MAXPINGFAILURES=5 CACHE_TTL_SECONDS=60
 ----
 
 === 3. Custom domain and TLS
 
+The `knowall.ai` zone is hosted in Azure DNS (resource group `knowallairg`).
+
 [source,bash]
 ----
-# CNAME agents.knowall.ai -> agent-dashboard-knowallai.azurewebsites.net (in DNS)
+VERIFY=$(az webapp show -g KnowAllAIRG -n agent-dashboard-knowallai --query customDomainVerificationId -o tsv)
+az network dns record-set txt add-record -g knowallairg -z knowall.ai -n asuid.agents -v "$VERIFY"
+az network dns record-set cname set-record -g knowallairg -z knowall.ai -n agents -c agent-dashboard-knowallai.azurewebsites.net
 az webapp config hostname add -g KnowAllAIRG --webapp-name agent-dashboard-knowallai --hostname agents.knowall.ai
-az webapp config ssl create -g KnowAllAIRG -n agent-dashboard-knowallai --hostname agents.knowall.ai
+THUMB=$(az webapp config ssl create -g KnowAllAIRG -n agent-dashboard-knowallai --hostname agents.knowall.ai --query thumbprint -o tsv)
+az webapp config ssl bind -g KnowAllAIRG -n agent-dashboard-knowallai --certificate-thumbprint "$THUMB" --ssl-type SNI
 ----
+
+The App Service managed certificate renews itself.
 
 === 4. GitHub secrets
 
@@ -52,20 +71,15 @@ az webapp config ssl create -g KnowAllAIRG -n agent-dashboard-knowallai --hostna
 |Secret |Value
 
 |`AZURE_CREDENTIALS`
-|Service principal JSON with Contributor on the App Service (`az ad sp create-for-rbac --sdk-auth`)
+|Service principal `agent-dashboard-github-deploy` with Contributor scoped to the App Service only. Created with `az ad sp create-for-rbac --sdk-auth` and piped straight into `gh secret set` so the value is never displayed.
 
-|`NEXTAUTH_SECRET`
-|`openssl rand -hex 32`
-
-|`AZURE_AD_CLIENT_ID`
-|App registration client ID
-
-|`AZURE_AD_CLIENT_SECRET`
-|App registration client secret
-
-|`AGENT_REPOS_GITHUB_TOKEN`
-|Fine-grained token, Contents: read on agent repos (for private repos)
+|`ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`
+|Optional — used by the manual *Claude Code Review* workflow
 |===
+
+=== 5. Branch protection
+
+`main` mirrors ZapDesk and Thyme: required checks *Lint*, *Format*, *Type Check*, *Unit Tests*, *Build* and *Title, body and issue link*; one approving review with code-owner review; stale reviews dismissed; no force pushes. A ruleset requests a Copilot review on every PR.
 
 == Releasing
 
@@ -78,6 +92,19 @@ git push --follow-tags  # tag triggers the deploy workflow
 
 The version appears in the sidebar footer.
 
+== Manual first deployment
+
+The workflow deploys on tags. To push a build by hand (e.g. the very first deployment):
+
+[source,bash]
+----
+bun run build
+cp -r public .next/standalone/ && cp -r .next/static .next/standalone/.next/
+(cd .next/standalone && zip -qr ../../deploy.zip .)
+az webapp deploy -g KnowAllAIRG -n agent-dashboard-knowallai --src-path .next/deploy.zip --type zip
+curl https://agents.knowall.ai/api/health
+----
+
 == Environment Variables
 
-See `.env.example`. All runtime settings are written by the deploy workflow as App Service application settings.
+See `.env.example`. Runtime settings are App Service application settings; the deploy workflow only builds and ships the standalone bundle.

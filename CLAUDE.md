@@ -107,7 +107,7 @@ When adding Playwright tests, extend the existing spec files rather than creatin
 
 ## Code Quality & CI/CD
 
-**ALWAYS run `bun run check` before pushing.** CI runs lint, format, typecheck, unit tests and build on every PR to `main`.
+**ALWAYS run `bun run check` before pushing.** CI runs lint, format, typecheck, unit tests and build on every PR to `main`; PR titles must use a conventional-commit prefix and the body needs a `## Test plan` (see `.github/workflows/pr-lint.yml`). All of these are required checks on `main`, plus one approving review.
 
 ```bash
 bun run check          # All checks

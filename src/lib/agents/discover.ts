@@ -179,6 +179,24 @@ export function groupResources(
   return [...buckets.values()];
 }
 
+/** Accept only https URLs (tags are writable by anyone with Contributor on a resource). */
+export function safeHttpsUrl(value?: string): string | undefined {
+  if (!value) return undefined;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' ? url.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Avatar may be a same-origin path (/agents/x.png) or an https URL. */
+export function safeAvatarUrl(value?: string): string | undefined {
+  if (!value) return undefined;
+  if (/^\/[A-Za-z0-9_\-./]+$/.test(value) && !value.includes('..')) return value;
+  return safeHttpsUrl(value);
+}
+
 function titleCase(slug: string): string {
   return slug
     .split('-')
@@ -250,11 +268,13 @@ export function buildAgent(
     subscriptionName: subscription?.name,
     resourceGroups,
     delegated: Boolean(tenantId && sessionTenantId && tenantId !== sessionTenantId),
-    portalUrl: entry?.portalUrl ?? firstTag(resources, 'agent-url'),
-    repo: entry?.repo ?? firstTag(resources, 'agent-repo'),
+    portalUrl: safeHttpsUrl(entry?.portalUrl ?? firstTag(resources, 'agent-url')),
+    repo: [entry?.repo ?? firstTag(resources, 'agent-repo')].find((r): r is string =>
+      Boolean(r && /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(r))
+    ),
     resourceCount: resources.length,
     source: entry && bucket.fromTags ? 'both' : entry ? 'registry' : 'tags',
-    avatarUrl: entry?.avatarUrl ?? firstTag(resources, 'agent-avatar'),
+    avatarUrl: safeAvatarUrl(entry?.avatarUrl ?? firstTag(resources, 'agent-avatar')),
     teamsChatUrl: teamsChatUrl(entry, resources),
     resources: [...resources].sort(
       (a, b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name)

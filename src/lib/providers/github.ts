@@ -13,6 +13,13 @@ function headers(): HeadersInit {
   return h;
 }
 
+const REPO_SLUG = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+
+/** True for an `owner/name` slug with no path tricks. */
+export function isValidRepo(repo: string): boolean {
+  return REPO_SLUG.test(repo) && !repo.includes('..');
+}
+
 async function ghJson<T>(path: string): Promise<T> {
   const response = await fetch(`${API}${path}`, {
     headers: headers(),
@@ -76,6 +83,8 @@ async function mapWithConcurrency<T, R>(
 
 /** List skills from `<repo>/<skillsPath>/<skill>/SKILL.md`. */
 export async function listRepoSkills(repo: string, skillsPath: string): Promise<Skill[]> {
+  if (!isValidRepo(repo)) throw new Error(`Invalid repo slug: ${repo}`);
+  if (skillsPath.includes('..')) throw new Error(`Invalid skills path: ${skillsPath}`);
   let listing = await ghJson<ContentItem | ContentItem[]>(`/repos/${repo}/contents/${skillsPath}`);
   if (!Array.isArray(listing) && listing.type === 'symlink' && listing.target) {
     const resolved = resolveSymlink(skillsPath, listing.target);
@@ -125,6 +134,7 @@ export async function listRepoCommits(
   agent: { id: string; name: string },
   limit = 15
 ): Promise<ActivityEvent[]> {
+  if (!isValidRepo(repo)) throw new Error(`Invalid repo slug: ${repo}`);
   const commits = await ghJson<RawCommit[]>(`/repos/${repo}/commits?per_page=${limit}`);
   return commits.map((c) => ({
     id: `github:${agent.id}:${c.sha}`,
