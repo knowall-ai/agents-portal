@@ -59,11 +59,24 @@ interface CostQueryResponse {
 export async function queryAzureCosts(
   armToken: string,
   subscriptionId: string,
-  timeframe: Timeframe
+  timeframe: Timeframe,
+  now = new Date()
 ): Promise<AzureCostRow[]> {
+  // Cost Management rejects timeframe "TheLastMonth" ("currently not supported"),
+  // so previous months are asked for as an explicit Custom period.
+  const window = monthWindows(now)[timeframe];
+  const lastDay = new Date(window.end.getTime() - 1);
   const body = {
     type: 'ActualCost',
-    timeframe,
+    ...(timeframe === 'MonthToDate'
+      ? { timeframe: 'MonthToDate' }
+      : {
+          timeframe: 'Custom',
+          timePeriod: {
+            from: window.start.toISOString(),
+            to: `${lastDay.toISOString().slice(0, 10)}T23:59:59Z`,
+          },
+        }),
     dataset: {
       granularity: 'None',
       aggregation: { totalCost: { name: 'Cost', function: 'Sum' } },
