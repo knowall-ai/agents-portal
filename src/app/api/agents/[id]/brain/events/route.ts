@@ -10,7 +10,8 @@ type RouteContext = { params: Promise<{ id: string }> };
 
 const SSE_HEADERS = {
   'Content-Type': 'text/event-stream',
-  'Cache-Control': 'no-cache, no-transform',
+  // authenticated, per-user data: never stored by a shared cache
+  'Cache-Control': 'no-store, private, no-transform',
   Connection: 'keep-alive',
   'X-Accel-Buffering': 'no',
 };

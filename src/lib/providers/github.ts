@@ -46,9 +46,19 @@ export function parseSkillFrontmatter(markdown: string): { name?: string; descri
   const match = markdown.match(/^---\s*\n([\s\S]*?)\n---/);
   if (!match) return {};
   const result: { name?: string; description?: string } = {};
-  for (const line of match[1].split('\n')) {
-    const m = line.match(/^(name|description):\s*(.*)$/);
-    if (m) result[m[1] as 'name' | 'description'] = m[2].trim().replace(/^["']|["']$/g, '');
+  const lines = match[1].split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(/^(name|description):\s*(.*)$/);
+    if (!m) continue;
+    const key = m[1] as 'name' | 'description';
+    let value = m[2].trim();
+    if (value === '>' || value === '|' || value === '>-' || value === '|-') {
+      // Folded (>) or literal (|) block scalar: gather the indented lines that follow
+      const block: string[] = [];
+      while (i + 1 < lines.length && /^\s+\S/.test(lines[i + 1])) block.push(lines[++i].trim());
+      value = block.join(value.startsWith('>') ? ' ' : '\n');
+    }
+    result[key] = value.replace(/^["']|["']$/g, '');
   }
   return result;
 }
@@ -147,18 +157,31 @@ interface RawCommit {
   commit: { message: string; author: { name: string; date: string } };
 }
 
-/** Recent commits on the agent's repo as activity events. */
+/**
+ * Commits on the agent's repo from the last `sinceDays`, newest first, paged
+ * 100 at a time up to `limit`. Both bounds must be positive integers.
+ */
 export async function listRepoCommits(
   repo: string,
   agent: { id: string; name: string },
   limit = 15,
-  sinceDays = 365
+  sinceDays = 90
 ): Promise<ActivityEvent[]> {
   if (!isValidRepo(repo)) throw new Error(`Invalid repo slug: ${repo}`);
+  if (!Number.isInteger(limit) || limit < 1 || limit > 5000)
+    throw new Error(`Invalid limit: ${limit}`);
+  if (!Number.isInteger(sinceDays) || sinceDays < 1 || sinceDays > 3650)
+    throw new Error(`Invalid sinceDays: ${sinceDays}`);
   const since = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000).toISOString();
-  const commits = await ghJson<RawCommit[]>(
-    `/repos/${repo}/commits?per_page=${Math.min(100, limit)}&since=${since}`
-  );
+  const commits: RawCommit[] = [];
+  for (let page = 1; commits.length < limit; page++) {
+    const perPage = Math.min(100, limit - commits.length);
+    const batch = await ghJson<RawCommit[]>(
+      `/repos/${repo}/commits?per_page=${perPage}&page=${page}&since=${since}`
+    );
+    commits.push(...batch);
+    if (batch.length < perPage) break;
+  }
   return commits.map((c) => ({
     id: `github:${agent.id}:${c.sha}`,
     agentId: agent.id,

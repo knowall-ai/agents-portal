@@ -118,7 +118,13 @@ export async function getSkills(ctx: UserContext, agent: AgentDetail): Promise<S
       const [repoLists, assistants] = await Promise.all([
         Promise.all(
           sources.map((source) =>
-            listRepoSkills(source.repo, source.path).catch((error) => {
+            // Repo skills come from the server-side GitHub token and are the same for
+            // every viewer, so cache them per repo rather than per user
+            cached(
+              `skills:repo:${source.repo}:${source.path}`,
+              () => listRepoSkills(source.repo, source.path),
+              10 * 60 * 1000
+            ).catch((error) => {
               console.warn(`GitHub skills lookup failed for ${agent.id} (${source.repo}):`, error);
               return [] as Skill[];
             })
@@ -437,7 +443,10 @@ export function brainSource(agent: AgentDetail): BrainSource | null {
   return { kind: 'reverie', url, token };
 }
 
-/** Snapshot of the agent's graph memory; short-lived cache, failures not cached. */
+/**
+ * Snapshot of the agent's graph memory. Cached briefly; a failed refresh serves
+ * the last good snapshot for a short while (see cache.ts) before erroring.
+ */
 export async function getBrain(agent: AgentDetail): Promise<AgentBrain> {
   const source = brainSource(agent);
   if (!source) {
@@ -483,7 +492,7 @@ export async function getActivity(ctx: UserContext, agent: AgentDetail): Promise
     });
 
     const github = agent.repo
-      ? listRepoCommits(agent.repo, who, 100).catch((error) => {
+      ? listRepoCommits(agent.repo, who, 1000, 365).catch((error) => {
           console.warn(`GitHub commits failed for ${agent.repo}:`, error);
           return [] as ActivityEvent[];
         })
@@ -501,15 +510,10 @@ export async function getActivity(ctx: UserContext, agent: AgentDetail): Promise
     })();
 
     const results = await Promise.all([...azure, github, foundry]);
-    return results
-      .flat()
-      .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
-      .slice(0, ACTIVITY_LIMIT);
+    // Untruncated: the calendar aggregates a whole year; the route trims the feed
+    return results.flat().sort((a, b) => b.timestamp.localeCompare(a.timestamp));
   });
 }
-
-/** Enough events for the 12-week calendar and the 3-day chart; the feeds trim what they show. */
-const ACTIVITY_LIMIT = 400;
 
 /** VM CPU series for the agent's virtual machines over the last `hours`. */
 export async function getMetrics(

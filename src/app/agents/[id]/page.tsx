@@ -55,6 +55,7 @@ import {
 import { useApi } from '@/hooks';
 import { BACKDROPS, type Backdrop } from '@/components/agents/BrainView';
 import type {
+  ActivityDay,
   ActivityEvent,
   AgentMetrics,
   AgentBoost,
@@ -124,11 +125,14 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
     60_000
   );
   const skills = useApi<{ skills: Skill[] }>(ready ? `/api/agents/${id}/skills` : null);
-  const soul = useApi<{ soul: AgentSoul | null }>(ready ? `/api/agents/${id}/soul` : null);
-  const metrics = useApi<{ metrics: AgentMetrics }>(
-    ready ? `/api/agents/${id}/metrics?hours=72` : null
+  const soul = useApi<{ soul: AgentSoul | null; configured: boolean }>(
+    ready ? `/api/agents/${id}/soul` : null
   );
-  const activity = useApi<{ events: ActivityEvent[] }>(
+  const metrics = useApi<{ metrics: AgentMetrics }>(
+    ready ? `/api/agents/${id}/metrics?hours=72` : null,
+    120_000
+  );
+  const activity = useApi<{ events: ActivityEvent[]; daily: ActivityDay[] }>(
     ready ? `/api/agents/${id}/activity` : null,
     120_000
   );
@@ -306,10 +310,12 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
                     skills.refetch();
                     soul.refetch();
                     activity.refetch();
+                    metrics.refetch();
                     costs.refetch();
                     licensing.refetch();
                     permissions.refetch();
                     boost.refetch();
+                    brain.refetch();
                   }}
                   className="btn-secondary flex items-center gap-2 text-sm"
                 >
@@ -401,7 +407,7 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
                         <CalendarDays size={18} style={{ color: 'var(--primary)' }} /> Activity
                       </h2>
                       <ActivityCalendar
-                        events={activity.data?.events ?? null}
+                        days={activity.data?.daily ?? null}
                         isLoading={activity.isLoading}
                       />
                     </section>
@@ -444,6 +450,7 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
                         </h2>
                         <SoulPanel
                           soul={soul.data?.soul ?? null}
+                          configured={soul.data?.configured}
                           isLoading={soul.isLoading}
                           error={soul.error}
                         />

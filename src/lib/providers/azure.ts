@@ -428,6 +428,9 @@ export async function runVmScript(
   return parseRunCommandMessage(message);
 }
 
+/** Azure Monitor normally answers in well under a second; never wait on it for longer than this */
+const METRICS_TIMEOUT_MS = 15_000;
+
 interface MetricsResponse {
   value: {
     name: { value: string };
@@ -457,7 +460,8 @@ export async function listVmCpu(
   });
   const result = await armFetch<MetricsResponse>(
     token,
-    `${resourceId}/providers/Microsoft.Insights/metrics?${query}`
+    `${resourceId}/providers/Microsoft.Insights/metrics?${query}`,
+    { signal: AbortSignal.timeout(METRICS_TIMEOUT_MS) }
   );
   const data = result.value[0]?.timeseries[0]?.data ?? [];
   return data.map((d) => ({

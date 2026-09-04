@@ -34,7 +34,7 @@
             }
           },
           "soulPath": { "type": "string" },
-          "brainUrl": { "type": "string", "format": "uri" },
+          "brainUrl": { "type": "string", "format": "uri", "pattern": "^https://" },
           "boost": {
             "type": "object",
             "required": ["script"],
