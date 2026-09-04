@@ -8,14 +8,25 @@ import type { AgentSoul } from '@/types';
 
 interface SoulPanelProps {
   soul: AgentSoul | null;
+  /** false when the agent has no registry repo, so there is nothing to read */
+  configured?: boolean;
   isLoading: boolean;
   error?: string | null;
 }
 
 /** Renders the agent's SOUL.md. HTML in the markdown is escaped, not rendered. */
-export default function SoulPanel({ soul, isLoading, error }: SoulPanelProps) {
+export default function SoulPanel({ soul, configured = true, isLoading, error }: SoulPanelProps) {
   if (isLoading && !soul) return <LoadingSpinner className="py-8" message="Loading SOUL.md..." />;
   if (error && !soul) return <EmptyState title="Could not load SOUL.md" description={error} />;
+  if (!soul && !configured) {
+    return (
+      <EmptyState
+        icon={<Heart size={28} />}
+        title="No repo configured"
+        description="Set repo on this agent's registry entry; SOUL.md is only read from registry-configured repos."
+      />
+    );
+  }
   if (!soul) {
     return (
       <EmptyState
