@@ -19,6 +19,8 @@ test.describe('API routes', () => {
     '/api/agents',
     '/api/agents/sallie',
     '/api/agents/sallie/skills',
+    '/api/agents/sallie/soul',
+    '/api/agents/sallie/licenses',
     '/api/agents/sallie/activity',
     '/api/agents/sallie/costs',
     '/api/costs',
@@ -40,6 +42,6 @@ test.describe('API routes', () => {
       data: { tenantId: '00000000-0000-0000-0000-000000000000' },
     });
     expect(ok.ok()).toBeTruthy();
-    expect(ok.headers()['set-cookie']).toContain('agent-dashboard-tenant=');
+    expect(ok.headers()['set-cookie']).toContain('agents-portal-tenant=');
   });
 });

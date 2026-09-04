@@ -6,11 +6,13 @@ import { useSession } from 'next-auth/react';
 import { formatDistanceToNow } from 'date-fns';
 import {
   ArrowLeft,
+  BadgeCheck,
   Boxes,
   Building2,
   ExternalLink,
   Github,
   Globe,
+  Heart,
   MessageSquare,
   Receipt,
   RefreshCw,
@@ -32,11 +34,21 @@ import {
   ActivityFeed,
   CostBreakdown,
   FoundryAssistants,
+  LicenseList,
   ResourceTable,
   SkillList,
+  SoulPanel,
 } from '@/components/agents';
 import { useApi } from '@/hooks';
-import type { ActivityEvent, AgentCosts, AgentDetail, FoundryAssistant, Skill } from '@/types';
+import type {
+  ActivityEvent,
+  AgentCosts,
+  AgentDetail,
+  AgentLicensing,
+  AgentSoul,
+  FoundryAssistant,
+  Skill,
+} from '@/types';
 
 export default function AgentPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -48,11 +60,17 @@ export default function AgentPage({ params }: { params: Promise<{ id: string }> 
     60_000
   );
   const skills = useApi<{ skills: Skill[] }>(ready ? `/api/agents/${id}/skills` : null);
+  const soul = useApi<{ soul: AgentSoul | null; configured: boolean }>(
+    ready ? `/api/agents/${id}/soul` : null
+  );
   const activity = useApi<{ events: ActivityEvent[] }>(
     ready ? `/api/agents/${id}/activity` : null,
     120_000
   );
   const costs = useApi<AgentCosts>(ready ? `/api/agents/${id}/costs` : null, 15 * 60_000);
+  const licensing = useApi<{ licensing: AgentLicensing }>(
+    ready ? `/api/agents/${id}/licenses` : null
+  );
 
   const agent = detail.data?.agent;
 
@@ -151,8 +169,10 @@ export default function AgentPage({ params }: { params: Promise<{ id: string }> 
                   onClick={() => {
                     detail.refetch();
                     skills.refetch();
+                    soul.refetch();
                     activity.refetch();
                     costs.refetch();
+                    licensing.refetch();
                   }}
                   className="btn-secondary flex items-center gap-2 text-sm"
                 >
@@ -232,6 +252,34 @@ export default function AgentPage({ params }: { params: Promise<{ id: string }> 
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
               <div className="space-y-6 lg:col-span-2">
+                {agent.repo && (soul.isLoading || soul.error || soul.data) && (
+                  <section className="card">
+                    <h2
+                      className="flex items-center gap-2 border-b p-4 text-lg font-semibold"
+                      style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                    >
+                      <Heart size={18} style={{ color: 'var(--primary)' }} /> Soul
+                      {soul.data?.soul?.url && (
+                        <a
+                          href={soul.data.soul.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="ml-auto flex items-center gap-1 font-mono text-xs font-normal hover:underline"
+                          style={{ color: 'var(--text-muted)' }}
+                        >
+                          {soul.data.soul.path} <ExternalLink size={11} />
+                        </a>
+                      )}
+                    </h2>
+                    <SoulPanel
+                      soul={soul.data?.soul ?? null}
+                      configured={soul.data?.configured}
+                      isLoading={soul.isLoading}
+                      error={soul.error}
+                    />
+                  </section>
+                )}
+
                 <section className="card">
                   <h2
                     className="flex items-center gap-2 border-b p-4 text-lg font-semibold"
@@ -265,6 +313,25 @@ export default function AgentPage({ params }: { params: Promise<{ id: string }> 
                     costs={costs.data}
                     isLoading={costs.isLoading}
                     error={costs.error}
+                  />
+                </section>
+
+                <section className="card">
+                  <h2
+                    className="flex items-center gap-2 border-b p-4 text-lg font-semibold"
+                    style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                  >
+                    <BadgeCheck size={18} style={{ color: 'var(--primary)' }} /> Licences
+                    {licensing.data && licensing.data.licensing.licenses.length > 0 && (
+                      <span className="text-sm font-normal" style={{ color: 'var(--text-muted)' }}>
+                        ({licensing.data.licensing.licenses.length})
+                      </span>
+                    )}
+                  </h2>
+                  <LicenseList
+                    licensing={licensing.data?.licensing ?? null}
+                    isLoading={licensing.isLoading}
+                    error={licensing.error}
                   />
                 </section>
 

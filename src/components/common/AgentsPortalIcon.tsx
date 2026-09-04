@@ -2,18 +2,18 @@
 
 import { useId } from 'react';
 
-interface AgentDashboardIconProps {
+interface AgentsPortalIconProps {
   size?: number;
   className?: string;
 }
 
 /**
- * Agent Dashboard logo icon.
+ * Agents Portal logo icon.
  *
  * A heartbeat pulse line — every agent's vital signs at a glance — on the same
  * green metallic rounded square used across the KnowAll product family.
  */
-export default function AgentDashboardIcon({ size = 32, className = '' }: AgentDashboardIconProps) {
+export default function AgentsPortalIcon({ size = 32, className = '' }: AgentsPortalIconProps) {
   const id = useId();
   const metalGradientId = `agentdash-metal-${id}`;
   const shineGradientId = `agentdash-shine-${id}`;
@@ -25,7 +25,7 @@ export default function AgentDashboardIcon({ size = 32, className = '' }: AgentD
       width={size}
       height={size}
       className={className}
-      aria-label="Agent Dashboard"
+      aria-label="Agents Portal"
     >
       <defs>
         <linearGradient id={metalGradientId} x1="0%" y1="0%" x2="100%" y2="100%">

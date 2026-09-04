@@ -1,5 +1,5 @@
 {
-  "name": "agent-dashboard",
+  "name": "agents-portal",
   "version": "0.2.2",
   "description": "Monitor KnowAll AI and customer AI agents across Azure tenants — status, skills and recent activity.",
   "private": true,
@@ -28,6 +28,8 @@
     "next-auth": "^4.24.13",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "sonner": "^2.0.7"
   },
   "devDependencies": {

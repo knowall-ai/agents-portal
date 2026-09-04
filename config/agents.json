@@ -12,6 +12,10 @@
       "healthUrl": "https://sallie.knowall.ai/health",
       "repo": "knowall-ai/sallie-openclaw",
       "skillsPath": ".claude/skills",
+      "skillSources": [
+        { "repo": "knowall-ai/claude-plugins", "path": "skills" },
+        { "repo": "T-Minus-15/claude-plugins", "path": "skills" }
+      ],
       "resourceGroups": ["ka-agents"],
       "avatarUrl": "/agents/sallie.png",
       "teamsUpn": "sallie@knowall.ai"
@@ -49,15 +53,6 @@
       "environment": "dev",
       "description": "Irish FA ticketing assistant — drafts replies to ticket enquiries for human review. In development on the KnowAll tenant.",
       "resourceGroups": ["rg-winnie-dev"]
-    },
-    {
-      "id": "allie",
-      "name": "Allie",
-      "kind": "foundry",
-      "customer": "Cairn Homes",
-      "environment": "dev",
-      "description": "Cairn Homes agent — not yet built.",
-      "planned": true
     },
     {
       "id": "pennie",

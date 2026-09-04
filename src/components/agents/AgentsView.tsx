@@ -22,7 +22,7 @@ import { formatTotals } from '@/lib/format';
 import type { AgentKind, AgentStatus, AgentSummary, CostsSummary, CurrencyTotals } from '@/types';
 
 type ViewMode = 'list' | 'grid';
-const VIEW_KEY = 'agent-dashboard-agents-view';
+const VIEW_KEY = 'agents-portal-agents-view';
 
 /** KPIs + filterable agent list. Used as the home page. */
 export default function AgentsView() {

@@ -1,5 +1,5 @@
-// GitHub: skills (SKILL.md folders) and recent commits for an agent's repo.
-import type { ActivityEvent, Skill } from '@/types';
+// GitHub: skills (SKILL.md folders), SOUL.md and recent commits for an agent's repo.
+import type { ActivityEvent, AgentSoul, Skill } from '@/types';
 
 const API = 'https://api.github.com';
 
@@ -7,7 +7,7 @@ function headers(): HeadersInit {
   const h: Record<string, string> = {
     Accept: 'application/vnd.github+json',
     'X-GitHub-Api-Version': '2022-11-28',
-    'User-Agent': 'knowall-agent-dashboard',
+    'User-Agent': 'knowall-agents-portal',
   };
   if (process.env.GITHUB_TOKEN) h.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
   return h;
@@ -46,9 +46,19 @@ export function parseSkillFrontmatter(markdown: string): { name?: string; descri
   const match = markdown.match(/^---\s*\n([\s\S]*?)\n---/);
   if (!match) return {};
   const result: { name?: string; description?: string } = {};
-  for (const line of match[1].split('\n')) {
-    const m = line.match(/^(name|description):\s*(.*)$/);
-    if (m) result[m[1] as 'name' | 'description'] = m[2].trim().replace(/^["']|["']$/g, '');
+  const lines = match[1].split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(/^(name|description):\s*(.*)$/);
+    if (!m) continue;
+    const key = m[1] as 'name' | 'description';
+    let value = m[2].trim();
+    if (value === '>' || value === '|' || value === '>-' || value === '|-') {
+      // Folded (>) or literal (|) block scalar: gather the indented lines that follow
+      const block: string[] = [];
+      while (i + 1 < lines.length && /^\s+\S/.test(lines[i + 1])) block.push(lines[++i].trim());
+      value = block.join(value.startsWith('>') ? ' ' : '\n');
+    }
+    result[key] = value.replace(/^["']|["']$/g, '');
   }
   return result;
 }
@@ -95,7 +105,7 @@ export async function listRepoSkills(repo: string, skillsPath: string): Promise<
   const dirs = listing.filter((item) => item.type === 'dir');
   const skills = await mapWithConcurrency(dirs, 6, async (dir): Promise<Skill> => {
     const fallback: Skill = {
-      id: `github:${dir.name}`,
+      id: `github:${repo}:${dir.name}`,
       name: dir.name,
       source: 'github',
       sourceLabel: repo,
@@ -120,6 +130,25 @@ export async function listRepoSkills(repo: string, skillsPath: string): Promise<
   });
 
   return skills.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Fetch a markdown file from the repo, or null when it does not exist. */
+export async function getRepoMarkdown(repo: string, path: string): Promise<AgentSoul | null> {
+  if (!isValidRepo(repo)) throw new Error(`Invalid repo slug: ${repo}`);
+  if (path.includes('..')) throw new Error(`Invalid path: ${path}`);
+  let file: ContentItem | ContentItem[];
+  try {
+    file = await ghJson<ContentItem | ContentItem[]>(`/repos/${repo}/contents/${path}`);
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('GitHub 404 ')) return null;
+    throw error;
+  }
+  if (Array.isArray(file) || !file.content || file.encoding !== 'base64') return null;
+  return {
+    path,
+    markdown: Buffer.from(file.content, 'base64').toString('utf8'),
+    url: file.html_url,
+  };
 }
 
 interface RawCommit {
