@@ -136,7 +136,7 @@ export async function getSoul(ctx: UserContext, agent: AgentDetail): Promise<Age
   const repo = entry?.repo;
   if (!repo) return null;
   return cached(
-    `soul:${scope(ctx)}:${agent.id}`,
+    `soul:${ctx.tenantId}:${agent.id}`,
     async () => {
       const candidates = [...(entry?.soulPath ? [entry.soulPath] : []), ...SOUL_CANDIDATES];
       for (const path of candidates) {
