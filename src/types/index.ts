@@ -70,6 +70,8 @@ export interface AgentRegistryEntry {
   soulPath?: string;
   /** Entra app registrations the agent runs as (Graph/API access). Bot app IDs are added automatically. */
   appRegistrations?: AppRegistrationRef[];
+  /** BOOST mode: run a script on the agent's VM to switch OpenAI Fast mode on/off */
+  boost?: BoostConfig;
   /** Resource groups whose resources belong to this agent (case-insensitive) */
   resourceGroups?: string[];
   /** Agent not yet built or deployed — shown as "planned" */
@@ -84,6 +86,34 @@ export interface AgentRegistryEntry {
   anthropicWorkspaceId?: string;
   /** Flat monthly fees not visible in any API (e.g. ChatGPT subscription, ElevenLabs plan) */
   fixedCosts?: FixedCost[];
+}
+
+/** Registry config for BOOST mode (OpenAI Fast mode with auto-revert), run on the agent's VM. */
+export interface BoostConfig {
+  /** Absolute path of the boost script on the VM (on|off|status) */
+  script: string;
+  /** Hours Boost stays on before the VM switches the agent back (default 2) */
+  defaultHours?: number;
+  /** Upper bound the UI and API accept (default 8) */
+  maxHours?: number;
+}
+
+/** BOOST state as reported by the VM (or last known). */
+export interface AgentBoost {
+  supported: boolean;
+  active: boolean;
+  /** Model that Fast mode applies to */
+  model?: string;
+  since?: string;
+  until?: string;
+  hours?: number;
+  /** Where this state came from */
+  source: 'vm' | 'cache' | 'none';
+  checkedAt?: string;
+  defaultHours: number;
+  maxHours: number;
+  warning: string;
+  error?: string;
 }
 
 export interface AppRegistrationRef {

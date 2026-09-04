@@ -21,6 +21,7 @@ import {
   Sparkles,
   Activity,
   Brain,
+  Zap,
 } from 'lucide-react';
 import { MainLayout } from '@/components/layout';
 import {
@@ -33,6 +34,7 @@ import {
 } from '@/components/common';
 import {
   ActivityFeed,
+  BoostControl,
   CostBreakdown,
   FoundryAssistants,
   LicenseList,
@@ -44,6 +46,7 @@ import {
 import { useApi } from '@/hooks';
 import type {
   ActivityEvent,
+  AgentBoost,
   AgentCosts,
   AgentDetail,
   AgentLicensing,
@@ -75,6 +78,7 @@ export default function AgentPage({ params }: { params: Promise<{ id: string }> 
   const permissions = useApi<{ permissions: AgentPermissions }>(
     ready ? `/api/agents/${id}/permissions` : null
   );
+  const boost = useApi<{ boost: AgentBoost }>(ready ? `/api/agents/${id}/boost` : null, 60_000);
 
   const agent = detail.data?.agent;
 
@@ -178,6 +182,7 @@ export default function AgentPage({ params }: { params: Promise<{ id: string }> 
                     costs.refetch();
                     licensing.refetch();
                     permissions.refetch();
+                    boost.refetch();
                   }}
                   className="btn-secondary flex items-center gap-2 text-sm"
                 >
@@ -257,6 +262,24 @@ export default function AgentPage({ params }: { params: Promise<{ id: string }> 
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
               <div className="space-y-6 lg:col-span-2">
+                {boost.data?.boost.supported && (
+                  <section className="card">
+                    <h2
+                      className="flex items-center gap-2 border-b p-4 text-lg font-semibold"
+                      style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                    >
+                      <Zap size={18} style={{ color: 'var(--primary)' }} /> Boost
+                    </h2>
+                    <BoostControl
+                      agentId={agent.id}
+                      boost={boost.data?.boost ?? null}
+                      isLoading={boost.isLoading}
+                      error={boost.error}
+                      onChanged={() => boost.refetch()}
+                    />
+                  </section>
+                )}
+
                 {agent.repo && (soul.isLoading || soul.error || soul.data) && (
                   <section className="card">
                     <h2

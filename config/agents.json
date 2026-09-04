@@ -22,7 +22,12 @@
       "appRegistrations": [
         { "appId": "27756f8e-e451-4c5d-91c3-e76035f376a6", "label": "Sallie MS365 MCP" },
         { "appId": "2b052ffe-e0f5-4a0e-ba85-910d56751ebc", "label": "Sallie - ClawdBot Portal" }
-      ]
+      ],
+      "boost": {
+        "script": "/home/sallie/sallie-openclaw/workspace/scripts/boost.sh",
+        "defaultHours": 2,
+        "maxHours": 8
+      }
     },
     {
       "id": "zaplie",
