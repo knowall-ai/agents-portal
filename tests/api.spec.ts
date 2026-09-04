@@ -40,6 +40,6 @@ test.describe('API routes', () => {
       data: { tenantId: '00000000-0000-0000-0000-000000000000' },
     });
     expect(ok.ok()).toBeTruthy();
-    expect(ok.headers()['set-cookie']).toContain('agent-dashboard-tenant=');
+    expect(ok.headers()['set-cookie']).toContain('agents-portal-tenant=');
   });
 });

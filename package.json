@@ -1,5 +1,5 @@
 {
-  "name": "agent-dashboard",
+  "name": "agents-portal",
   "version": "0.2.2",
   "description": "Monitor KnowAll AI and customer AI agents across Azure tenants — status, skills and recent activity.",
   "private": true,

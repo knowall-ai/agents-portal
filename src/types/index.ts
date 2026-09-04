@@ -1,4 +1,4 @@
-// Shared types for Agent Dashboard
+// Shared types for Agents Portal
 
 /** How the agent is built / hosted. */
 export type AgentKind = 'openclaw' | 'foundry' | 'botframework' | 'unknown';

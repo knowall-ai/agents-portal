@@ -63,7 +63,7 @@ export async function probeUrl(url: string): Promise<NonNullable<AgentDetail['re
       method: 'GET',
       redirect: 'manual',
       signal: AbortSignal.timeout(6_000),
-      headers: { 'User-Agent': 'knowall-agent-dashboard/health' },
+      headers: { 'User-Agent': 'knowall-agents-portal/health' },
     });
     // Drain nothing: the body is irrelevant and may be large
     response.body?.cancel().catch(() => undefined);

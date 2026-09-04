@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Agent Dashboard registry",
+  "title": "Agents Portal registry",
   "type": "object",
   "required": ["agents"],
   "properties": {

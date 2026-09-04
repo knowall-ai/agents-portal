@@ -1,11 +1,11 @@
-= Agent Dashboard Solution Design
+= Agents Portal Solution Design
 :toc: left
 :toclevels: 3
 :icons: font
 
 == Overview
 
-Agent Dashboard is a read-only operations portal for the AI agents KnowAll AI builds and runs. It answers three questions for every agent: *Is it up?*, *What can it do?* and *What has it been doing?* — across KnowAll's own tenant and customer tenants.
+Agents Portal is a read-only operations portal for the AI agents KnowAll AI builds and runs. It answers three questions for every agent: *Is it up?*, *What can it do?* and *What has it been doing?* — across KnowAll's own tenant and customer tenants.
 
 It stores nothing. Everything is read live from Azure, GitHub and Azure AI Foundry using the signed-in user's own permissions, then cached in memory for a minute.
 
@@ -14,7 +14,7 @@ It stores nothing. Everything is read live from Azure, GitHub and Azure AI Found
 [mermaid]
 ....
 flowchart LR
-    Browser["Browser"] --> App["Agent Dashboard<br/>(Next.js on App Service)"]
+    Browser["Browser"] --> App["Agents Portal<br/>(Next.js on App Service)"]
     App --> Entra["Microsoft Entra ID<br/>(multi-tenant app)"]
     App --> ARM["Azure Resource Manager<br/>Resource Graph · Activity Log"]
     App --> Foundry["Azure AI Foundry<br/>Assistants API"]

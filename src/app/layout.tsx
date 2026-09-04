@@ -6,7 +6,7 @@ import './globals.css';
 const siteUrl = process.env.NEXTAUTH_URL || 'https://agents.knowall.ai';
 
 export const metadata: Metadata = {
-  title: 'Agent Dashboard - AI Agent Monitoring by KnowAll',
+  title: 'Agents Portal - AI Agent Monitoring by KnowAll',
   description:
     'Monitor KnowAll AI and customer AI agents across Azure tenants. See status, skills and recent activity for every agent in one place.',
   keywords: ['ai agents', 'monitoring', 'azure', 'openclaw', 'ai foundry', 'dashboard', 'knowall'],
@@ -26,8 +26,8 @@ export const metadata: Metadata = {
     type: 'website',
     locale: 'en_US',
     url: siteUrl,
-    siteName: 'Agent Dashboard',
-    title: 'Agent Dashboard - AI Agent Monitoring by KnowAll',
+    siteName: 'Agents Portal',
+    title: 'Agents Portal - AI Agent Monitoring by KnowAll',
     description:
       'Monitor KnowAll AI and customer AI agents across Azure tenants. See status, skills and recent activity for every agent in one place.',
     images: [
@@ -35,14 +35,14 @@ export const metadata: Metadata = {
         url: '/og-image.png',
         width: 1200,
         height: 630,
-        alt: 'Agent Dashboard - AI Agent Monitoring',
+        alt: 'Agents Portal - AI Agent Monitoring',
         type: 'image/png',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Agent Dashboard - AI Agent Monitoring by KnowAll',
+    title: 'Agents Portal - AI Agent Monitoring by KnowAll',
     description:
       'Monitor KnowAll AI and customer AI agents across Azure tenants. See status, skills and recent activity for every agent in one place.',
     images: ['/og-image.png'],

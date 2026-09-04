@@ -2,7 +2,7 @@
 :toc: left
 :icons: font
 
-This guide explains how to make an agent appear in Agent Dashboard — whether it runs in KnowAll's tenant or in a customer's.
+This guide explains how to make an agent appear in Agents Portal — whether it runs in KnowAll's tenant or in a customer's.
 
 == 1. Tag the Azure resources
 
@@ -98,9 +98,9 @@ az deployment sub create --location uksouth \
   --template-uri https://raw.githubusercontent.com/Azure/Azure-Lighthouse-samples/master/templates/delegated-resource-management/subscription/subscription.json \
   --parameters mspOfferName="KnowAll AI Agent Monitoring" \
                managedByTenantId=<knowall-tenant-id> \
-               authorizations='[{"principalId":"<reader-group-object-id>","principalIdDisplayName":"KnowAll agent dashboard readers","roleDefinitionId":"acdd72a7-3385-48ef-bd42-f606fba81ae7"}]'
+               authorizations='[{"principalId":"<reader-group-object-id>","principalIdDisplayName":"KnowAll agents portal readers","roleDefinitionId":"acdd72a7-3385-48ef-bd42-f606fba81ae7"}]'
 ----
-. Sign in to Agent Dashboard with the KnowAll tenant. The customer's agents appear with a *Lighthouse* badge.
+. Sign in to Agents Portal with the KnowAll tenant. The customer's agents appear with a *Lighthouse* badge.
 
 *Reader* is enough for status, resources and the Activity Log. To list the customer's AI Foundry assistants and runs, the group also needs *Azure AI User* on the AI Services account.
 

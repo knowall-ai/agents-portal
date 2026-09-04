@@ -4,7 +4,7 @@
 
 == Overview
 
-Agent Dashboard deploys to Azure App Service as a Next.js standalone build, the same way as ZapDesk. Pushing a `v*` tag runs `.github/workflows/deploy.yml`.
+Agents Portal deploys to Azure App Service as a Next.js standalone build, the same way as ZapDesk. Pushing a `v*` tag runs `.github/workflows/deploy.yml`.
 
 [cols="1,2"]
 |===

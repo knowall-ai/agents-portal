@@ -1,4 +1,4 @@
-= Agent Dashboard Troubleshooting Guide
+= Agents Portal Troubleshooting Guide
 :toc: left
 :icons: font
 
@@ -72,5 +72,5 @@
 |Azure Cost Management lags usage by up to 24 hours, and month-to-date resets on the 1st (UTC).
 
 |**Production deploy workflow fails at "Login to Azure"**
-|The `AZURE_CREDENTIALS` secret must be the JSON from `az ad sp create-for-rbac --sdk-auth` for a principal with Contributor on the App Service. Re-create it and set the secret again with `gh secret set AZURE_CREDENTIALS -R knowall-ai/agent-dashboard`.
+|The `AZURE_CREDENTIALS` secret must be the JSON from `az ad sp create-for-rbac --sdk-auth` for a principal with Contributor on the App Service. Re-create it and set the secret again with `gh secret set AZURE_CREDENTIALS -R knowall-ai/agents-portal`.
 |===

@@ -1,10 +1,10 @@
-# CLAUDE.md - Agent Dashboard Project Guidelines
+# CLAUDE.md - Agents Portal Project Guidelines
 
-This document provides guidance for AI assistants (like Claude) working on the Agent Dashboard project.
+This document provides guidance for AI assistants (like Claude) working on the Agents Portal project.
 
 ## Project Overview
 
-Agent Dashboard monitors the AI agents KnowAll AI builds and runs for itself and its customers (Sallie, Zaplie, Winnie for the Irish FA, Allie for Cairn Homes). It discovers agents from Azure, derives their status, and shows skills and recent activity. It is a sibling of ZapDesk and Thyme and shares their stack and branding.
+Agents Portal monitors the AI agents KnowAll AI builds and runs for itself and its customers (Sallie, Zaplie, Winnie for the Irish FA, Allie for Cairn Homes). It discovers agents from Azure, derives their status, and shows skills and recent activity. It is a sibling of ZapDesk and Thyme and shares their stack and branding.
 
 ## Architecture
 
@@ -142,5 +142,5 @@ See `docs/TROUBLESHOOTING.adoc`. When you resolve an issue that admins or users 
 ## Contact
 
 - **Project Owner**: KnowAll AI
-- **Repository**: https://github.com/knowall-ai/agent-dashboard
+- **Repository**: https://github.com/knowall-ai/agents-portal
 - **Support**: support@knowall.ai

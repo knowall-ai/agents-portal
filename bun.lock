@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "agent-dashboard",
+      "name": "agents-portal",
       "dependencies": {
         "date-fns": "^4.1.0",
         "lucide-react": "^0.562.0",
