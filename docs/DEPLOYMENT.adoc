@@ -48,6 +48,8 @@ az webapp config appsettings set -g KnowAllAIRG -n agent-dashboard-knowallai --s
   SCM_DO_BUILD_DURING_DEPLOYMENT=false WEBSITE_HEALTHCHECK_MAXPINGFAILURES=5 CACHE_TTL_SECONDS=60
 ----
 
+The app registration needs the delegated Graph permission *User.Read.All* (admin consent) for the Licences card; the README setup command includes it. Because the portal acts as the signed-in user, that user must also hold an Entra role that can read licence details (for example Global Reader, User Administrator or License Administrator, or a custom role with `microsoft.directory/users/licenseDetails/read`). Without it the card reports a Graph 403 for that viewer only.
+
 `GITHUB_TOKEN` is a fine-grained token with *Contents: read* on every agent repo and on the shared skill-pack repos listed in `skillSources` (`knowall-ai/claude-plugins` is private).
 
 === 3. Custom domain and TLS

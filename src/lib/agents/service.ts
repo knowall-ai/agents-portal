@@ -11,11 +11,18 @@ import {
 } from '@/lib/providers/foundry';
 import { getRepoMarkdown, listRepoCommits, listRepoSkills } from '@/lib/providers/github';
 import { probeUrl } from '@/lib/providers/health';
-import { FOUNDRY_SCOPE, getResourceToken, type UserContext } from '@/lib/tokens';
+import { getUserLicensing } from '@/lib/providers/graph';
+import {
+  FOUNDRY_SCOPE,
+  GRAPH_DIRECTORY_SCOPE,
+  getResourceToken,
+  type UserContext,
+} from '@/lib/tokens';
 import type {
   ActivityEvent,
   AgentCosts,
   AgentDetail,
+  AgentLicensing,
   AgentSoul,
   CostSourceStatus,
   CostsSummary,
@@ -139,6 +146,48 @@ export async function getSoul(ctx: UserContext, agent: AgentDetail): Promise<Age
       return null;
     },
     10 * 60 * 1000
+  );
+}
+
+/**
+ * Microsoft licences on the agent's own Entra account (registry `teamsUpn`)
+ * plus flat-fee subscriptions from the registry. Reading another user's
+ * licences needs the User.Read.All delegated permission with admin consent;
+ * without it the subscriptions still render and `licenseError` says why.
+ */
+const DIRECTORY_TTL = 30 * 60 * 1000;
+const DIRECTORY_ERROR_TTL = 60 * 1000;
+
+export async function getLicensing(ctx: UserContext, agent: AgentDetail): Promise<AgentLicensing> {
+  const entry = getRegistryEntry(agent.id);
+  const base: AgentLicensing = {
+    upn: entry?.teamsUpn,
+    licenses: [],
+    subscriptions: entry?.fixedCosts ?? [],
+  };
+  if (!entry?.teamsUpn) return base;
+  const upn = entry.teamsUpn;
+  return cached(
+    `licensing:${scope(ctx)}:${agent.id}`,
+    async () => {
+      try {
+        const token = await getResourceToken(ctx, GRAPH_DIRECTORY_SCOPE);
+        if (!token) {
+          return {
+            ...base,
+            licenseError:
+              'Microsoft Graph User.Read.All is not consented for this app — see docs/DEPLOYMENT.adoc',
+          };
+        }
+        return { ...base, ...(await getUserLicensing(token, upn)) };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(`Licence lookup failed for ${agent.id}:`, message);
+        return { ...base, licenseError: message };
+      }
+    },
+    // Keep successes for a while; retry failures (missing consent, Graph errors) quickly
+    (value) => (value.licenseError ? DIRECTORY_ERROR_TTL : DIRECTORY_TTL)
   );
 }
 

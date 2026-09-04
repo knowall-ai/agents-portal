@@ -15,7 +15,7 @@ Agents Portal monitors the AI agents KnowAll AI builds and runs for itself and i
 - **Package Manager**: Bun
 - **Styling**: Tailwind CSS 4 with CSS variables for theming (same palette as ZapDesk)
 - **Authentication**: NextAuth.js with Azure AD provider (multi-tenant)
-- **Data**: Azure Resource Graph, Azure Activity Log, Azure AI Foundry Assistants API, GitHub REST API
+- **Data**: Azure Resource Graph, Azure Activity Log, Azure AI Foundry Assistants API, GitHub REST API, Microsoft Graph
 - **Deployment**: Azure App Service
 
 ### Key Concepts
@@ -24,6 +24,7 @@ Agents Portal monitors the AI agents KnowAll AI builds and runs for itself and i
 - **Kind** = how the agent is built: `openclaw` (VM-hosted OpenClaw gateway), `foundry` (Azure AI Foundry assistants), `botframework` (Teams bot)
 - **Status** = derived from compute state (`src/lib/agents/discover.ts` → `deriveStatus`) and downgraded to `degraded` if the portal probe fails
 - **Skills** = `SKILL.md` folders in the agent's GitHub repo, plus shared skill packs listed in `skillSources` (local skills shadow same-named plugin skills), plus tools on its Foundry assistants
+- **Licences** = Microsoft licences on the agent's own Entra account (`teamsUpn`, via Graph `User.Read.All`) plus `fixedCosts` subscriptions from the registry
 - **Soul** = the agent's `SOUL.md` (`soulPath`, default `workspace/SOUL.md` then `SOUL.md`) rendered on its page
 - **Activity** = Azure Activity Log + GitHub commits + Foundry runs, merged and sorted
 - **Costs** = Azure Cost Management by resource group (user token) + OpenAI/Anthropic admin cost APIs by project/workspace mapping + `fixedCosts` from the registry; aggregation is pure in `src/lib/agents/costs.ts`
