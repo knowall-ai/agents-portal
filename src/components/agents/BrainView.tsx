@@ -96,6 +96,9 @@ const HOLO_AMBER = '#ffb000';
 const FOCAL = 1100;
 const DEFAULT_ZOOM = 1;
 const TILT = 0.32;
+/** Stars in the parallax field and their drift in canvas widths per second, far to near */
+const STAR_COUNT = 140;
+const STAR_SPEED = [0.006, 0.014, 0.03];
 /** radians per second — one full turn every ~2.5 minutes */
 const AUTO_ROTATE = 0.042;
 /** Backdrop plates (public/brain), in the style of the avatar renderer's scenes */
@@ -566,6 +569,18 @@ export default function BrainView({
     let raf = 0;
     let last = performance.now();
     let floorY = CANVAS_HEIGHT * 0.8;
+    // Three depth layers of stars drifting past, near ones faster: the bridge is under way
+    const stars = Array.from({ length: STAR_COUNT }, (_, i) => {
+      const depth = i % 3; // 0 far, 2 near
+      return {
+        x: Math.random(),
+        y: Math.random(),
+        depth,
+        size: depth === 2 ? 1.6 : depth === 1 ? 1.1 : 0.7,
+        speed: (STAR_SPEED[depth] * (0.8 + Math.random() * 0.4)) / 1000,
+        twinkle: Math.random() * Math.PI * 2,
+      };
+    });
 
     const resize = () => {
       const dpr = window.devicePixelRatio || 1;
@@ -655,6 +670,32 @@ export default function BrainView({
         const oy = Math.min(0, Math.max(h - ph, h - 68 - plate.ay * ph));
         ctx.drawImage(plate.img, ox, oy, pw, ph);
         floorY = oy + plate.ay * ph;
+
+        // ---- parallax starfield over the plate: the ship is moving ----
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(0, 0, w, Math.max(0, floorY - 120));
+        ctx.clip();
+        ctx.globalCompositeOperation = 'lighter';
+        for (const st of stars) {
+          st.x -= st.speed * dt * 1000;
+          if (st.x < -0.02) {
+            st.x = 1.02;
+            st.y = Math.random();
+          }
+          const glow = 0.35 + 0.35 * Math.sin(frame / 25 + st.twinkle);
+          const alpha = (st.depth === 2 ? 0.55 : st.depth === 1 ? 0.4 : 0.28) * glow;
+          const px = st.x * w;
+          const py = st.y * (floorY - 120);
+          ctx.fillStyle = `rgba(214, 240, 255, ${alpha})`;
+          if (st.depth === 2) {
+            // the nearest layer streaks a little in the direction of travel
+            ctx.fillRect(px, py, st.size * 4, st.size * 0.6);
+          } else {
+            ctx.fillRect(px, py, st.size, st.size);
+          }
+        }
+        ctx.restore();
 
         // The emitter lights the plate and throws a cone up to the hologram
         const flicker = 0.03 * Math.sin(frame / 6) + 0.02 * Math.sin(frame / 17);
