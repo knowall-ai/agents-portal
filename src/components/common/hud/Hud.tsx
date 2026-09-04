@@ -109,10 +109,16 @@ export function HudGauge({ label, frac, value, colour = HUD.g, dim = HUD.dim }: 
   const [peak, setPeak] = useState(0);
   const clamped = Math.max(0, Math.min(1, Number.isFinite(frac) ? frac : 0));
   useEffect(() => {
-    const now = Date.now();
-    peaks.current.push({ t: now, f: clamped });
-    peaks.current = peaks.current.filter((p) => p.t > now - 10_000);
-    setPeak(Math.max(...peaks.current.map((p) => p.f), 0));
+    const refresh = () => {
+      const now = Date.now();
+      peaks.current = peaks.current.filter((p) => p.t > now - 10_000);
+      setPeak(Math.max(...peaks.current.map((p) => p.f), 0));
+    };
+    peaks.current.push({ t: Date.now(), f: clamped });
+    refresh();
+    // the hold also has to expire while the value sits still
+    const timer = setInterval(refresh, 1000);
+    return () => clearInterval(timer);
   }, [clamped]);
   return (
     <div className="flex h-[20px] items-center" style={{ fontFamily: HUD.font, fontSize: 12 }}>

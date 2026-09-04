@@ -442,9 +442,11 @@ export async function getBrain(agent: AgentDetail): Promise<AgentBrain> {
     const entry = getRegistryEntry(agent.id);
     return {
       available: false,
-      error: entry?.brainUrl
-        ? 'REVERIE_TOKEN is not set on the server'
-        : 'No brainUrl in the registry for this agent',
+      error: !entry?.brainUrl
+        ? 'No brainUrl in the registry for this agent'
+        : !isValidBrainUrl(entry.brainUrl)
+          ? 'brainUrl in the registry is not a valid https URL'
+          : 'REVERIE_TOKEN is not set on the server',
     };
   }
   if (source.kind === 'fixture')

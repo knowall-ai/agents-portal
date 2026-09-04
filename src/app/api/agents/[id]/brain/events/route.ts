@@ -32,9 +32,20 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
 
   if (source.kind === 'fixture') {
     const encoder = new TextEncoder();
+    let closed = false;
+    let timer: ReturnType<typeof setInterval> | undefined;
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
-        let closed = false;
+        const stop = () => {
+          if (closed) return;
+          closed = true;
+          clearInterval(timer);
+          try {
+            controller.close();
+          } catch {
+            // already closed
+          }
+        };
         const send = (event: string, data: unknown) => {
           if (!closed) controller.enqueue(encoder.encode(line(event, data)));
         };
@@ -44,7 +55,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
           ...fixtureHostStats(),
         });
         let n = 0;
-        const timer = setInterval(() => {
+        timer = setInterval(() => {
           n += 1;
           if (n % 2 === 0) {
             const { activation, diff } = fixtureTick();
@@ -53,15 +64,12 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
           }
           send('state', { lastActivityAt: Date.now() / 1000, ...fixtureHostStats() });
         }, 1250);
-        req.signal.addEventListener('abort', () => {
-          closed = true;
-          clearInterval(timer);
-          try {
-            controller.close();
-          } catch {
-            // already closed
-          }
-        });
+        req.signal.addEventListener('abort', stop);
+      },
+      cancel() {
+        // the consumer went away without the request aborting
+        closed = true;
+        clearInterval(timer);
       },
     });
     return new Response(stream, { headers: SSE_HEADERS });

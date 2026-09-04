@@ -56,6 +56,11 @@ const LABEL_COLOURS: Record<string, string> = {
 };
 const OTHER_COLOUR = '#94a3b8';
 
+/** d3 swaps link endpoints from ids to node objects once the simulation has run. */
+function endpointId(end: SimNode | string | number): string {
+  return typeof end === 'object' ? end.id : String(end);
+}
+
 /** The rotation and vertical pan that put `node` front and centre, from its live position. */
 function focusTarget(node: SimNode, zoom: number, tilt: number): { angle: number; panY: number } {
   const x = node.x ?? 0;
@@ -111,7 +116,7 @@ interface Plate {
 }
 /** How fast recency fades: live activity over ~20 min, graph timestamps over ~12 h */
 const RECENCY_LIVE_TAU = 20 * 60;
-const RECENCY_GRAPH_TAU = 12 * 3600; // radians per frame ≈ one turn every 48 s
+const RECENCY_GRAPH_TAU = 12 * 3600;
 
 function colourFor(label: string): string {
   return LABEL_COLOURS[label] ?? OTHER_COLOUR;
@@ -404,6 +409,11 @@ export default function BrainView({
       byId.delete(id);
       byNameRef.current.delete(n.name.toLowerCase());
       nodes.splice(nodes.indexOf(n), 1);
+      // drop every edge that touched it, whether or not the diff listed them
+      for (let i = links.length - 1; i >= 0; i--) {
+        const l = links[i];
+        if (endpointId(l.source) === id || endpointId(l.target) === id) links.splice(i, 1);
+      }
     }
     for (const rid of diff.relsRemoved ?? []) {
       const i = links.findIndex((l) => l.id === rid);
@@ -1128,7 +1138,7 @@ export default function BrainView({
               }
               if (e.key === 'Escape') setQuery('');
             }}
-            placeholder="search her memory…"
+            placeholder={`search ${agentName}'s memory…`}
             className="w-full px-2 py-1 outline-none"
             style={{
               border: `1px solid ${HUD.dim}`,

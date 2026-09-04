@@ -170,4 +170,5 @@ Azure costs need no setup beyond the user having *Cost Management Reader* on the
 * [ ] GitHub repo and `skillsPath` set (OpenClaw agents); `skillSources` if the agent loads shared skill packs; `SOUL.md` in the repo if you want the Soul card
 * [ ] `avatarUrl` and, for agents with their own account, `teamsUpn` set
 * [ ] `openaiProjectId` / `anthropicWorkspaceId` / `fixedCosts` set so the cost breakdown is complete
+* [ ] `brainUrl` set for agents running `reverie serve`, and `REVERIE_TOKEN` set on the server (never `BRAIN_FIXTURE=1` outside development)
 * [ ] Lighthouse delegation in place (customer-hosted agents)

@@ -97,9 +97,9 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const requested = searchParams.get('tab');
-  const tab: TabId = (TAB_IDS as readonly string[]).includes(requested ?? '')
+  const requestedTab: TabId | null = (TAB_IDS as readonly string[]).includes(requested ?? '')
     ? (requested as TabId)
-    : 'overview';
+    : null;
   const requestedBg = searchParams.get('bg');
   const backdrop: Backdrop = (BACKDROPS as readonly string[]).includes(requestedBg ?? '')
     ? (requestedBg as Backdrop)
@@ -182,6 +182,10 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
       count: activity.data?.events.length,
     },
   ];
+  // only a tab that is actually rendered can be selected, so a shared ?tab=brain link
+  // on an agent without a brain falls back to Overview instead of a blank panel
+  const tab: TabId =
+    requestedTab && tabs.some((t) => t.id === requestedTab) ? requestedTab : 'overview';
 
   return (
     <MainLayout>
