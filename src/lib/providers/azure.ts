@@ -21,6 +21,18 @@ export const AGENT_RESOURCE_TYPES = [
   'microsoft.containerinstance/containergroups',
 ];
 
+/** Every page of an ARM list, following `nextLink` until it runs out (bounded). */
+async function armList<T>(token: string, path: string, maxPages = 20): Promise<T[]> {
+  const items: T[] = [];
+  let next: string | undefined = path;
+  for (let page = 0; next && page < maxPages; page++) {
+    const result: { value: T[]; nextLink?: string } = await armFetch(token, next);
+    items.push(...result.value);
+    next = result.nextLink;
+  }
+  return items;
+}
+
 /** ARM answers in seconds; a hung socket must not stall a whole page */
 const ARM_TIMEOUT_MS = 30_000;
 
@@ -303,15 +315,13 @@ export async function listRoleAssignments(
   const rows = (
     await Promise.all(
       subscriptionIds.map((sub) =>
-        armFetch<{ value: RoleAssignmentRow[] }>(
+        armList<RoleAssignmentRow>(
           token,
           `/subscriptions/${sub}/providers/Microsoft.Authorization/roleAssignments?api-version=2022-04-01&$filter=${encodeURIComponent(`principalId eq '${principalId}'`)}`
-        )
-          .then((r) => r.value)
-          .catch((error) => {
-            console.warn(`Role assignments failed for ${sub}:`, error);
-            return [] as RoleAssignmentRow[];
-          })
+        ).catch((error) => {
+          console.warn(`Role assignments failed for ${sub}:`, error);
+          return [] as RoleAssignmentRow[];
+        })
       )
     )
   ).flat();
