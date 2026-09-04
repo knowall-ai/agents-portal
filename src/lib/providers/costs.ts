@@ -31,16 +31,39 @@ export function monthWindows(now = new Date()): Record<Timeframe, Window> {
   };
 }
 
-async function fetchWithRetry(url: string, init: RequestInit, retries = 2): Promise<Response> {
+/**
+ * Retry on 429, honouring the longest back-off the service asks for. Cost
+ * Management throttles third-party client apps to roughly one query every
+ * 25–40 s and reports it in its own headers rather than Retry-After alone.
+ */
+async function fetchWithRetry(url: string, init: RequestInit, retries = 3): Promise<Response> {
   let response = await fetch(url, init);
   for (let attempt = 0; attempt < retries && response.status === 429; attempt++) {
-    const retryAfter = Number(response.headers.get('Retry-After') ?? '0');
-    const waitMs = Math.min(Math.max(retryAfter * 1000, 3_000), 30_000);
-    console.warn(`429 from ${new URL(url).host}; retrying in ${waitMs / 1000}s`);
+    const seconds = [
+      'Retry-After',
+      'x-ms-ratelimit-microsoft.costmanagement-clienttype-retry-after',
+      'x-ms-ratelimit-microsoft.costmanagement-entity-retry-after',
+      'x-ms-ratelimit-microsoft.costmanagement-tenant-retry-after',
+    ]
+      .map((h) => Number(response.headers.get(h) ?? '0'))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    const waitMs = Math.min(Math.max(...seconds, 5) * 1000 + 1_000, 60_000);
+    console.warn(
+      `429 from ${new URL(url).host}; waiting ${waitMs / 1000}s (attempt ${attempt + 1}/${retries})`
+    );
     await new Promise((resolve) => setTimeout(resolve, waitMs));
     response = await fetch(url, init);
   }
   return response;
+}
+
+// Cost Management rejects concurrent queries from the same principal with 429,
+// so calls are serialised through one queue per server process.
+let costQueue: Promise<unknown> = Promise.resolve();
+function serialised<T>(task: () => Promise<T>): Promise<T> {
+  const run = costQueue.then(task, task);
+  costQueue = run.catch(() => undefined);
+  return run;
 }
 
 // ---------------------------------------------------------------------------
@@ -87,6 +110,14 @@ export async function queryAzureCosts(
     },
   };
 
+  return serialised(() => runCostQuery(armToken, subscriptionId, body));
+}
+
+async function runCostQuery(
+  armToken: string,
+  subscriptionId: string,
+  body: Record<string, unknown>
+): Promise<AzureCostRow[]> {
   const rows: AzureCostRow[] = [];
   let url: string | null | undefined =
     `https://management.azure.com/subscriptions/${subscriptionId}/providers/Microsoft.CostManagement/query?api-version=2023-11-01`;

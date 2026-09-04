@@ -174,7 +174,7 @@ export async function getAllActivity(ctx: UserContext, limit = 60): Promise<Acti
 // Costs
 // ---------------------------------------------------------------------------
 
-const COST_TTL = 15 * 60 * 1000; // billing APIs are rate limited and change slowly
+const COST_TTL = 30 * 60 * 1000; // billing APIs are rate limited and change slowly
 const COST_ERROR_TTL = 2 * 60 * 1000; // back off after a failure instead of hammering a 429
 const TIMEFRAMES: Timeframe[] = ['MonthToDate', 'TheLastMonth'];
 

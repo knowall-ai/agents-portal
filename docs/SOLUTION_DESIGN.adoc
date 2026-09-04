@@ -197,7 +197,7 @@ Costs are shown for the current calendar month (month to date) and the previous 
 |None
 |===
 
-Billing APIs are rate limited and slow-moving, so results are cached for 15 minutes. Each source reports a status (`ok`, `not-configured`, `no-mapping`, `error`) which the breakdown shows as a footnote rather than silently omitting a figure. Azure Cost Management lags usage by up to 24 hours.
+Billing APIs are rate limited and slow-moving, so results are cached for 30 minutes (failures for 2 minutes). Azure Cost Management additionally throttles third-party client apps to about one query every 25–40 seconds per subscription; queries are therefore serialised through one queue and retried according to the `x-ms-ratelimit-microsoft.costmanagement-*-retry-after` headers. Previous months are requested as an explicit `Custom` time period because the `TheLastMonth` timeframe is rejected by the API. Each source reports a status (`ok`, `not-configured`, `no-mapping`, `error`) which the breakdown shows as a footnote rather than silently omitting a figure. Azure Cost Management lags usage by up to 24 hours.
 
 == Pages
 
