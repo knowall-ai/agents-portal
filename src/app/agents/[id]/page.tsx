@@ -16,6 +16,7 @@ import {
   Heart,
   LayoutGrid,
   MessageSquare,
+  Phone,
   Receipt,
   RefreshCw,
   Share2,
@@ -256,6 +257,17 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
                     className="btn-primary flex items-center gap-2 text-sm"
                   >
                     <MessageSquare size={14} /> Chat in Teams
+                  </a>
+                )}
+                {agent.teamsCallUrl && (
+                  <a
+                    href={agent.teamsCallUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn-primary flex items-center gap-2 text-sm"
+                    title="Start a Teams call with this agent"
+                  >
+                    <Phone size={14} /> Call in Teams
                   </a>
                 )}
                 {agent.portalUrl && (

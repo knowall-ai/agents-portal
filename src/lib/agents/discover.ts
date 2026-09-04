@@ -219,6 +219,14 @@ export function teamsChatUrl(
   return undefined;
 }
 
+/** Teams deep link that starts a call with the agent's own account (bots cannot be called this way). */
+export function teamsCallUrl(entry: AgentRegistryEntry | undefined): string | undefined {
+  const upn = entry?.teamsUpn;
+  return upn
+    ? `https://teams.microsoft.com/l/call/0/0?users=${encodeURIComponent(upn)}`
+    : undefined;
+}
+
 function firstTag(resources: AzureResource[], key: string): string | undefined {
   for (const r of resources) {
     const v = tag(r.tags, key);
@@ -276,6 +284,7 @@ export function buildAgent(
     source: entry && bucket.fromTags ? 'both' : entry ? 'registry' : 'tags',
     avatarUrl: safeAvatarUrl(entry?.avatarUrl ?? firstTag(resources, 'agent-avatar')),
     teamsChatUrl: teamsChatUrl(entry, resources),
+    teamsCallUrl: teamsCallUrl(entry),
     resources: [...resources].sort(
       (a, b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name)
     ),
@@ -304,6 +313,7 @@ export function toSummary(agent: AgentDetail): AgentSummary {
     source: agent.source,
     avatarUrl: agent.avatarUrl,
     teamsChatUrl: agent.teamsChatUrl,
+    teamsCallUrl: agent.teamsCallUrl,
   };
 }
 
