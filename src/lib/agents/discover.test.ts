@@ -55,6 +55,22 @@ describe('groupResources', () => {
     expect(sallie?.fromTags).toBe(false);
   });
 
+  it('lets a tag beat a registry resource-group claim (shared resource group)', () => {
+    const buckets = groupResources(
+      [
+        resource({ name: 'ka-sallie-vm', resourceGroup: 'ka-agents' }),
+        resource({ name: 'ka-poppie-vm', resourceGroup: 'ka-agents', tags: { agent: 'poppie' } }),
+      ],
+      registry
+    );
+    expect(buckets.find((b) => b.id === 'sallie')?.resources.map((r) => r.name)).toEqual([
+      'ka-sallie-vm',
+    ]);
+    const poppie = buckets.find((b) => b.id === 'poppie');
+    expect(poppie?.resources.map((r) => r.name)).toEqual(['ka-poppie-vm']);
+    expect(poppie?.fromTags).toBe(true);
+  });
+
   it('discovers agents from tags, case-insensitively', () => {
     const buckets = groupResources(
       [

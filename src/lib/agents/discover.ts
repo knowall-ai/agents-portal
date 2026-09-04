@@ -2,7 +2,9 @@
 //
 // Discovery rules (first match wins):
 //   1. Resource tag `agent` (or any key in AGENT_TAG_KEYS) names the agent slug.
-//   2. A registry entry whose `resourceGroups` contains the resource's group claims it.
+//   2. Otherwise a registry entry whose `resourceGroups` contains the resource's
+//      group claims it — so a shared resource group (e.g. ka-agents) can host
+//      several agents as long as the newer ones are tagged.
 //   3. Anything else is ignored.
 //
 // Registry metadata (name, customer, kind, URLs) overrides tag-derived values.
@@ -151,11 +153,6 @@ export function groupResources(
   };
 
   for (const resource of resources) {
-    const claimed = byGroup.get(resource.resourceGroup);
-    if (claimed) {
-      bucketFor(claimed.id).resources.push(resource);
-      continue;
-    }
     let slug: string | undefined;
     for (const key of tagKeys) {
       const value = tag(resource.tags, key);
@@ -164,10 +161,14 @@ export function groupResources(
         break;
       }
     }
-    if (!slug) continue;
-    const bucket = bucketFor(slug);
-    bucket.resources.push(resource);
-    bucket.fromTags = true;
+    if (slug) {
+      const bucket = bucketFor(slug);
+      bucket.resources.push(resource);
+      bucket.fromTags = true;
+      continue;
+    }
+    const claimed = byGroup.get(resource.resourceGroup);
+    if (claimed) bucketFor(claimed.id).resources.push(resource);
   }
 
   // Registry-only agents (planned, or nothing deployed yet)
