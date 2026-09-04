@@ -320,9 +320,12 @@ export default function BrainView({
       backdropRef.current = null;
       return;
     }
+    // A plate that finishes loading after the backdrop changed must not win
+    let cancelled = false;
     const img = new Image();
     img.src = `/brain/bg-${backdrop}.jpg`;
     img.onload = () => {
+      if (cancelled) return;
       // Brighten once at load so the plate reads without a per-frame filter
       const lit = document.createElement('canvas');
       lit.width = img.width;
@@ -343,6 +346,9 @@ export default function BrainView({
       };
     };
     return () => {
+      cancelled = true;
+      img.onload = null;
+      img.onerror = null;
       backdropRef.current = null;
     };
   }, [backdrop]);
