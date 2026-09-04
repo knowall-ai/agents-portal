@@ -46,9 +46,19 @@ export function parseSkillFrontmatter(markdown: string): { name?: string; descri
   const match = markdown.match(/^---\s*\n([\s\S]*?)\n---/);
   if (!match) return {};
   const result: { name?: string; description?: string } = {};
-  for (const line of match[1].split('\n')) {
-    const m = line.match(/^(name|description):\s*(.*)$/);
-    if (m) result[m[1] as 'name' | 'description'] = m[2].trim().replace(/^["']|["']$/g, '');
+  const lines = match[1].split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(/^(name|description):\s*(.*)$/);
+    if (!m) continue;
+    const key = m[1] as 'name' | 'description';
+    let value = m[2].trim();
+    if (value === '>' || value === '|' || value === '>-' || value === '|-') {
+      // Folded (>) or literal (|) block scalar: gather the indented lines that follow
+      const block: string[] = [];
+      while (i + 1 < lines.length && /^\s+\S/.test(lines[i + 1])) block.push(lines[++i].trim());
+      value = block.join(value.startsWith('>') ? ' ' : '\n');
+    }
+    result[key] = value.replace(/^["']|["']$/g, '');
   }
   return result;
 }
