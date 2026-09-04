@@ -156,6 +156,9 @@ export async function getSoul(ctx: UserContext, agent: AgentDetail): Promise<Age
  * licences needs the User.Read.All delegated permission with admin consent;
  * without it the subscriptions still render and `licenseError` says why.
  */
+const DIRECTORY_TTL = 30 * 60 * 1000;
+const DIRECTORY_ERROR_TTL = 60 * 1000;
+
 export async function getLicensing(ctx: UserContext, agent: AgentDetail): Promise<AgentLicensing> {
   const entry = getRegistryEntry(agent.id);
   const base: AgentLicensing = {
@@ -168,15 +171,15 @@ export async function getLicensing(ctx: UserContext, agent: AgentDetail): Promis
   return cached(
     `licensing:${scope(ctx)}:${agent.id}`,
     async () => {
-      const token = await getResourceToken(ctx, GRAPH_DIRECTORY_SCOPE);
-      if (!token) {
-        return {
-          ...base,
-          licenseError:
-            'Microsoft Graph User.Read.All is not consented for this app — see docs/DEPLOYMENT.adoc',
-        };
-      }
       try {
+        const token = await getResourceToken(ctx, GRAPH_DIRECTORY_SCOPE);
+        if (!token) {
+          return {
+            ...base,
+            licenseError:
+              'Microsoft Graph User.Read.All is not consented for this app — see docs/DEPLOYMENT.adoc',
+          };
+        }
         return { ...base, ...(await getUserLicensing(token, upn)) };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -184,7 +187,8 @@ export async function getLicensing(ctx: UserContext, agent: AgentDetail): Promis
         return { ...base, licenseError: message };
       }
     },
-    30 * 60 * 1000
+    // Keep successes for a while; retry failures (missing consent, Graph errors) quickly
+    (value) => (value.licenseError ? DIRECTORY_ERROR_TTL : DIRECTORY_TTL)
   );
 }
 
@@ -195,7 +199,8 @@ const NO_DIRECTORY_CONSENT =
  * What the agent can do: directory roles, groups and Azure RBAC roles of its
  * own account, and the API permissions of its app registrations (registry
  * `appRegistrations` plus any Bot Service app IDs) with consent state.
- * Read-only; needs Directory.Read.All (delegated, admin consent).
+ * Read-only; needs Directory.Read.All (delegated, admin consent). Never
+ * throws: failures come back as `error` and are cached only briefly.
  */
 export async function getPermissions(
   ctx: UserContext,
@@ -215,26 +220,37 @@ export async function getPermissions(
   }
   if (!entry?.teamsUpn && apps.size === 0) return { apps: [] };
 
+  const upn = entry?.teamsUpn;
+  const skeleton = (error: string): AgentPermissions => ({
+    account: upn ? { upn, directoryRoles: [], groups: [], azureRoles: [] } : undefined,
+    apps: [...apps.values()].map((a) => ({
+      appId: a.appId,
+      displayName: a.label ?? a.appId,
+      label: a.label,
+      permissions: [],
+      azureRoles: [],
+    })),
+    error,
+  });
+
   return cached(
     `permissions:${scope(ctx)}:${agent.id}`,
-    async () => {
-      const token = await getResourceToken(ctx, GRAPH_DIRECTORY_READ_ALL_SCOPE);
-      if (!token) {
-        return {
-          account: entry?.teamsUpn
-            ? { upn: entry.teamsUpn, directoryRoles: [], groups: [], azureRoles: [] }
-            : undefined,
-          apps: [...apps.values()].map((a) => ({
-            appId: a.appId,
-            displayName: a.label ?? a.appId,
-            label: a.label,
-            permissions: [],
-            azureRoles: [],
-          })),
-          error: NO_DIRECTORY_CONSENT,
-        };
+    async (): Promise<AgentPermissions> => {
+      let token: string | null;
+      try {
+        token = await getResourceToken(ctx, GRAPH_DIRECTORY_READ_ALL_SCOPE);
+      } catch (error) {
+        return skeleton(error instanceof Error ? error.message : String(error));
       }
-      const subscriptionIds = (await listSubscriptions(ctx.armToken)).map((s) => s.subscriptionId);
+      if (!token) return skeleton(NO_DIRECTORY_CONSENT);
+      const graph = token;
+
+      const subscriptionIds = await listSubscriptions(ctx.armToken)
+        .then((subs) => subs.map((s) => s.subscriptionId))
+        .catch((error) => {
+          console.warn('Subscription list failed for role assignments:', error);
+          return [] as string[];
+        });
       const roles = (principalId?: string) =>
         principalId
           ? listRoleAssignments(ctx.armToken, subscriptionIds, principalId).catch((error) => {
@@ -243,27 +259,18 @@ export async function getPermissions(
             })
           : Promise.resolve([]);
 
-      const account = entry?.teamsUpn
-        ? await getUserAccess(token, entry.teamsUpn)
-            .then(async (access) => ({
-              upn: entry.teamsUpn as string,
-              ...access,
-              azureRoles: await roles(access.objectId),
-            }))
+      const account = upn
+        ? await getUserAccess(graph, upn)
+            .then(async (access) => ({ upn, ...access, azureRoles: await roles(access.objectId) }))
             .catch((error) => {
               console.warn(`User access lookup failed for ${agent.id}:`, error);
-              return {
-                upn: entry.teamsUpn as string,
-                directoryRoles: [],
-                groups: [],
-                azureRoles: [],
-              };
+              return { upn, directoryRoles: [], groups: [], azureRoles: [] };
             })
         : undefined;
 
       const appAccess = await Promise.all(
         [...apps.values()].map((a) =>
-          getAppAccess(token, a.appId, a.label)
+          getAppAccess(graph, a.appId, a.label)
             .then(async (access) => ({
               ...access,
               azureRoles: await roles(access.servicePrincipalId),
@@ -280,7 +287,7 @@ export async function getPermissions(
       );
       return { account, apps: appAccess };
     },
-    15 * 60 * 1000
+    (value) => (value.error ? DIRECTORY_ERROR_TTL : DIRECTORY_TTL)
   );
 }
 

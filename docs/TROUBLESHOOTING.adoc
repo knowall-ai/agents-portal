@@ -44,6 +44,9 @@
 |**Permissions card says Directory.Read.All is not consented**
 |The *Directory.Read.All* delegated Graph permission (admin consent) is needed to read groups, directory roles, app registrations and consent grants. Grant it as in the README setup step, then sign out and in again.
 
+|**Licences card shows `Graph 403` for some viewers**
+|Reading another user's licence details also needs the *viewer* to hold an Entra role with `microsoft.directory/users/licenseDetails/read` (Global Reader, User Administrator, License Administrator, or a custom role). Assign the role and reload; failures are only cached for a minute.
+
 |**No AI Foundry assistants shown**
 |The token exchange for `https://ai.azure.com/.default` failed — the app registration needs the *Azure Machine Learning Services / user_impersonation* delegated permission with admin consent, and the user needs *Azure AI User* on the AI Services account.
 
