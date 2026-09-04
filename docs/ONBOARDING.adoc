@@ -89,7 +89,7 @@ For richer metadata (skills repo, portal URL, health URL) or for resources you c
 * `soulPath` points at the agent's `SOUL.md`; leave it out for the OpenClaw default (`workspace/SOUL.md`, then `SOUL.md`). It renders on the agent page.
 * Agents appear automatically once their Azure resources are tagged — a registry entry is only needed for metadata. Set `"planned": true` only when you deliberately want an agent listed before anything is deployed.
 * `avatarUrl` points at a file in `public/agents/` (256 px square PNG works well) or an `https` URL.
-* `teamsUpn` is the agent's own Entra account (e.g. `<agent>@<tenant-domain>`); it powers the *Chat in Teams* button and the *Licences* card (account state and Microsoft licences read from Graph). `fixedCosts` entries are listed there too as subscriptions. Bots do not need it — their Bot Service app ID is used instead.
+* The agent's own Entra account comes from the `agent-teams-upn` tag on any of its Azure resources (`az resource update --ids <resource-id> --set tags.agent-teams-upn=<agent>@<tenant-domain>`); `teamsUpn` in the registry overrides it but should stay unused, because this repo is public and must not carry addresses. It powers the *Chat in Teams* button and the *Licences* card (account state and Microsoft licences read from Graph). `fixedCosts` entries are listed there too as subscriptions. Bots do not need it — their Bot Service app ID is used instead.
 * Registry values override tag values.
 
 Private repos need `GITHUB_TOKEN` set on the server (fine-grained token, Contents: read).
@@ -168,7 +168,7 @@ Azure costs need no setup beyond the user having *Cost Management Reader* on the
 * [ ] `environment` set
 * [ ] Portal / health URL set
 * [ ] GitHub repo and `skillsPath` set (OpenClaw agents); `skillSources` if the agent loads shared skill packs; `SOUL.md` in the repo if you want the Soul card
-* [ ] `avatarUrl` and, for agents with their own account, `teamsUpn` set
+* [ ] `avatarUrl` set and, for agents with their own account, the `agent-teams-upn` tag on a resource
 * [ ] `openaiProjectId` / `anthropicWorkspaceId` / `fixedCosts` set so the cost breakdown is complete
 * [ ] `brainUrl` set for agents running `reverie serve`, and `REVERIE_TOKEN` set on the server (never `BRAIN_FIXTURE=1` outside development)
 * [ ] Lighthouse delegation in place (customer-hosted agents)

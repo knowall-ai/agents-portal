@@ -335,6 +335,8 @@ export interface AgentSummary {
   avatarUrl?: string;
   /** Deep link that opens a Teams chat with the agent (user account or bot) */
   teamsChatUrl?: string;
+  /** The agent's own Entra account, from the agent-teams-upn tag or the registry */
+  teamsUpn?: string;
 }
 
 export interface FoundryProject {
