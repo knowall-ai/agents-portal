@@ -470,37 +470,64 @@ export default function BrainView({
   // ---- live stream ------------------------------------------------------------
   useEffect(() => {
     if (!brain?.available || !snapshot) return;
-    const source = new EventSource(`/api/agents/${agentId}/brain/events`);
-    source.onopen = () => setStreamStatus('live');
-    source.onerror = () => setStreamStatus('offline');
-    source.addEventListener('activation', (e) => {
-      try {
-        applyActivation(JSON.parse((e as MessageEvent).data) as BrainActivation);
-      } catch {
-        // ignore malformed
-      }
-    });
-    source.addEventListener('graph', (e) => {
-      try {
-        applyDiff(JSON.parse((e as MessageEvent).data) as BrainDiff);
-      } catch {
-        // ignore malformed
-      }
-    });
-    source.addEventListener('state', (e) => {
-      try {
-        const next = JSON.parse((e as MessageEvent).data) as Partial<BrainState>;
-        setState((s) => ({ ...(s as BrainState), ...next }));
-        if (typeof next.dreaming === 'boolean') dreamingRef.current = next.dreaming;
-        if (typeof next.cpuPercent === 'number') {
-          const cpu = next.cpuPercent;
-          setCpuHistory((h) => [...h, cpu].slice(-40));
+    // EventSource gives up for good on a non-200 response (e.g. the proxy hit an
+    // upstream throttle), so reconnect ourselves with a gentle backoff
+    let source: EventSource | null = null;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    let delay = 5_000;
+    let stopped = false;
+    const connect = () => {
+      if (stopped) return;
+      source = new EventSource(`/api/agents/${agentId}/brain/events`);
+      wire(source);
+    };
+    const wire = (source: EventSource) => {
+      source.onopen = () => {
+        delay = 5_000;
+        setStreamStatus('live');
+      };
+      source.onerror = () => {
+        setStreamStatus('offline');
+        if (source.readyState === EventSource.CLOSED && !stopped) {
+          clearTimeout(retry);
+          retry = setTimeout(connect, delay);
+          delay = Math.min(60_000, delay * 2);
         }
-      } catch {
-        // ignore malformed
-      }
-    });
-    return () => source.close();
+      };
+      source.addEventListener('activation', (e) => {
+        try {
+          applyActivation(JSON.parse((e as MessageEvent).data) as BrainActivation);
+        } catch {
+          // ignore malformed
+        }
+      });
+      source.addEventListener('graph', (e) => {
+        try {
+          applyDiff(JSON.parse((e as MessageEvent).data) as BrainDiff);
+        } catch {
+          // ignore malformed
+        }
+      });
+      source.addEventListener('state', (e) => {
+        try {
+          const next = JSON.parse((e as MessageEvent).data) as Partial<BrainState>;
+          setState((s) => ({ ...(s as BrainState), ...next }));
+          if (typeof next.dreaming === 'boolean') dreamingRef.current = next.dreaming;
+          if (typeof next.cpuPercent === 'number') {
+            const cpu = next.cpuPercent;
+            setCpuHistory((h) => [...h, cpu].slice(-40));
+          }
+        } catch {
+          // ignore malformed
+        }
+      });
+    };
+    connect();
+    return () => {
+      stopped = true;
+      clearTimeout(retry);
+      source?.close();
+    };
   }, [agentId, brain?.available, snapshot, applyActivation, applyDiff]);
 
   // ---- render loop -------------------------------------------------------------
