@@ -288,6 +288,7 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
                     licensing.refetch();
                     permissions.refetch();
                     boost.refetch();
+                    brain.refetch();
                   }}
                   className="btn-secondary flex items-center gap-2 text-sm"
                 >

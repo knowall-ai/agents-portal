@@ -435,7 +435,10 @@ export function brainSource(agent: AgentDetail): BrainSource | null {
   return { kind: 'reverie', url, token };
 }
 
-/** Snapshot of the agent's graph memory; short-lived cache, failures not cached. */
+/**
+ * Snapshot of the agent's graph memory. Cached briefly; a failed refresh serves
+ * the last good snapshot for a short while (see cache.ts) before erroring.
+ */
 export async function getBrain(agent: AgentDetail): Promise<AgentBrain> {
   const source = brainSource(agent);
   if (!source) {

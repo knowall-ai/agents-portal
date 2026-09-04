@@ -97,7 +97,9 @@ export interface BrainNode {
   labels: string[];
   name: string;
   degree: number;
+  /** epoch seconds */
   updatedAt: number;
+  /** epoch seconds */
   createdAt: number;
   props: Record<string, string | number | boolean | null | (string | number)[]>;
 }
@@ -107,6 +109,7 @@ export interface BrainRel {
   type: string;
   source: string;
   target: string;
+  /** epoch seconds */
   updatedAt: number;
 }
 
@@ -121,6 +124,7 @@ export interface BrainStats {
 /** Awake / dreaming signals from the agent's activation log and dream diary. */
 export interface BrainState {
   dreaming: boolean;
+  /** epoch seconds, as are lastDreamAt and generatedAt */
   lastActivityAt: number | null;
   lastDreamAt: number | null;
   lastDreamName: string | null;
@@ -166,6 +170,7 @@ export interface BrainSnapshot {
 
 /** One line of the activation log: what the agent just read or wrote. */
 export interface BrainActivation {
+  /** epoch seconds */
   ts: number;
   kind: 'recall' | 'remember' | 'connect' | 'forget' | 'dream.start' | 'dream.end' | string;
   ids?: string[];
