@@ -175,7 +175,25 @@ export async function getAllActivity(ctx: UserContext, limit = 60): Promise<Acti
 // ---------------------------------------------------------------------------
 
 const COST_TTL = 15 * 60 * 1000; // billing APIs are rate limited and change slowly
+const COST_ERROR_TTL = 2 * 60 * 1000; // back off after a failure instead of hammering a 429
 const TIMEFRAMES: Timeframe[] = ['MonthToDate', 'TheLastMonth'];
+
+type Loaded<T> = { rows: T[]; error?: string };
+
+/** Cache successes for COST_TTL and failures for COST_ERROR_TTL. */
+async function loadCached<T>(key: string, loader: () => Promise<T[]>): Promise<Loaded<T>> {
+  return cached<Loaded<T>>(
+    key,
+    async () => {
+      try {
+        return { rows: await loader() };
+      } catch (error) {
+        return { rows: [], error: error instanceof Error ? error.message : String(error) };
+      }
+    },
+    (value) => (value.error ? COST_ERROR_TTL : COST_TTL)
+  );
+}
 
 async function loadCostInputs(ctx: UserContext, agents: AgentDetail[]): Promise<CostInputs> {
   const subscriptionIds = [
@@ -190,15 +208,12 @@ async function loadCostInputs(ctx: UserContext, agents: AgentDetail[]): Promise<
   await Promise.all(
     subscriptionIds.flatMap((sub) =>
       TIMEFRAMES.map(async (tf) => {
-        try {
-          const rows = await cached(
-            `costs:azure:${scope(ctx)}:${sub}:${tf}`,
-            () => queryAzureCosts(ctx.armToken, sub, tf),
-            COST_TTL
-          );
-          azure[tf].push(...rows);
-        } catch (error) {
-          azureError = error instanceof Error ? error.message : String(error);
+        const result = await loadCached(`costs:azure:${scope(ctx)}:${sub}:${tf}`, () =>
+          queryAzureCosts(ctx.armToken, sub, tf)
+        );
+        azure[tf].push(...result.rows);
+        if (result.error) {
+          azureError = result.error;
           console.warn(`Azure cost query failed for ${sub}/${tf}:`, azureError);
         }
       })

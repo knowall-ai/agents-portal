@@ -143,23 +143,24 @@ export default function AgentsView() {
       color: 'var(--primary)',
       status: '',
     },
-    {
-      title: 'Cost this month',
-      value: costsApi.data
-        ? formatTotals(costsApi.data.totals.monthToDate, '—')
-        : costsApi.error
-          ? 'n/a'
-          : '',
-      icon: <Receipt size={22} />,
-      color: 'var(--status-degraded)',
-      status: '',
-      loading: costsApi.isLoading && !costsApi.data,
-      hint: costsApi.data
-        ? `Last month ${formatTotals(costsApi.data.totals.lastMonth, '—')}`
-        : costsApi.error
-          ? costsApi.error
-          : undefined,
-    },
+    (() => {
+      const summary = costsApi.data;
+      const azure = summary?.sources.find((s) => s.source === 'azure');
+      const failed = !summary ? Boolean(costsApi.error) : azure?.status === 'error';
+      return {
+        title: 'Cost this month',
+        value: failed ? 'n/a' : summary ? formatTotals(summary.totals.monthToDate, '—') : '',
+        icon: <Receipt size={22} />,
+        color: failed ? 'var(--text-muted)' : 'var(--status-degraded)',
+        status: '',
+        loading: costsApi.isLoading && !summary,
+        hint: failed
+          ? (azure?.detail ?? costsApi.error ?? 'Cost lookup failed').replace(/\{.*$/, '').trim()
+          : summary
+            ? `Last month ${formatTotals(summary.totals.lastMonth, '—')}`
+            : undefined,
+      };
+    })(),
   ];
 
   return (

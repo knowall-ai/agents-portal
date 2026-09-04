@@ -15,10 +15,14 @@ export function getCacheTtlMs(): number {
   return (Number.isFinite(seconds) && seconds > 0 ? seconds : 60) * 1000;
 }
 
+/**
+ * `ttlMs` may be a function of the loaded value, so callers can cache a
+ * failure briefly (negative caching) while keeping successes for longer.
+ */
 export async function cached<T>(
   key: string,
   loader: () => Promise<T>,
-  ttlMs: number = getCacheTtlMs()
+  ttlMs: number | ((value: T) => number) = getCacheTtlMs()
 ): Promise<T> {
   const now = Date.now();
   const hit = store.get(key) as Entry<T> | undefined;
@@ -26,7 +30,8 @@ export async function cached<T>(
     return hit.value;
   }
   const value = await loader();
-  store.set(key, { value, expiresAt: now + ttlMs });
+  const ttl = typeof ttlMs === 'function' ? ttlMs(value) : ttlMs;
+  store.set(key, { value, expiresAt: now + ttl });
   return value;
 }
 

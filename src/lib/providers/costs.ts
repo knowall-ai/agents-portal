@@ -35,7 +35,8 @@ async function fetchWithRetry(url: string, init: RequestInit, retries = 2): Prom
   let response = await fetch(url, init);
   for (let attempt = 0; attempt < retries && response.status === 429; attempt++) {
     const retryAfter = Number(response.headers.get('Retry-After') ?? '0');
-    const waitMs = Math.min(Math.max(retryAfter * 1000, 3_000), 20_000);
+    const waitMs = Math.min(Math.max(retryAfter * 1000, 3_000), 30_000);
+    console.warn(`429 from ${new URL(url).host}; retrying in ${waitMs / 1000}s`);
     await new Promise((resolve) => setTimeout(resolve, waitMs));
     response = await fetch(url, init);
   }
