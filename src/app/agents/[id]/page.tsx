@@ -11,6 +11,7 @@ import {
   ExternalLink,
   Github,
   Globe,
+  MessageSquare,
   RefreshCw,
   Share2,
   Sparkles,
@@ -19,6 +20,7 @@ import {
 } from 'lucide-react';
 import { MainLayout } from '@/components/layout';
 import {
+  AgentAvatar,
   EmptyState,
   EnvironmentBadge,
   KindBadge,
@@ -50,7 +52,7 @@ export default function AgentPage({ params }: { params: Promise<{ id: string }> 
     <MainLayout>
       <div className="p-6">
         <Link
-          href="/agents"
+          href="/"
           className="mb-4 inline-flex items-center gap-1 text-sm hover:underline"
           style={{ color: 'var(--text-secondary)' }}
         >
@@ -66,36 +68,57 @@ export default function AgentPage({ params }: { params: Promise<{ id: string }> 
         ) : agent ? (
           <>
             <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-              <div className="min-w-0">
-                <div className="mb-1 flex flex-wrap items-center gap-3">
-                  <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
-                    {agent.name}
-                  </h1>
-                  <StatusBadge status={agent.status} title={agent.statusReason} />
-                  <KindBadge kind={agent.kind} />
-                  <EnvironmentBadge environment={agent.environment} />
-                  {agent.delegated && (
-                    <span className="kind-badge" style={{ color: 'var(--status-planned)' }}>
-                      <Share2 size={12} /> Lighthouse
-                    </span>
-                  )}
-                </div>
-                <p
-                  className="flex items-center gap-1 text-sm"
-                  style={{ color: 'var(--text-muted)' }}
-                >
-                  <Building2 size={14} /> {agent.customer}
-                </p>
-                {agent.description && (
-                  <p className="mt-2 max-w-2xl text-sm" style={{ color: 'var(--text-secondary)' }}>
-                    {agent.description}
+              <div className="flex min-w-0 items-start gap-4">
+                <AgentAvatar
+                  name={agent.name}
+                  image={agent.avatarUrl}
+                  status={agent.status}
+                  size="xl"
+                />
+                <div className="min-w-0">
+                  <div className="mb-1 flex flex-wrap items-center gap-3">
+                    <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
+                      {agent.name}
+                    </h1>
+                    <StatusBadge status={agent.status} title={agent.statusReason} />
+                    <KindBadge kind={agent.kind} />
+                    <EnvironmentBadge environment={agent.environment} />
+                    {agent.delegated && (
+                      <span className="kind-badge" style={{ color: 'var(--status-planned)' }}>
+                        <Share2 size={12} /> Lighthouse
+                      </span>
+                    )}
+                  </div>
+                  <p
+                    className="flex items-center gap-1 text-sm"
+                    style={{ color: 'var(--text-muted)' }}
+                  >
+                    <Building2 size={14} /> {agent.customer}
                   </p>
-                )}
-                <p className="mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
-                  {agent.statusReason}
-                </p>
+                  {agent.description && (
+                    <p
+                      className="mt-2 max-w-2xl text-sm"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
+                      {agent.description}
+                    </p>
+                  )}
+                  <p className="mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+                    {agent.statusReason}
+                  </p>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {agent.teamsChatUrl && (
+                  <a
+                    href={agent.teamsChatUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn-primary flex items-center gap-2 text-sm"
+                  >
+                    <MessageSquare size={14} /> Chat in Teams
+                  </a>
+                )}
                 {agent.portalUrl && (
                   <a
                     href={agent.portalUrl}

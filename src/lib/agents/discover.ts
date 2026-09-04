@@ -186,6 +186,21 @@ function titleCase(slug: string): string {
     .join(' ');
 }
 
+/**
+ * Teams deep link for the agent. Agents with their own Entra account (OpenClaw)
+ * are addressed by UPN; bots by their Microsoft App ID with the 28: prefix.
+ */
+export function teamsChatUrl(
+  entry: AgentRegistryEntry | undefined,
+  resources: AzureResource[]
+): string | undefined {
+  const upn = entry?.teamsUpn;
+  if (upn) return `https://teams.microsoft.com/l/chat/0/0?users=${encodeURIComponent(upn)}`;
+  const bot = resources.find((r) => r.type === 'microsoft.botservice/botservices' && r.botAppId);
+  if (bot?.botAppId) return `https://teams.microsoft.com/l/chat/0/0?users=28:${bot.botAppId}`;
+  return undefined;
+}
+
 function firstTag(resources: AzureResource[], key: string): string | undefined {
   for (const r of resources) {
     const v = tag(r.tags, key);
@@ -239,6 +254,8 @@ export function buildAgent(
     repo: entry?.repo ?? firstTag(resources, 'agent-repo'),
     resourceCount: resources.length,
     source: entry && bucket.fromTags ? 'both' : entry ? 'registry' : 'tags',
+    avatarUrl: entry?.avatarUrl ?? firstTag(resources, 'agent-avatar'),
+    teamsChatUrl: teamsChatUrl(entry, resources),
     resources: [...resources].sort(
       (a, b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name)
     ),
@@ -265,6 +282,8 @@ export function toSummary(agent: AgentDetail): AgentSummary {
     repo: agent.repo,
     resourceCount: agent.resourceCount,
     source: agent.source,
+    avatarUrl: agent.avatarUrl,
+    teamsChatUrl: agent.teamsChatUrl,
   };
 }
 

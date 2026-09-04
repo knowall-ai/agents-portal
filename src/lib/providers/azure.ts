@@ -51,6 +51,7 @@ interface GraphRow {
   siteState: string;
   provisioningState: string;
   hostName: string;
+  botAppId: string;
 }
 
 function normaliseState(row: GraphRow): { state: ResourceState; rawState?: string } {
@@ -91,7 +92,8 @@ export async function listAgentResources(token: string): Promise<AzureResource[]
     powerState = tostring(properties.extended.instanceView.powerState.code),
     siteState = tostring(properties.state),
     provisioningState = tostring(properties.provisioningState),
-    hostName = tostring(properties.defaultHostName)
+    hostName = tostring(properties.defaultHostName),
+    botAppId = tostring(properties.msaAppId)
 | order by name asc`;
 
   const rows: GraphRow[] = [];
@@ -129,6 +131,7 @@ export async function listAgentResources(token: string): Promise<AzureResource[]
       state,
       rawState,
       hostName: row.hostName || undefined,
+      botAppId: row.botAppId || undefined,
     };
   });
 }

@@ -7,6 +7,11 @@ test.describe('Navigation (unauthenticated)', () => {
     await expect(link).toHaveAttribute('href', 'https://github.com/knowall-ai/agent-dashboard');
   });
 
+  test('/agents redirects to the home page keeping filters', async ({ page }) => {
+    await page.goto('/agents?status=online');
+    await expect(page).toHaveURL(/\/\?status=online$/);
+  });
+
   test('has correct page metadata', async ({ page }) => {
     await page.goto('/');
     await expect(page).toHaveTitle(/Agent Dashboard/);

@@ -2,12 +2,11 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Bot, Activity, BookOpen, X, Github } from 'lucide-react';
+import { Home, Activity, BookOpen, X, Github } from 'lucide-react';
 import { AgentDashboardIcon } from '@/components/common';
 
 const mainNavItems = [
-  { id: 'home', name: 'Home', icon: <Home size={20} />, href: '/' },
-  { id: 'agents', name: 'Agents', icon: <Bot size={20} />, href: '/agents' },
+  { id: 'home', name: 'Agents', icon: <Home size={20} />, href: '/' },
   { id: 'activity', name: 'Activity', icon: <Activity size={20} />, href: '/activity' },
 ];
 
@@ -21,10 +20,10 @@ export default function Sidebar({ isOpen = false, onClose, counts }: SidebarProp
   const pathname = usePathname();
 
   const views = [
-    { id: 'online', name: 'Online', href: '/agents?status=online', count: counts?.online },
-    { id: 'degraded', name: 'Degraded', href: '/agents?status=degraded', count: counts?.degraded },
-    { id: 'offline', name: 'Offline', href: '/agents?status=offline', count: counts?.offline },
-    { id: 'planned', name: 'Planned', href: '/agents?status=planned', count: counts?.planned },
+    { id: 'online', name: 'Online', href: '/?status=online', count: counts?.online },
+    { id: 'degraded', name: 'Degraded', href: '/?status=degraded', count: counts?.degraded },
+    { id: 'offline', name: 'Offline', href: '/?status=offline', count: counts?.offline },
+    { id: 'planned', name: 'Planned', href: '/?status=planned', count: counts?.planned },
   ];
 
   return (

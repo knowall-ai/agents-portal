@@ -6,6 +6,7 @@ import {
   groupResources,
   normaliseEnvironment,
   slugify,
+  teamsChatUrl,
 } from './discover';
 
 function resource(overrides: Partial<AzureResource>): AzureResource {
@@ -160,5 +161,25 @@ describe('helpers', () => {
   });
   it('slugifies tag values', () => {
     expect(slugify('Zaplie Test')).toBe('zaplie-test');
+  });
+});
+
+describe('teamsChatUrl', () => {
+  it('prefers the agent user account over a bot', () => {
+    expect(
+      teamsChatUrl({ id: 'sallie', name: 'Sallie', teamsUpn: 'sallie@example.com' }, [
+        resource({ type: 'microsoft.botservice/botservices', botAppId: 'abc' }),
+      ])
+    ).toBe('https://teams.microsoft.com/l/chat/0/0?users=sallie%40example.com');
+  });
+  it('addresses bots by their Microsoft App ID', () => {
+    expect(
+      teamsChatUrl(undefined, [
+        resource({ type: 'microsoft.botservice/botservices', botAppId: 'abc' }),
+      ])
+    ).toBe('https://teams.microsoft.com/l/chat/0/0?users=28:abc');
+  });
+  it('returns nothing when the agent cannot be reached in Teams', () => {
+    expect(teamsChatUrl(undefined, [resource({})])).toBeUndefined();
   });
 });

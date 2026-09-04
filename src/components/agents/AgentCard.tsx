@@ -1,8 +1,16 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRight, Boxes, Building2, ExternalLink, Github, Share2 } from 'lucide-react';
-import { EnvironmentBadge, KindBadge, StatusBadge } from '@/components/common';
+import {
+  ArrowRight,
+  Boxes,
+  Building2,
+  ExternalLink,
+  Github,
+  MessageSquare,
+  Share2,
+} from 'lucide-react';
+import { AgentAvatar, EnvironmentBadge, KindBadge, StatusBadge } from '@/components/common';
 import type { AgentSummary } from '@/types';
 
 export default function AgentCard({ agent }: { agent: AgentSummary }) {
@@ -14,14 +22,17 @@ export default function AgentCard({ agent }: { agent: AgentSummary }) {
       data-testid="agent-card"
     >
       <div className="mb-3 flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="truncate text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
-            {agent.name}
-          </h3>
-          <p className="flex items-center gap-1 text-xs" style={{ color: 'var(--text-muted)' }}>
-            <Building2 size={12} />
-            {agent.customer}
-          </p>
+        <div className="flex min-w-0 items-center gap-3">
+          <AgentAvatar name={agent.name} image={agent.avatarUrl} status={agent.status} size="md" />
+          <div className="min-w-0">
+            <h3 className="truncate text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
+              {agent.name}
+            </h3>
+            <p className="flex items-center gap-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+              <Building2 size={12} />
+              {agent.customer}
+            </p>
+          </div>
         </div>
         <StatusBadge status={agent.status} title={agent.statusReason} />
       </div>
@@ -53,6 +64,7 @@ export default function AgentCard({ agent }: { agent: AgentSummary }) {
             <Boxes size={12} />
             {agent.resourceCount}
           </span>
+          {agent.teamsChatUrl && <MessageSquare size={12} aria-label="Reachable in Teams" />}
           {agent.repo && <Github size={12} aria-label="Has GitHub repo" />}
           {agent.portalUrl && <ExternalLink size={12} aria-label="Has portal" />}
           <ArrowRight size={14} />

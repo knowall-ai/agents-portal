@@ -25,6 +25,8 @@ export interface AzureResource {
   /** Raw state string from Azure (e.g. "PowerState/running", "Running") */
   rawState?: string;
   hostName?: string;
+  /** Bot Service only: the Microsoft App ID used to address the bot in Teams (28:<id>) */
+  botAppId?: string;
 }
 
 export interface AzureSubscription {
@@ -55,6 +57,10 @@ export interface AgentRegistryEntry {
   resourceGroups?: string[];
   /** Agent not yet built or deployed — shown as "planned" */
   planned?: boolean;
+  /** Profile image (absolute URL or path under /public) */
+  avatarUrl?: string;
+  /** Entra user principal name of the agent's own account, for a Teams chat deep link */
+  teamsUpn?: string;
 }
 
 export interface AgentSummary {
@@ -76,6 +82,9 @@ export interface AgentSummary {
   repo?: string;
   resourceCount: number;
   source: 'registry' | 'tags' | 'both';
+  avatarUrl?: string;
+  /** Deep link that opens a Teams chat with the agent (user account or bot) */
+  teamsChatUrl?: string;
 }
 
 export interface FoundryProject {

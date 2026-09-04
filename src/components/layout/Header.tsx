@@ -21,7 +21,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
 
   const submitSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    router.push(query.trim() ? `/agents?q=${encodeURIComponent(query.trim())}` : '/agents');
+    router.push(query.trim() ? `/?q=${encodeURIComponent(query.trim())}` : '/');
   };
 
   return (

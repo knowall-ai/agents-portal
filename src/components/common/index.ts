@@ -1,3 +1,4 @@
+export { default as AgentAvatar } from './AgentAvatar';
 export { default as AgentDashboardIcon } from './AgentDashboardIcon';
 export { default as Avatar } from './Avatar';
 export { default as EmptyState } from './EmptyState';
