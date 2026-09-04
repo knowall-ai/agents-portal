@@ -392,19 +392,19 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
             <div role="tabpanel" id={`agent-panel-${tab}`} aria-labelledby={`agent-${tab}`}>
               {tab === 'overview' && (
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                  <section className="card lg:col-span-3">
-                    <h2
-                      className="flex items-center gap-2 border-b p-4 text-lg font-semibold"
-                      style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-                    >
-                      <CalendarDays size={18} style={{ color: 'var(--primary)' }} /> Activity
-                    </h2>
-                    <ActivityCalendar
-                      events={activity.data?.events ?? null}
-                      isLoading={activity.isLoading}
-                    />
-                  </section>
                   <div className="space-y-6 lg:col-span-2">
+                    <section className="card">
+                      <h2
+                        className="flex items-center gap-2 border-b p-4 text-lg font-semibold"
+                        style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                      >
+                        <CalendarDays size={18} style={{ color: 'var(--primary)' }} /> Activity
+                      </h2>
+                      <ActivityCalendar
+                        events={activity.data?.events ?? null}
+                        isLoading={activity.isLoading}
+                      />
+                    </section>
                     {boost.data?.boost.supported && (
                       <section className="card">
                         <h2
