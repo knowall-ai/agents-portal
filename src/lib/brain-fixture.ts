@@ -66,7 +66,8 @@ function build(): { nodes: BrainNode[]; rels: BrainRel[] } {
   const link = (a: string, b: string, type: string) => {
     const s = byName.get(a);
     const t = byName.get(b);
-    if (!s || !t) return;
+    if (!s || !t || s === t) return;
+    if (rels.some((r) => r.source === s.id && r.target === t.id)) return;
     rels.push({ id: `r${rels.length}`, type, source: s.id, target: t.id, updatedAt: s.updatedAt });
     s.degree++;
     t.degree++;
@@ -110,11 +111,204 @@ function build(): { nodes: BrainNode[]; rels: BrainRel[] } {
   link('Sarah Quinn', 'Louise Byrne', 'INTRODUCED_BY');
   link('Glanua', 'ZapDesk', 'INTERESTED_IN');
   link('Tom Hendry', 'ZapDesk', 'DISCUSSED');
+
+  // A wider world so the picture has depth: generated people, organisations,
+  // projects, concepts, meetings, decisions and risks, wired up plausibly.
+  const FIRST = [
+    'Aoife',
+    'Cian',
+    'Niamh',
+    'Oisín',
+    'Saoirse',
+    'Fionn',
+    'Róisín',
+    'Darragh',
+    'Emma',
+    'Jack',
+    'Grace',
+    'Liam',
+    'Hannah',
+    'Noah',
+    'Ava',
+    'Ryan',
+    'Ella',
+    'Ollie',
+    'Mia',
+    'Sam',
+  ];
+  const LAST = [
+    'Byrne',
+    'Murphy',
+    'Kelly',
+    'Walsh',
+    'Doyle',
+    'Brennan',
+    'Ryan',
+    'Nolan',
+    'Hughes',
+    'Flynn',
+    'Reid',
+    'Clarke',
+    'Moore',
+    'Hayes',
+    'Burke',
+  ];
+  const ORG_A = [
+    'Northwind',
+    'Shannon',
+    'Liffey',
+    'Atlantic',
+    'Harbour',
+    'Summit',
+    'Beacon',
+    'Kestrel',
+    'Granite',
+    'Willow',
+    'Ardent',
+    'Lumen',
+    'Meridian',
+    'Copper',
+    'Tidal',
+  ];
+  const ORG_B = [
+    'Logistics',
+    'Health',
+    'Foods',
+    'Energy',
+    'Capital',
+    'Systems',
+    'Retail',
+    'Pharma',
+    'Construction',
+    'Media',
+  ];
+  const PROJ = [
+    'Rollout',
+    'Migration',
+    'Pilot',
+    'Renewal',
+    'Assessment',
+    'Automation',
+    'Dashboard',
+    'Integration',
+    'Onboarding',
+    'Audit',
+    'Roadmap',
+    'Discovery',
+  ];
+  const CONC = [
+    'Zero trust',
+    'Copilot licensing',
+    'Data residency',
+    'Change control',
+    'Rate limits',
+    'Token budget',
+    'Lighthouse delegation',
+    'Conditional access',
+    'Backlog hygiene',
+    'Definition of done',
+    'Sprint cadence',
+    'Stand-up etiquette',
+    'Escalation path',
+    'Runbook',
+    'Observability',
+    'Cost centre',
+    'Procurement',
+    'Renewal window',
+  ];
+  const MEET = [
+    'Kick-off',
+    'Weekly sync',
+    'Steering',
+    'Retro',
+    'Demo',
+    'Workshop',
+    'Site visit',
+    'Board update',
+    'Vendor call',
+    'QBR',
+  ];
+  const DEC = [
+    'Go with Azure OpenAI',
+    'Single rate card',
+    'Ship read-only first',
+    'Monthly billing',
+    'Per-agent graph',
+    'Pause the pilot',
+    'Extend the trial',
+  ];
+  const RISK = [
+    'Key person dependency',
+    'Quota exhaustion',
+    'Consent not granted',
+    'Scope creep',
+    'Data leak via tags',
+    'Unpatched VM',
+  ];
+  const pickR = <T>(arr: T[]) => arr[Math.floor(rand() * arr.length)];
+  const people: BrainNode[] = [];
+  const orgs: BrainNode[] = [];
+  const projects: BrainNode[] = [];
+  const concepts: BrainNode[] = [];
+  const add = (label: string, name: string, bucket: BrainNode[]) => {
+    if (byName.has(name)) return byName.get(name) as BrainNode;
+    const n = node(label, name, nodes.length);
+    nodes.push(n);
+    byName.set(name, n);
+    bucket.push(n);
+    return n;
+  };
+  for (let k = 0; k < 18; k++)
+    add('Organization', `${ORG_A[k % ORG_A.length]} ${ORG_B[(k * 7) % ORG_B.length]}`, orgs);
+  for (let k = 0; k < 52; k++)
+    add('Person', `${FIRST[(k * 3) % FIRST.length]} ${LAST[(k * 5 + 2) % LAST.length]}`, people);
+  for (let k = 0; k < 16; k++)
+    add('Project', `${ORG_A[(k * 4 + 1) % ORG_A.length]} ${PROJ[k % PROJ.length]}`, projects);
+  for (const c of CONC) add('Concept', c, concepts);
+  const meetings = MEET.map((m, k) => add('Meeting', `${m} ${k + 1}`, []));
+  const decisions = DEC.map((d) => add('Decision', d, []));
+  const risks = RISK.map((r) => add('Risk', r, []));
+  const allOrgs = [...orgs, ...ORGS.map((o) => byName.get(o) as BrainNode)];
+  for (const p of people) link(p.name, pickR(allOrgs).name, 'WORKS_AT');
+  for (const pr of projects) {
+    link(pickR(allOrgs).name, pr.name, 'OWNS');
+    link(pickR(people).name, pr.name, 'DISCUSSED');
+    link(pickR(people).name, pr.name, 'INTERESTED_IN');
+    link(pr.name, pickR(concepts).name, 'DISCUSSED');
+  }
+  for (const m of meetings) {
+    for (let k = 0; k < 3; k++) link(pickR(people).name, m.name, 'MET_WITH');
+    link(m.name, pickR(projects).name, 'DISCUSSED');
+    link(m.name, pickR(concepts).name, 'DISCUSSED');
+  }
+  for (const d of decisions) {
+    link(
+      pickR([...people, 'Ben Weeks', 'Poppie'].map((x) => (typeof x === 'string' ? x : x.name))),
+      d.name,
+      'DECIDED'
+    );
+    link(d.name, pickR(concepts).name, 'DISCUSSED');
+  }
+  for (const r of risks) link(pickR(projects).name, r.name, 'BLOCKED_BY');
+  for (let k = 0; k < 30; k++) link(pickR(people).name, pickR(people).name, 'INTRODUCED_BY');
+  for (let k = 0; k < 20; k++) link(pickR(allOrgs).name, pickR(allOrgs).name, 'PARTNERS_WITH');
   return { nodes, rels };
 }
 
 const graph = build();
 let extra = 0;
+let cpu = 23;
+
+/** A CPU figure that wanders like a real box, with the odd spike. */
+export function fixtureHostStats(): { cpuPercent: number; load1: number; memPercent: number } {
+  const spike = rand() < 0.08 ? 25 + rand() * 40 : 0;
+  cpu = Math.max(3, Math.min(97, cpu + (rand() - 0.5) * 12 + spike * 0.5 - (cpu > 60 ? 6 : 0)));
+  return {
+    cpuPercent: Math.round(cpu * 10) / 10,
+    load1: Math.round((cpu / 25) * 100) / 100,
+    memPercent: 61.4,
+  };
+}
 
 function stats(): BrainSnapshot['stats'] {
   const labels: Record<string, number> = {};
@@ -144,6 +338,7 @@ export function fixtureSnapshot(): BrainSnapshot {
       recentReads: 7,
       recentWrites: 2,
       eventsAvailable: true,
+      ...fixtureHostStats(),
     },
     generatedAt: now,
   };

@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { getUserContext } from '@/lib/tokens';
 import { brainSource, getAgent } from '@/lib/agents/service';
 import { openBrainEvents } from '@/lib/providers/reverie';
-import { fixtureTick } from '@/lib/brain-fixture';
+import { fixtureHostStats, fixtureTick } from '@/lib/brain-fixture';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,12 +38,21 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
         const send = (event: string, data: unknown) => {
           if (!closed) controller.enqueue(encoder.encode(line(event, data)));
         };
-        send('state', { dreaming: false, lastActivityAt: Date.now() / 1000 });
+        send('state', {
+          dreaming: false,
+          lastActivityAt: Date.now() / 1000,
+          ...fixtureHostStats(),
+        });
+        let n = 0;
         const timer = setInterval(() => {
-          const { activation, diff } = fixtureTick();
-          if (activation) send('activation', activation);
-          if (diff) send('graph', diff);
-        }, 2500);
+          n += 1;
+          if (n % 2 === 0) {
+            const { activation, diff } = fixtureTick();
+            if (activation) send('activation', activation);
+            if (diff) send('graph', diff);
+          }
+          send('state', { lastActivityAt: Date.now() / 1000, ...fixtureHostStats() });
+        }, 1250);
         req.signal.addEventListener('abort', () => {
           closed = true;
           clearInterval(timer);

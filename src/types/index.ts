@@ -127,6 +127,10 @@ export interface BrainState {
   recentReads: number;
   recentWrites: number;
   eventsAvailable: boolean;
+  /** Agent VM host stats, when the server can read them */
+  cpuPercent?: number | null;
+  load1?: number | null;
+  memPercent?: number | null;
 }
 
 export interface BrainSnapshot {
