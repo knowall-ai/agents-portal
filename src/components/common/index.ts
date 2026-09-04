@@ -6,3 +6,5 @@ export { default as EnvironmentBadge } from './EnvironmentBadge';
 export { default as KindBadge, kindLabels } from './KindBadge';
 export { default as LoadingSpinner } from './LoadingSpinner';
 export { default as StatusBadge } from './StatusBadge';
+export { default as Tabs } from './Tabs';
+export type { TabDef } from './Tabs';
