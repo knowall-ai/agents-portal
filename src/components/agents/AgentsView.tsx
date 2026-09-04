@@ -188,7 +188,8 @@ export default function AgentsView() {
           return (
             <Link
               key={kpi.title}
-              href={kpi.status ? `/?status=${kpi.status}` : '/'}
+              // a second click on the active card clears the filter
+              href={kpi.status && !active ? `/?status=${kpi.status}` : '/'}
               className="card p-4 transition-colors hover:bg-[var(--surface-hover)]"
               style={active ? { borderColor: kpi.color } : undefined}
               aria-pressed={active}

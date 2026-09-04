@@ -160,7 +160,7 @@ export default function PermissionsPanel({ permissions, isLoading, error }: Perm
   }
 
   return (
-    <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
+    <div className="divide-y">
       {permissions.error && (
         <p className="px-4 py-3 text-xs" style={{ color: 'var(--status-degraded)' }}>
           Directory data unavailable: {permissions.error}
