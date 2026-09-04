@@ -1,5 +1,6 @@
 // Azure Resource Manager helpers: Resource Graph, subscriptions, tenants and the Activity Log.
 import type {
+  PermissionItem,
   ActivityEvent,
   AzureResource,
   AzureSubscription,
@@ -247,4 +248,96 @@ export async function listActivityLog(
     });
   }
   return events;
+}
+
+// ---------------------------------------------------------------------------
+// Azure RBAC role assignments for a principal (user or service principal)
+// ---------------------------------------------------------------------------
+
+interface RoleAssignmentRow {
+  properties: { roleDefinitionId: string; scope: string; principalId: string };
+}
+
+const roleDefinitionCache = new Map<string, Promise<{ roleName: string; description?: string }>>();
+
+function roleDefinition(token: string, id: string) {
+  let pending = roleDefinitionCache.get(id);
+  if (!pending) {
+    pending = armFetch<{ properties: { roleName: string; description?: string } }>(
+      token,
+      `${id}?api-version=2022-04-01`
+    ).then((r) => r.properties);
+    roleDefinitionCache.set(id, pending);
+  }
+  return pending;
+}
+
+/** "/subscriptions/…/resourceGroups/rg/providers/…/vaults/kv" → "kv (Key Vault)" style short scope. */
+export function shortenScope(scope: string): string {
+  const parts = scope.split('/').filter(Boolean);
+  if (parts.length <= 2)
+    return parts.length === 2 ? `Subscription ${parts[1].slice(0, 8)}…` : scope;
+  const rg = parts.indexOf('resourceGroups');
+  if (rg !== -1 && parts.length === rg + 2) return `Resource group ${parts[rg + 1]}`;
+  const providers = parts.indexOf('providers');
+  if (providers !== -1 && parts.length > providers + 2) {
+    const type = parts[providers + 2];
+    return `${parts
+      .slice(providers + 3)
+      .filter((_, i) => i % 2 === 1)
+      .join('/')} (${type})`;
+  }
+  return scope;
+}
+
+/** Role assignments for a principal across the given subscriptions, with role descriptions. */
+export async function listRoleAssignments(
+  token: string,
+  subscriptionIds: string[],
+  principalId: string
+): Promise<PermissionItem[]> {
+  if (!/^[0-9a-f-]{36}$/i.test(principalId))
+    throw new Error(`Invalid principal id: ${principalId}`);
+  const rows = (
+    await Promise.all(
+      subscriptionIds.map((sub) =>
+        armFetch<{ value: RoleAssignmentRow[] }>(
+          token,
+          `/subscriptions/${sub}/providers/Microsoft.Authorization/roleAssignments?api-version=2022-04-01&$filter=${encodeURIComponent(`principalId eq '${principalId}'`)}`
+        )
+          .then((r) => r.value)
+          .catch((error) => {
+            console.warn(`Role assignments failed for ${sub}:`, error);
+            return [] as RoleAssignmentRow[];
+          })
+      )
+    )
+  ).flat();
+  const seen = new Set<string>();
+  const items = await Promise.all(
+    rows
+      .filter((row) => {
+        const key = `${row.properties.roleDefinitionId}@${row.properties.scope}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .map(async (row): Promise<PermissionItem> => {
+        const def = await roleDefinition(token, row.properties.roleDefinitionId).catch(() => ({
+          roleName: row.properties.roleDefinitionId.split('/').pop() ?? 'Unknown role',
+          description: undefined,
+        }));
+        return {
+          id: `${row.properties.roleDefinitionId}@${row.properties.scope}`,
+          name: def.roleName,
+          kind: 'azure-role',
+          description: def.description,
+          resource: 'Azure',
+          scope: shortenScope(row.properties.scope),
+        };
+      })
+  );
+  return items.sort(
+    (a, b) => a.name.localeCompare(b.name) || (a.scope ?? '').localeCompare(b.scope ?? '')
+  );
 }

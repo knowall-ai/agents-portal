@@ -68,6 +68,8 @@ export interface AgentRegistryEntry {
   skillSources?: SkillSource[];
   /** Path to the agent's SOUL.md. Defaults to workspace/SOUL.md, then SOUL.md. */
   soulPath?: string;
+  /** Entra app registrations the agent runs as (Graph/API access). Bot app IDs are added automatically. */
+  appRegistrations?: AppRegistrationRef[];
   /** Resource groups whose resources belong to this agent (case-insensitive) */
   resourceGroups?: string[];
   /** Agent not yet built or deployed — shown as "planned" */
@@ -82,6 +84,60 @@ export interface AgentRegistryEntry {
   anthropicWorkspaceId?: string;
   /** Flat monthly fees not visible in any API (e.g. ChatGPT subscription, ElevenLabs plan) */
   fixedCosts?: FixedCost[];
+}
+
+export interface AppRegistrationRef {
+  appId: string;
+  label?: string;
+}
+
+export type PermissionKind =
+  | 'delegated'
+  | 'application'
+  | 'directory-role'
+  | 'group'
+  | 'azure-role';
+
+/** One permission, role or membership, with an explanation for the expandable row. */
+export interface PermissionItem {
+  id: string;
+  name: string;
+  kind: PermissionKind;
+  /** Microsoft's own description where it publishes one */
+  description?: string;
+  /** API the permission is on (Microsoft Graph, …) or "Azure" for RBAC */
+  resource?: string;
+  /** App permissions: whether the tenant has consented / assigned it */
+  granted?: boolean;
+  /** Azure RBAC: the scope the role is assigned at */
+  scope?: string;
+}
+
+/** What the agent's own Entra account can do. */
+export interface AgentAccountAccess {
+  upn: string;
+  objectId?: string;
+  directoryRoles: PermissionItem[];
+  groups: PermissionItem[];
+  azureRoles: PermissionItem[];
+}
+
+/** What one of the agent's app registrations can do. */
+export interface AgentAppAccess {
+  appId: string;
+  displayName: string;
+  label?: string;
+  servicePrincipalId?: string;
+  permissions: PermissionItem[];
+  azureRoles: PermissionItem[];
+  error?: string;
+}
+
+export interface AgentPermissions {
+  account?: AgentAccountAccess;
+  apps: AgentAppAccess[];
+  /** Why directory data could not be read, when it could not */
+  error?: string;
 }
 
 /** A Microsoft licence (SKU) assigned to the agent's Entra account. */

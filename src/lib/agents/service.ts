@@ -2,7 +2,12 @@
 // health probes into the shapes the API routes return.
 import { cached } from '@/lib/cache';
 import { getRegistry, getRegistryEntry } from '@/lib/registry';
-import { listActivityLog, listAgentResources, listSubscriptions } from '@/lib/providers/azure';
+import {
+  listActivityLog,
+  listAgentResources,
+  listRoleAssignments,
+  listSubscriptions,
+} from '@/lib/providers/azure';
 import {
   assistantsToSkills,
   listAssistants,
@@ -11,9 +16,10 @@ import {
 } from '@/lib/providers/foundry';
 import { getRepoMarkdown, listRepoCommits, listRepoSkills } from '@/lib/providers/github';
 import { probeUrl } from '@/lib/providers/health';
-import { getUserLicensing } from '@/lib/providers/graph';
+import { getAppAccess, getUserAccess, getUserLicensing } from '@/lib/providers/graph';
 import {
   FOUNDRY_SCOPE,
+  GRAPH_DIRECTORY_READ_ALL_SCOPE,
   GRAPH_DIRECTORY_SCOPE,
   getResourceToken,
   type UserContext,
@@ -23,6 +29,7 @@ import type {
   AgentCosts,
   AgentDetail,
   AgentLicensing,
+  AgentPermissions,
   AgentSoul,
   CostSourceStatus,
   CostsSummary,
@@ -178,6 +185,102 @@ export async function getLicensing(ctx: UserContext, agent: AgentDetail): Promis
       }
     },
     30 * 60 * 1000
+  );
+}
+
+const NO_DIRECTORY_CONSENT =
+  'Microsoft Graph Directory.Read.All is not consented for this app — see docs/DEPLOYMENT.adoc';
+
+/**
+ * What the agent can do: directory roles, groups and Azure RBAC roles of its
+ * own account, and the API permissions of its app registrations (registry
+ * `appRegistrations` plus any Bot Service app IDs) with consent state.
+ * Read-only; needs Directory.Read.All (delegated, admin consent).
+ */
+export async function getPermissions(
+  ctx: UserContext,
+  agent: AgentDetail
+): Promise<AgentPermissions> {
+  const entry = getRegistryEntry(agent.id);
+  const apps = new Map<string, { appId: string; label?: string }>();
+  for (const app of entry?.appRegistrations ?? []) apps.set(app.appId.toLowerCase(), app);
+  for (const r of agent.resources) {
+    if (
+      r.type === 'microsoft.botservice/botservices' &&
+      r.botAppId &&
+      !apps.has(r.botAppId.toLowerCase())
+    ) {
+      apps.set(r.botAppId.toLowerCase(), { appId: r.botAppId, label: `Bot Service ${r.name}` });
+    }
+  }
+  if (!entry?.teamsUpn && apps.size === 0) return { apps: [] };
+
+  return cached(
+    `permissions:${scope(ctx)}:${agent.id}`,
+    async () => {
+      const token = await getResourceToken(ctx, GRAPH_DIRECTORY_READ_ALL_SCOPE);
+      if (!token) {
+        return {
+          account: entry?.teamsUpn
+            ? { upn: entry.teamsUpn, directoryRoles: [], groups: [], azureRoles: [] }
+            : undefined,
+          apps: [...apps.values()].map((a) => ({
+            appId: a.appId,
+            displayName: a.label ?? a.appId,
+            label: a.label,
+            permissions: [],
+            azureRoles: [],
+          })),
+          error: NO_DIRECTORY_CONSENT,
+        };
+      }
+      const subscriptionIds = (await listSubscriptions(ctx.armToken)).map((s) => s.subscriptionId);
+      const roles = (principalId?: string) =>
+        principalId
+          ? listRoleAssignments(ctx.armToken, subscriptionIds, principalId).catch((error) => {
+              console.warn(`Role assignments failed for ${principalId}:`, error);
+              return [];
+            })
+          : Promise.resolve([]);
+
+      const account = entry?.teamsUpn
+        ? await getUserAccess(token, entry.teamsUpn)
+            .then(async (access) => ({
+              upn: entry.teamsUpn as string,
+              ...access,
+              azureRoles: await roles(access.objectId),
+            }))
+            .catch((error) => {
+              console.warn(`User access lookup failed for ${agent.id}:`, error);
+              return {
+                upn: entry.teamsUpn as string,
+                directoryRoles: [],
+                groups: [],
+                azureRoles: [],
+              };
+            })
+        : undefined;
+
+      const appAccess = await Promise.all(
+        [...apps.values()].map((a) =>
+          getAppAccess(token, a.appId, a.label)
+            .then(async (access) => ({
+              ...access,
+              azureRoles: await roles(access.servicePrincipalId),
+            }))
+            .catch((error) => ({
+              appId: a.appId,
+              displayName: a.label ?? a.appId,
+              label: a.label,
+              permissions: [],
+              azureRoles: [],
+              error: error instanceof Error ? error.message : String(error),
+            }))
+        )
+      );
+      return { account, apps: appAccess };
+    },
+    15 * 60 * 1000
   );
 }
 

@@ -19,7 +19,7 @@ flowchart LR
     App --> ARM["Azure Resource Manager<br/>Resource Graph · Activity Log"]
     App --> Foundry["Azure AI Foundry<br/>Assistants API"]
     App --> GitHub["GitHub REST API<br/>skills · SOUL.md · commits"]
-    App --> Graph["Microsoft Graph<br/>agent account · licences"]
+    App --> Graph["Microsoft Graph<br/>agent account · licences · roles · app permissions"]
     App --> Portal["Agent portals<br/>(health probe)"]
 
     subgraph KnowAll["KnowAll tenant"]

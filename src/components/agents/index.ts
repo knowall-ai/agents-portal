@@ -5,6 +5,7 @@ export { default as AgentsView } from './AgentsView';
 export { default as CostBreakdown } from './CostBreakdown';
 export { default as FoundryAssistants } from './FoundryAssistants';
 export { default as LicenseList } from './LicenseList';
+export { default as PermissionsPanel } from './PermissionsPanel';
 export { default as ResourceTable } from './ResourceTable';
 export { default as SkillList } from './SkillList';
 export { default as SoulPanel } from './SoulPanel';

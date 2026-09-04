@@ -83,6 +83,7 @@ For richer metadata (skills repo, portal URL, health URL) or for resources you c
 * `resourceGroups` claims every agent-shaped resource in those groups, tagged or not.
 * `skillsPath` is the folder containing `<skill>/SKILL.md`; symlinks (e.g. `workspace/skills → ../.claude/skills`) are followed.
 * `skillSources` lists shared skill packs the agent also loads at runtime (for OpenClaw, the repos in `skills.load.extraDirs`). A skill in the agent's own repo shadows a same-named plugin skill, exactly as it does at runtime. `GITHUB_TOKEN` must be able to read these repos too.
+* `appRegistrations` lists the Entra app registrations the agent runs as (`appId` + `label`). The *Permissions* card shows each one's API permissions with Microsoft's description and whether the tenant has consented, plus the account's directory roles, groups and Azure RBAC roles. Bot Service app IDs are added automatically.
 * `soulPath` points at the agent's `SOUL.md`; leave it out for the OpenClaw default (`workspace/SOUL.md`, then `SOUL.md`). It renders on the agent page.
 * Agents appear automatically once their Azure resources are tagged — a registry entry is only needed for metadata. Set `"planned": true` only when you deliberately want an agent listed before anything is deployed.
 * `avatarUrl` points at a file in `public/agents/` (256 px square PNG works well) or an `https` URL.

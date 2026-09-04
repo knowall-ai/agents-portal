@@ -17,6 +17,7 @@ import {
   Receipt,
   RefreshCw,
   Share2,
+  ShieldCheck,
   Sparkles,
   Activity,
   Brain,
@@ -35,6 +36,7 @@ import {
   CostBreakdown,
   FoundryAssistants,
   LicenseList,
+  PermissionsPanel,
   ResourceTable,
   SkillList,
   SoulPanel,
@@ -45,6 +47,7 @@ import type {
   AgentCosts,
   AgentDetail,
   AgentLicensing,
+  AgentPermissions,
   AgentSoul,
   FoundryAssistant,
   Skill,
@@ -68,6 +71,9 @@ export default function AgentPage({ params }: { params: Promise<{ id: string }> 
   const costs = useApi<AgentCosts>(ready ? `/api/agents/${id}/costs` : null, 15 * 60_000);
   const licensing = useApi<{ licensing: AgentLicensing }>(
     ready ? `/api/agents/${id}/licenses` : null
+  );
+  const permissions = useApi<{ permissions: AgentPermissions }>(
+    ready ? `/api/agents/${id}/permissions` : null
   );
 
   const agent = detail.data?.agent;
@@ -171,6 +177,7 @@ export default function AgentPage({ params }: { params: Promise<{ id: string }> 
                     activity.refetch();
                     costs.refetch();
                     licensing.refetch();
+                    permissions.refetch();
                   }}
                   className="btn-secondary flex items-center gap-2 text-sm"
                 >
@@ -329,6 +336,20 @@ export default function AgentPage({ params }: { params: Promise<{ id: string }> 
                     licensing={licensing.data?.licensing ?? null}
                     isLoading={licensing.isLoading}
                     error={licensing.error}
+                  />
+                </section>
+
+                <section className="card">
+                  <h2
+                    className="flex items-center gap-2 border-b p-4 text-lg font-semibold"
+                    style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                  >
+                    <ShieldCheck size={18} style={{ color: 'var(--primary)' }} /> Permissions
+                  </h2>
+                  <PermissionsPanel
+                    permissions={permissions.data?.permissions ?? null}
+                    isLoading={permissions.isLoading}
+                    error={permissions.error}
                   />
                 </section>
 

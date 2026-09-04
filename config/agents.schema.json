@@ -34,6 +34,18 @@
             }
           },
           "soulPath": { "type": "string" },
+          "appRegistrations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["appId"],
+              "additionalProperties": false,
+              "properties": {
+                "appId": { "type": "string", "format": "uuid" },
+                "label": { "type": "string" }
+              }
+            }
+          },
           "resourceGroups": { "type": "array", "items": { "type": "string" } },
           "planned": { "type": "boolean" },
           "avatarUrl": { "type": "string" },
