@@ -3,32 +3,48 @@
 // and the occasional new node so the picture moves.
 import type { BrainActivation, BrainDiff, BrainNode, BrainRel, BrainSnapshot } from '@/types';
 
+// Demo data only. The named people and companies are well-known public figures
+// and firms (or Microsoft's fictional Contoso) so the picture is recognisable in
+// a video, and only public facts are attached to them; everything else is
+// generated. Never put a customer, colleague or private contact in here: this
+// ships in a public repo and in screenshots.
 const PEOPLE = [
-  'Matt Lacey',
-  'Louise Byrne',
-  'Ciarán Walsh',
-  'Priya Nair',
-  'Tom Hendry',
-  'Sarah Quinn',
-  'Dev Patel',
-  'Aoife Kelly',
-  'Ben Weeks',
-  'Poppie',
+  'Satoshi Nakamoto',
+  'Jack Dorsey',
+  'Michael Saylor',
+  'Satya Nadella',
+  'Jensen Huang',
+  'Sam Altman',
+  'Hal Finney',
+  'Ada Lovelace',
+  'Bill Gates',
+  'Clippy',
 ];
-const ORGS = ['Medite Smartply', 'Cairn Homes', 'Irish FA', 'Eir Evo', 'KnowAll AI', 'Glanua'];
-const PROJECTS = ['CISP renewal', 'Ticketing assistant', 'Timesheets', 'Agents Portal', 'Reverie'];
-const PRODUCTS = ['Presence', 'Thyme', 'ZapDesk'];
+const ORGS = ['Contoso', 'Microsoft', 'Nvidia', 'OpenAI', 'Block', 'Strategy'];
+const PROJECTS = [
+  'Contoso rollout',
+  'Lightning payments',
+  'Copilot licensing',
+  'GPU cluster',
+  'Memory engine',
+];
+const PRODUCTS = ['Azure', 'Bitcoin', 'CUDA'];
 const CONCEPTS = [
   'Graph memory',
   'Dreaming',
   'Fast mode',
   'Azure Lighthouse',
-  'Rule of Quarters',
+  'Proof of work',
   'Rate card',
 ];
-const MEETINGS = ['Daily stand-up', 'Cairn discovery call', 'Eir account review', 'Sprint review'];
-const DECISIONS = ['One rate card', 'Reverie per agent', 'Boost auto-revert'];
-const RISKS = ['E3 seats exhausted', 'Codex quota'];
+const MEETINGS = [
+  'Daily stand-up',
+  'Contoso discovery call',
+  'Microsoft account review',
+  'Sprint review',
+];
+const DECISIONS = ['One rate card', 'Graph per agent', 'Turbo auto-revert'];
+const RISKS = ['Seats exhausted', 'Model quota'];
 
 let seed = 7;
 function rand(): number {
@@ -72,45 +88,49 @@ function build(): { nodes: BrainNode[]; rels: BrainRel[] } {
     s.degree++;
     t.degree++;
   };
-  link('Matt Lacey', 'Medite Smartply', 'WORKS_AT');
-  link('Louise Byrne', 'Cairn Homes', 'WORKS_AT');
-  link('Ciarán Walsh', 'Irish FA', 'WORKS_AT');
-  link('Priya Nair', 'Eir Evo', 'WORKS_AT');
-  link('Tom Hendry', 'Glanua', 'WORKS_AT');
-  link('Sarah Quinn', 'Cairn Homes', 'WORKS_AT');
-  link('Dev Patel', 'KnowAll AI', 'WORKS_AT');
-  link('Aoife Kelly', 'Irish FA', 'WORKS_AT');
-  link('Ben Weeks', 'KnowAll AI', 'WORKS_AT');
-  link('Poppie', 'KnowAll AI', 'WORKS_AT');
-  link('Matt Lacey', 'CISP renewal', 'DISCUSSED');
-  link('Medite Smartply', 'CISP renewal', 'OWNS');
-  link('Louise Byrne', 'Cairn discovery call', 'MET_WITH');
-  link('Ben Weeks', 'Cairn discovery call', 'MET_WITH');
-  link('Cairn discovery call', 'Reverie', 'DISCUSSED');
-  link('Cairn discovery call', 'Presence', 'DISCUSSED');
-  link('Ciarán Walsh', 'Ticketing assistant', 'INTERESTED_IN');
-  link('Irish FA', 'Ticketing assistant', 'OWNS');
-  link('Priya Nair', 'Eir account review', 'MET_WITH');
-  link('Eir Evo', 'Rate card', 'DISCUSSED');
+  link('Satya Nadella', 'Microsoft', 'WORKS_AT');
+  link('Bill Gates', 'Microsoft', 'WORKS_AT');
+  link('Clippy', 'Microsoft', 'WORKS_AT');
+  link('Jensen Huang', 'Nvidia', 'WORKS_AT');
+  link('Sam Altman', 'OpenAI', 'WORKS_AT');
+  link('Jack Dorsey', 'Block', 'WORKS_AT');
+  link('Michael Saylor', 'Strategy', 'WORKS_AT');
+  link('Satoshi Nakamoto', 'Bitcoin', 'CREATED');
+  link('Hal Finney', 'Bitcoin', 'DISCUSSED');
+  link('Ada Lovelace', 'Contoso', 'WORKS_AT');
+  link('Contoso', 'Contoso rollout', 'OWNS');
+  link('Ada Lovelace', 'Contoso rollout', 'DISCUSSED');
+  link('Ada Lovelace', 'Contoso discovery call', 'MET_WITH');
+  link('Clippy', 'Contoso discovery call', 'MET_WITH');
+  link('Contoso discovery call', 'Memory engine', 'DISCUSSED');
+  link('Contoso discovery call', 'Azure', 'DISCUSSED');
+  link('Jack Dorsey', 'Lightning payments', 'INTERESTED_IN');
+  link('Block', 'Lightning payments', 'OWNS');
+  link('Michael Saylor', 'Bitcoin', 'INTERESTED_IN');
+  link('Strategy', 'Bitcoin', 'OWNS');
+  link('Satya Nadella', 'Microsoft account review', 'MET_WITH');
+  link('Microsoft', 'Copilot licensing', 'OWNS');
+  link('Microsoft', 'Rate card', 'DISCUSSED');
   link('One rate card', 'Rate card', 'DECIDED');
-  link('Ben Weeks', 'One rate card', 'DECIDED');
-  link('Ben Weeks', 'Reverie per agent', 'DECIDED');
-  link('Reverie per agent', 'Reverie', 'DISCUSSED');
-  link('Reverie', 'Graph memory', 'DISCUSSED');
-  link('Reverie', 'Dreaming', 'DISCUSSED');
-  link('Boost auto-revert', 'Fast mode', 'DECIDED');
-  link('Agents Portal', 'Azure Lighthouse', 'DISCUSSED');
-  link('Agents Portal', 'Boost auto-revert', 'DISCUSSED');
-  link('Dev Patel', 'Timesheets', 'OWNS');
-  link('Timesheets', 'Thyme', 'DISCUSSED');
-  link('Poppie', 'Daily stand-up', 'MET_WITH');
-  link('Daily stand-up', 'Rule of Quarters', 'DISCUSSED');
-  link('Sprint review', 'Agents Portal', 'DISCUSSED');
-  link('E3 seats exhausted', 'Poppie', 'BLOCKED_BY');
-  link('Codex quota', 'Fast mode', 'BLOCKED_BY');
-  link('Sarah Quinn', 'Louise Byrne', 'INTRODUCED_BY');
-  link('Glanua', 'ZapDesk', 'INTERESTED_IN');
-  link('Tom Hendry', 'ZapDesk', 'DISCUSSED');
+  link('Bill Gates', 'One rate card', 'DECIDED');
+  link('Bill Gates', 'Graph per agent', 'DECIDED');
+  link('Graph per agent', 'Memory engine', 'DISCUSSED');
+  link('Memory engine', 'Graph memory', 'DISCUSSED');
+  link('Memory engine', 'Dreaming', 'DISCUSSED');
+  link('Turbo auto-revert', 'Fast mode', 'DECIDED');
+  link('Contoso rollout', 'Azure Lighthouse', 'DISCUSSED');
+  link('Contoso rollout', 'Turbo auto-revert', 'DISCUSSED');
+  link('Jensen Huang', 'GPU cluster', 'OWNS');
+  link('GPU cluster', 'CUDA', 'DISCUSSED');
+  link('Nvidia', 'CUDA', 'OWNS');
+  link('Clippy', 'Daily stand-up', 'MET_WITH');
+  link('Daily stand-up', 'Proof of work', 'DISCUSSED');
+  link('Sprint review', 'Contoso rollout', 'DISCUSSED');
+  link('Seats exhausted', 'Copilot licensing', 'BLOCKED_BY');
+  link('Model quota', 'Fast mode', 'BLOCKED_BY');
+  link('Hal Finney', 'Satoshi Nakamoto', 'INTRODUCED_BY');
+  link('OpenAI', 'Azure', 'INTERESTED_IN');
+  link('Sam Altman', 'GPU cluster', 'DISCUSSED');
 
   // A wider world so the picture has depth: generated people, organisations,
   // projects, concepts, meetings, decisions and risks, wired up plausibly.
@@ -276,6 +296,58 @@ function build(): { nodes: BrainNode[]; rels: BrainRel[] } {
     bucket.push(n);
     return n;
   };
+  // Recognisable companies and public figures, each tied only to a public fact
+  const KNOWN_ORGS = [
+    'Apple',
+    'Google',
+    'Amazon',
+    'Meta',
+    'Tesla',
+    'SpaceX',
+    'Coinbase',
+    'Stripe',
+    'Shopify',
+    'Salesforce',
+    'Oracle',
+    'IBM',
+    'Intel',
+    'AMD',
+    'Netflix',
+    'Cloudflare',
+    'GitHub',
+    'Anthropic',
+    'Fabrikam',
+    'Tailwind Traders',
+  ];
+  const KNOWN_PEOPLE: [string, string, string][] = [
+    ['Tim Cook', 'Apple', 'CEO'],
+    ['Sundar Pichai', 'Google', 'CEO'],
+    ['Jeff Bezos', 'Amazon', 'Founder'],
+    ['Mark Zuckerberg', 'Meta', 'CEO'],
+    ['Elon Musk', 'Tesla', 'CEO'],
+    ['Brian Armstrong', 'Coinbase', 'CEO'],
+    ['Patrick Collison', 'Stripe', 'CEO'],
+    ['Tobi Lütke', 'Shopify', 'CEO'],
+    ['Marc Benioff', 'Salesforce', 'CEO'],
+    ['Larry Ellison', 'Oracle', 'Founder'],
+    ['Lisa Su', 'AMD', 'CEO'],
+    ['Matthew Prince', 'Cloudflare', 'CEO'],
+    ['Linus Torvalds', 'Linux Foundation', 'Creator of Linux'],
+    ['Grace Hopper', 'US Navy', 'Computer scientist'],
+    ['Alan Turing', 'Bletchley Park', 'Mathematician'],
+    ['Adam Back', 'Blockstream', 'CEO'],
+    ['Nick Szabo', 'Bit gold', 'Cryptographer'],
+    ['Vitalik Buterin', 'Ethereum Foundation', 'Co-founder'],
+    ['Dario Amodei', 'Anthropic', 'CEO'],
+    ['Guido van Rossum', 'Python Software Foundation', 'Creator of Python'],
+  ];
+  for (const o of KNOWN_ORGS) add('Organization', o, orgs);
+  for (const [person, org, role] of KNOWN_PEOPLE) {
+    const p = add('Person', person, people);
+    p.props = { name: person, role };
+    add('Organization', org, orgs);
+    link(person, org, 'WORKS_AT');
+  }
   for (let k = 0; k < 44; k++)
     add(
       'Organization',
@@ -327,7 +399,7 @@ function build(): { nodes: BrainNode[]; rels: BrainRel[] } {
   }
   for (const d of decisions) {
     link(
-      pickR([...people, 'Ben Weeks', 'Poppie'].map((x) => (typeof x === 'string' ? x : x.name))),
+      pickR([...people, 'Bill Gates', 'Clippy'].map((x) => (typeof x === 'string' ? x : x.name))),
       d.name,
       'DECIDED'
     );
@@ -338,38 +410,30 @@ function build(): { nodes: BrainNode[]; rels: BrainRel[] } {
   for (let k = 0; k < 50; k++) link(pickR(allOrgs).name, pickR(allOrgs).name, 'PARTNERS_WITH');
   for (let k = 0; k < 60; k++) link(pickR(people).name, pickR(concepts).name, 'INTERESTED_IN');
   for (let k = 0; k < 40; k++) link(pickR(people).name, pickR(meetings).name, 'MET_WITH');
-  // A real contact to search for: the Irish FA's project sponsor for Winnie.
-  // Facts as remembered from calls; the dog's name is not recorded yet.
-  const thomas = add('Person', 'Thomas Fulton', people);
-  thomas.props = {
-    name: thomas.name,
-    role: 'Project sponsor',
-    lives: 'Belfast',
-    hobby: 'Hill walking',
-    pet: 'Frida (Shar-Pei)',
-    studying: 'TU Dublin, Evolving Technologies',
+  // A well-connected figure to search for in demos, wired with public facts only
+  const satoshi = byName.get('Satoshi Nakamoto') as BrainNode;
+  satoshi.props = { name: satoshi.name, role: 'Creator of Bitcoin', location: 'Unknown' };
+  add('Concept', 'Bitcoin whitepaper', concepts);
+  add('Concept', 'Cryptography', concepts);
+  add('Concept', 'Genesis block', concepts);
+  link(satoshi.name, 'Bitcoin whitepaper', 'AUTHORED');
+  link(satoshi.name, 'Proof of work', 'DISCUSSED');
+  link(satoshi.name, 'Cryptography', 'INTERESTED_IN');
+  link(satoshi.name, 'Genesis block', 'CREATED');
+  link(satoshi.name, 'Hal Finney', 'WORKS_WITH');
+  link('Jack Dorsey', satoshi.name, 'INTERESTED_IN');
+  link('Michael Saylor', 'Bitcoin whitepaper', 'DISCUSSED');
+  (byName.get('Jack Dorsey') as BrainNode).props = {
+    name: 'Jack Dorsey',
+    role: 'Co-founder, Block',
   };
-  add('Concept', 'Belfast', concepts);
-  add('Concept', 'Hill walking', concepts);
-  add('Concept', 'Frida the Shar-Pei', concepts);
-  add('Concept', 'TU Dublin', concepts);
-  link(thomas.name, 'Irish FA', 'WORKS_AT');
-  link(thomas.name, 'Belfast', 'LIVES_IN');
-  link(thomas.name, 'Hill walking', 'ENJOYS');
-  link(thomas.name, 'Frida the Shar-Pei', 'HAS_PET');
-  link(thomas.name, 'TU Dublin', 'STUDIES_AT');
-  link(thomas.name, 'Ticketing assistant', 'SPONSORS');
-  link(thomas.name, 'Ben Weeks', 'MET_WITH');
-  add('Concept', 'Football', concepts);
-  link(thomas.name, 'Football', 'ENJOYS');
-  const norrie = add('Person', 'Norrie Clarke', people);
-  norrie.props = { name: norrie.name, role: 'Head of Fan Experience' };
-  link(norrie.name, 'Irish FA', 'WORKS_AT');
-  link(thomas.name, norrie.name, 'COLLEAGUE_OF');
-  const jordan = add('Person', 'Jordan Armstrong', people);
-  jordan.props = { name: jordan.name, role: 'Account manager' };
-  link(jordan.name, 'Eir Evo', 'WORKS_AT');
-  link(thomas.name, jordan.name, 'WORKS_WITH');
+  (byName.get('Michael Saylor') as BrainNode).props = {
+    name: 'Michael Saylor',
+    role: 'Executive chairman, Strategy',
+  };
+  (byName.get('Satya Nadella') as BrainNode).props = { name: 'Satya Nadella', role: 'CEO' };
+  (byName.get('Jensen Huang') as BrainNode).props = { name: 'Jensen Huang', role: 'CEO' };
+  (byName.get('Clippy') as BrainNode).props = { name: 'Clippy', role: 'Office assistant' };
   return { nodes, rels };
 }
 
