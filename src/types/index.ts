@@ -131,6 +131,29 @@ export interface BrainState {
   cpuPercent?: number | null;
   load1?: number | null;
   memPercent?: number | null;
+  memUsedGb?: number | null;
+  memTotalGb?: number | null;
+  /** usage-stats.json as defined by knowall-ai/agent-presence docs/HUD-CONTRACT.md */
+  usage?: PresenceUsage | null;
+  /** boost-state.json as defined by the same contract */
+  boost?: PresenceBoost | null;
+}
+
+/** OPENAI // USAGE figures the video feed shows (agent-presence HUD contract). */
+export interface PresenceUsage {
+  mode?: 'sub' | 'api';
+  sub?: { pct_left?: number | null; reset_at?: number | null; reset?: string | null };
+  api?: { usd_mtd?: number | null };
+  budget?: number | null;
+}
+
+/** BOOST chip state (agent-presence HUD contract); `until` is epoch milliseconds. */
+export interface PresenceBoost {
+  active?: boolean;
+  tier?: string;
+  until?: number | null;
+  since?: number | null;
+  minutes?: number | null;
 }
 
 export interface BrainSnapshot {

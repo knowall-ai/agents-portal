@@ -5,8 +5,20 @@ import { forceCenter, forceCollide, forceLink, forceManyBody, forceSimulation } 
 import type { Simulation, SimulationLinkDatum, SimulationNodeDatum } from 'd3-force-3d';
 import { Moon, Pause, Play, RotateCcw, Sparkles, Sun, Zap } from 'lucide-react';
 import { EmptyState, LoadingSpinner } from '@/components/common';
+import {
+  HUD,
+  HudBoostChip,
+  HudDeep,
+  HudGauge,
+  HudPanel,
+  HudRow,
+  HudSparkline,
+} from '@/components/common/hud/Hud';
+import { formatTotals } from '@/lib/format';
 import type {
+  AgentBoost,
   AgentBrain,
+  AgentCosts,
   AgentStatus,
   BrainActivation,
   BrainDiff,
@@ -53,10 +65,25 @@ const HOLO_AMBER = '#ffb000';
 const FOCAL = 1100;
 const DEFAULT_ZOOM = 1.3;
 const TILT = 0.32;
-const AUTO_ROTATE = 0.0022; // radians per frame ≈ one turn every 48 s
+const AUTO_ROTATE = 0.0022;
+/** Backdrop plates (public/brain), in the style of the avatar renderer's scenes */
+export const BACKDROPS = ['none', 'bridge', 'rain-city', 'cyber-sky'] as const;
+export type Backdrop = (typeof BACKDROPS)[number];
+/** How fast recency fades: live activity over ~20 min, graph timestamps over ~12 h */
+const RECENCY_LIVE_TAU = 20 * 60;
+const RECENCY_GRAPH_TAU = 12 * 3600; // radians per frame ≈ one turn every 48 s
 
 function colourFor(label: string): string {
   return LABEL_COLOURS[label] ?? OTHER_COLOUR;
+}
+
+/** Blend two hex colours; t=0 gives a, t=1 gives b. */
+function mixHex(a: string, b: string, t: number): string {
+  const pa = parseInt(a.slice(1), 16);
+  const pb = parseInt(b.slice(1), 16);
+  const ch = (shift: number) =>
+    Math.round(((pa >> shift) & 255) * (1 - t) + ((pb >> shift) & 255) * t);
+  return `#${((ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).padStart(6, '0')}`;
 }
 
 function hexToRgba(hex: string, alpha: number): string {
@@ -91,6 +118,10 @@ interface BrainViewProps {
   agentName: string;
   agentStatus: AgentStatus;
   brain: AgentBrain | null;
+  costs?: AgentCosts | null;
+  boost?: AgentBoost | null;
+  /** Scene behind the graph; 'none' keeps the plain gradient */
+  backdrop?: Backdrop;
   isLoading: boolean;
   error?: string | null;
 }
@@ -104,6 +135,9 @@ export default function BrainView({
   agentName,
   agentStatus,
   brain,
+  costs,
+  boost,
+  backdrop = 'bridge',
   isLoading,
   error,
 }: BrainViewProps) {
@@ -123,7 +157,10 @@ export default function BrainView({
   const rotateRef = useRef(true);
   const dreamingRef = useRef(false);
   const firesRef = useRef<Map<string, number>>(new Map());
+  /** When each node was last touched and with what colour, for the recency gradient */
+  const recencyRef = useRef<Map<string, { at: number; colour: string; live: boolean }>>(new Map());
   const panRef = useRef({ y: 0 });
+  const backdropRef = useRef<HTMLImageElement | null>(null);
   const focusRef = useRef<{ angle: number; panY: number } | null>(null);
   const packetsRef = useRef<Map<string, number>>(new Map());
   const dustRef = useRef<{ x: number; y: number; vx: number; vy: number; s: number; p: number }[]>(
@@ -172,6 +209,11 @@ export default function BrainView({
     linksRef.current = links;
     byIdRef.current = byId;
     byNameRef.current = new Map(nodes.map((n) => [n.name.toLowerCase(), n]));
+    recencyRef.current = new Map(
+      nodes
+        .filter((n) => n.updatedAt > 0)
+        .map((n) => [n.id, { at: n.updatedAt * 1000, colour: WRITE_COLOUR, live: false }])
+    );
     setNames(nodes.map((n) => ({ id: n.id, name: n.name, label: n.label })));
     setStats(snapshot.stats);
     setState(snapshot.state);
@@ -208,6 +250,21 @@ export default function BrainView({
   }, [snapshot]);
 
   useEffect(() => {
+    if (backdrop === 'none') {
+      backdropRef.current = null;
+      return;
+    }
+    const img = new Image();
+    img.src = `/brain/bg-${backdrop}.jpg`;
+    img.onload = () => {
+      backdropRef.current = img;
+    };
+    return () => {
+      backdropRef.current = null;
+    };
+  }, [backdrop]);
+
+  useEffect(() => {
     const timer = setInterval(() => setClock(Date.now()), 30_000);
     return () => clearInterval(timer);
   }, []);
@@ -216,7 +273,10 @@ export default function BrainView({
   const highlight = useCallback((ids: string[], kind: string, colour: string) => {
     const until = Date.now() + (HIGHLIGHT_MS[kind] ?? 8000);
     for (const id of ids) {
-      if (byIdRef.current.has(id)) highlightsRef.current.set(id, { colour, until, kind });
+      if (byIdRef.current.has(id)) {
+        highlightsRef.current.set(id, { colour, until, kind });
+        recencyRef.current.set(id, { at: Date.now(), colour, live: true });
+      }
     }
   }, []);
 
@@ -294,6 +354,7 @@ export default function BrainView({
       nodes.push(sn);
       byId.set(sn.id, sn);
       byNameRef.current.set(sn.name.toLowerCase(), sn);
+      recencyRef.current.set(sn.id, { at: Date.now(), colour: WRITE_COLOUR, live: true });
       highlightsRef.current.set(sn.id, {
         colour: NEW_COLOUR,
         until: Date.now() + HIGHLIGHT_MS.added,
@@ -424,6 +485,21 @@ export default function BrainView({
       bg.addColorStop(1, '#05070b');
       ctx.fillStyle = bg;
       ctx.fillRect(0, 0, w, h);
+      const plate = backdropRef.current;
+      if (plate) {
+        // cover-fit the plate, then darken it so the graph and HUD stay legible
+        const scale = Math.max(w / plate.width, h / plate.height);
+        const pw = plate.width * scale;
+        const ph = plate.height * scale;
+        ctx.globalAlpha = 0.85;
+        ctx.drawImage(plate, (w - pw) / 2, (h - ph) / 2, pw, ph);
+        ctx.globalAlpha = 1;
+        const shade = ctx.createRadialGradient(cx, cy, 60, cx, cy, Math.max(w, h) * 0.7);
+        shade.addColorStop(0, 'rgba(5, 7, 11, 0.55)');
+        shade.addColorStop(1, 'rgba(5, 7, 11, 0.35)');
+        ctx.fillStyle = shade;
+        ctx.fillRect(0, 0, w, h);
+      }
 
       const horizon = h * 0.6;
       ctx.save();
@@ -505,11 +581,12 @@ export default function BrainView({
         const rz = -x * sinA + z * cosA;
         const ry = y * cosT - rz * sinT;
         const rz2 = y * sinT + rz * cosT;
-        const scale = (FOCAL / (FOCAL + rz2)) * zoom;
+        // Never let a node pass behind the camera: keep the projection scale positive
+        const scale = (FOCAL / Math.max(FOCAL * 0.2, FOCAL + rz2)) * zoom;
         n.sx = cx + rx * scale;
         n.sy = cy + ry * scale;
         n.depth = scale;
-        n.sr = (3.2 + Math.sqrt(n.degree) * 1.8) * scale;
+        n.sr = Math.max(0.5, (3.2 + Math.sqrt(Math.max(0, n.degree)) * 1.8) * scale);
       }
 
       // ---- background firing: the graph is never completely still ----
@@ -582,13 +659,21 @@ export default function BrainView({
 
       // ---- nodes, far to near, as lit spheres ----
       const ordered = [...nodes].sort((p, q) => (p.depth ?? 0) - (q.depth ?? 0));
-      const labelThreshold = nodes.length > 120 ? 5 : nodes.length > 30 ? 3 : 1;
+      // Label sparingly: the best-connected nodes only, and none of the unrelated ones
+      // while something is focused, so the picture reads around what you're inspecting
+      const labelThreshold =
+        nodes.length > 200 ? 9 : nodes.length > 120 ? 7 : nodes.length > 30 ? 5 : 2;
       for (const n of ordered) {
         const x = n.sx as number;
         const y = n.sy as number;
         const r = n.sr as number;
         const depth = n.depth ?? 1;
-        const colour = colourFor(n.label);
+        const baseColour = colourFor(n.label);
+        const rec = recencyRef.current.get(n.id);
+        const recency = rec
+          ? Math.exp(-((now - rec.at) / 1000) / (rec.live ? RECENCY_LIVE_TAU : RECENCY_GRAPH_TAU))
+          : 0;
+        const colour = rec ? mixHex(baseColour, rec.colour, Math.min(0.9, recency)) : baseColour;
         const hl = highlightsRef.current.get(n.id);
         if (hl && hl.until < now) highlightsRef.current.delete(n.id);
         const active = hl && hl.until > now ? hl : undefined;
@@ -598,11 +683,11 @@ export default function BrainView({
         // halo (additive)
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
-        const haloR = r * (active ? 3.2 : 2.1);
+        const haloR = r * (active ? 3.2 : 2.1 + recency * 1.6);
         const halo = ctx.createRadialGradient(x, y, r * 0.6, x, y, haloR);
         halo.addColorStop(
           0,
-          hexToRgba(active ? active.colour : colour, (active ? 0.5 : 0.22) * fog)
+          hexToRgba(active ? active.colour : colour, (active ? 0.5 : 0.22 + recency * 0.3) * fog)
         );
         halo.addColorStop(1, hexToRgba(active ? active.colour : colour, 0));
         ctx.fillStyle = halo;
@@ -640,7 +725,8 @@ export default function BrainView({
           ctx.stroke();
         }
         const related = focusId !== undefined && (n.id === focusId || neighbours.has(n.id));
-        if (hovered || active || related || n.degree >= labelThreshold) {
+        const wellConnected = n.degree >= labelThreshold && (focusId === undefined || related);
+        if (hovered || active || related || wellConnected) {
           const size = Math.max(9, 11 * depth);
           ctx.font = `${hovered || active || related ? 600 : 400} ${size}px ui-sans-serif, system-ui, sans-serif`;
           const tw = ctx.measureText(n.name).width;
@@ -773,6 +859,27 @@ export default function BrainView({
     if (!q) return [] as typeof names;
     return names.filter((n) => n.name.toLowerCase().includes(q)).slice(0, 6);
   }, [names, query]);
+  const usage = state?.usage ?? null;
+  const usageMode = usage?.mode ?? (boost?.active ? 'api' : 'sub');
+  // BOOST chip: the portal's own boost state (Azure run-command) or the Presence file, whichever says active
+  const boostChip = (() => {
+    const presence = state?.boost;
+    if (presence?.active) {
+      const untilMs =
+        presence.until ?? (presence.minutes != null ? clock + presence.minutes * 60000 : clock);
+      return { minutes: Math.max(0, Math.round((untilMs - clock) / 60000)) };
+    }
+    if (boost?.active) {
+      const untilMs = boost.until ? new Date(boost.until).getTime() : clock;
+      return { minutes: Math.max(0, Math.round((untilMs - clock) / 60000)) };
+    }
+    return null;
+  })();
+  const activityPerMin = useMemo(
+    () => feed.filter((ev) => clock / 1000 - ev.ts < 60).length,
+    [feed, clock]
+  );
+  const deepNow = feed[0] && clock / 1000 - feed[0].ts < 6 ? feed[0] : null;
   const legend = useMemo(
     () => Object.entries(stats?.labels ?? {}).sort((a, b) => b[1] - a[1]),
     [stats]
@@ -824,31 +931,35 @@ export default function BrainView({
         style={{ display: 'block', cursor: 'grab' }}
       />
 
-      {/* Top-left: state + focus */}
+      {/* Top-left: state, search, focus, deep-brain feed — one aligned column */}
       <div
-        className="pointer-events-none absolute top-3 left-3 flex flex-col gap-2 font-mono text-[11px]"
-        style={{ width: OVERLAY_WIDTH, color: HOLO_CORE }}
+        className="pointer-events-none absolute top-3 left-3 flex flex-col gap-2"
+        style={{ width: HUD.colWidth, fontFamily: HUD.font, fontSize: 12, color: HUD.text }}
       >
         <div className="flex items-center gap-2">
           <span
-            className="inline-flex items-center gap-1 rounded-sm border px-2 py-0.5 text-[10px] font-semibold tracking-widest uppercase"
+            className="inline-flex items-center gap-1 border px-2 py-0.5 text-[11px] font-semibold tracking-widest uppercase"
             style={{
               borderColor: hexToRgba(moodColour, 0.6),
-              backgroundColor: 'rgba(5, 10, 8, 0.55)',
+              backgroundColor: HUD.panel,
               color: moodColour,
             }}
           >
             {asleep ? <Moon size={11} /> : dreaming ? <Sparkles size={11} /> : <Sun size={11} />}
             {mood}
           </span>
-          <span style={{ color: streamStatus === 'live' ? HOLO : HOLO_DIM }}>
+          <span style={{ color: streamStatus === 'live' ? HUD.g : HUD.dim }}>
             {streamStatus === 'live'
-              ? '● LIVE'
+              ? '● STREAM LIVE'
               : streamStatus === 'connecting'
-                ? '○ CONNECTING'
+                ? '○ STREAM CONNECTING'
                 : '○ STREAM OFFLINE'}
           </span>
-          {brain.fixture && <span style={{ color: HOLO_AMBER }}>FIXTURE</span>}
+          {brain.fixture && (
+            <span style={{ color: HUD.amber }} title="Built-in sample graph, not an agent's memory">
+              DEMO DATA
+            </span>
+          )}
         </div>
         <div className="pointer-events-auto relative">
           <input
@@ -863,20 +974,19 @@ export default function BrainView({
               if (e.key === 'Escape') setQuery('');
             }}
             placeholder="search her memory…"
-            className="w-full px-2 py-1 font-mono text-[11px] outline-none"
+            className="w-full px-2 py-1 outline-none"
             style={{
-              border: `1px solid ${hexToRgba(HOLO, 0.35)}`,
-              backgroundColor: 'rgba(5, 10, 8, 0.6)',
-              color: HOLO_CORE,
+              border: `1px solid ${HUD.dim}`,
+              backgroundColor: HUD.panel,
+              color: HUD.text,
+              fontFamily: HUD.font,
+              fontSize: 12,
             }}
           />
           {query && results.length > 0 && (
             <ul
               className="absolute right-0 left-0 z-10 mt-1"
-              style={{
-                border: `1px solid ${hexToRgba(HOLO, 0.35)}`,
-                backgroundColor: 'rgba(5, 10, 8, 0.92)',
-              }}
+              style={{ border: `1px solid ${HUD.dim}`, backgroundColor: 'rgba(6, 12, 9, 0.92)' }}
             >
               {results.map((r) => (
                 <li key={r.id}>
@@ -894,7 +1004,7 @@ export default function BrainView({
                       style={{ backgroundColor: colourFor(r.label) }}
                     />
                     <span className="flex-1 truncate">{r.name}</span>
-                    <span style={{ color: HOLO_DIM }}>{r.label}</span>
+                    <span style={{ color: HUD.dim }}>{r.label}</span>
                   </button>
                 </li>
               ))}
@@ -902,153 +1012,156 @@ export default function BrainView({
           )}
         </div>
         {selected && (
-          <Panel title="FOCUS">
-            <p className="font-semibold" style={{ color: colourFor(selected.label) }}>
-              {selected.name}
-            </p>
-            <p style={{ color: HOLO_DIM }}>
-              {selected.label} · {selected.degree} connections
-            </p>
-            <ul className="mt-1 space-y-0.5">
-              {Object.entries(selected.props)
-                .filter(([k]) => k !== 'name')
-                .slice(0, 6)
-                .map(([k, v]) => (
-                  <li key={k} className="truncate">
-                    <span style={{ color: HOLO_DIM }}>{k}:</span> {String(v)}
-                  </li>
-                ))}
-            </ul>
-            {selectedLinks.length > 0 && (
-              <ul className="mt-1 space-y-0.5">
-                {selectedLinks.map((l) => {
-                  const src = l.source as SimNode;
-                  const tgt = l.target as SimNode;
-                  const other = src.id === selected.id ? tgt : src;
-                  return (
-                    <li key={l.id} className="truncate">
-                      <span style={{ color: HOLO_DIM }}>
-                        {src.id === selected.id ? '→' : '←'} {l.type}
-                      </span>{' '}
-                      {other.name}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </Panel>
+          <HudPanel title="FOCUS">
+            <HudRow colour={colourFor(selected.label)}>{selected.name}</HudRow>
+            <HudRow colour={HUD.dim}>
+              {selected.label} {selected.degree} CONNECTIONS
+            </HudRow>
+            {Object.entries(selected.props)
+              .filter(([k]) => k !== 'name')
+              .slice(0, 4)
+              .map(([k, v]) => (
+                <HudRow key={k}>
+                  <span style={{ color: HUD.dim }}>{k.toUpperCase()} </span>
+                  {String(v).slice(0, 34)}
+                </HudRow>
+              ))}
+            {selectedLinks.map((l) => {
+              const src = l.source as SimNode;
+              const tgt = l.target as SimNode;
+              const other = src.id === selected.id ? tgt : src;
+              return (
+                <HudRow key={l.id}>
+                  <span style={{ color: HUD.dim }}>
+                    {src.id === selected.id ? '→' : '←'} {l.type}{' '}
+                  </span>
+                  {other.name.slice(0, 26)}
+                </HudRow>
+              );
+            })}
+          </HudPanel>
         )}
+        <HudPanel title={`${agentName.toUpperCase()} // DEEP BRAIN`}>
+          {feed.length === 0 ? (
+            <HudRow colour={HUD.dim}>waiting for the first thought…</HudRow>
+          ) : (
+            feed.slice(0, 7).map((ev, i) => (
+              <HudRow key={`${ev.ts}-${i}`} colour={activationColour(ev.kind)}>
+                {activationGlyph(ev.kind)} {ev.kind.toUpperCase().padEnd(9)}
+                <span style={{ color: HUD.text }}>{activationText(ev).slice(0, 30)}</span>
+                <span style={{ color: HUD.dim }}> {shortAgo(ev.ts)}</span>
+              </HudRow>
+            ))
+          )}
+        </HudPanel>
       </div>
 
-      {/* Bottom-left: deep-brain feed above telemetry, one aligned column like the video feed */}
+      {/* Bottom-left: USAGE above TELEMETRY, as on the video */}
       <div
-        className="pointer-events-none absolute bottom-3 left-3 flex flex-col gap-2 font-mono text-[11px]"
-        style={{ width: OVERLAY_WIDTH, color: HOLO_CORE }}
+        className="pointer-events-none absolute bottom-3 left-3 flex flex-col gap-2"
+        style={{ width: HUD.colWidth }}
       >
-        <Panel title={`${agentName.toUpperCase()} // DEEP BRAIN`}>
-          {feed.length === 0 ? (
-            <p style={{ color: HOLO_DIM }}>waiting for the first thought…</p>
-          ) : (
-            <ul className="space-y-1">
-              {feed.slice(0, 7).map((ev, i) => (
-                <li key={`${ev.ts}-${i}`} className="flex gap-2 leading-snug">
-                  <span style={{ color: activationColour(ev.kind) }}>
-                    {activationGlyph(ev.kind)}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate">
-                    <span style={{ color: activationColour(ev.kind) }}>{ev.kind}</span>{' '}
-                    {activationText(ev)}
-                  </span>
-                  <span className="shrink-0" style={{ color: HOLO_DIM }}>
-                    {shortAgo(ev.ts)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Panel>
-        <Panel title={`${agentName.toUpperCase()} // TELEMETRY`}>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
-            <Stat label="NODES" value={stats?.nodeCount ?? 0} />
-            <Stat label="EDGES" value={stats?.relCount ?? 0} />
-            <Stat label="READS 15M" value={state?.recentReads ?? 0} />
-            <Stat label="WRITES 15M" value={state?.recentWrites ?? 0} />
-            <Stat
-              label="LAST DREAM"
-              value={state?.lastDreamAt ? shortAgo(state.lastDreamAt) : '—'}
-            />
-            <Stat
-              label="LAST THOUGHT"
-              value={state?.lastActivityAt ? shortAgo(state.lastActivityAt) : '—'}
-            />
-          </div>
-          <div className="mt-2 flex items-baseline justify-between">
-            <span style={{ color: HOLO_DIM }}>CPU</span>
-            <span style={{ color: (state?.cpuPercent ?? 0) > 80 ? HOLO_AMBER : HOLO }}>
-              {state?.cpuPercent != null ? `${state.cpuPercent.toFixed(0)}%` : '—'}
-              {state?.load1 != null && (
-                <span className="ml-2" style={{ color: HOLO_DIM }}>
-                  load {state.load1}
-                </span>
-              )}
-              {state?.memPercent != null && (
-                <span className="ml-2" style={{ color: HOLO_DIM }}>
-                  mem {state.memPercent.toFixed(0)}%
-                </span>
-              )}
-            </span>
-          </div>
-          <svg className="mt-1 h-7 w-full" viewBox="0 0 100 28" preserveAspectRatio="none">
-            <polyline
-              fill="none"
-              stroke={HOLO}
-              strokeWidth="1.2"
-              vectorEffect="non-scaling-stroke"
-              points={(cpuHistory.length ? cpuHistory : [0])
-                .map(
-                  (v, i, arr) => `${(i / Math.max(1, arr.length - 1)) * 100},${27 - (v / 100) * 26}`
-                )
-                .join(' ')}
-            />
-            <line
-              x1="0"
-              y1="27.5"
-              x2="100"
-              y2="27.5"
-              stroke={hexToRgba(HOLO, 0.3)}
-              strokeWidth="0.5"
-            />
-          </svg>
-          <div
-            className="mt-1 flex h-4 items-end gap-[2px]"
-            title="activations per minute, last 30 min"
+        <div>
+          {boostChip && <HudBoostChip minutesLeft={boostChip.minutes} />}
+          <HudPanel
+            title={`OPENAI // USAGE — ${usageMode === 'api' ? 'API' : 'SUB'} MODE${boostChip ? ' · BOOST' : ''}`}
+            boost={!!boostChip}
           >
-            {sparkline.map((v, i) => (
-              <span
-                key={i}
-                className="flex-1"
-                style={{
-                  height: `${Math.max(8, Math.min(100, v * 25))}%`,
-                  backgroundColor: v ? hexToRgba(READ_COLOUR, 0.8) : hexToRgba(HOLO, 0.12),
-                }}
+            {usage?.sub?.pct_left != null ? (
+              <HudGauge
+                label="SUB"
+                frac={usage.sub.pct_left / 100}
+                value={`${usage.sub.pct_left}%${
+                  usage.sub.reset_at
+                    ? ` → ${new Date(usage.sub.reset_at * 1000).toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}`
+                    : usage.sub.reset
+                      ? ` → in ${usage.sub.reset}`
+                      : ''
+                }`}
+                colour={
+                  usage.sub.pct_left < HUD.subRedBelow
+                    ? HUD.red
+                    : usage.sub.pct_left < HUD.subAmberBelow
+                      ? HUD.amber
+                      : HUD.g
+                }
+                dim={usageMode === 'api' ? HUD.dim : HUD.dimStrong}
               />
-            ))}
+            ) : (
+              <HudRow colour={HUD.dim}>SUB --</HudRow>
+            )}
+            {usage?.api?.usd_mtd != null && usage.budget ? (
+              <HudGauge
+                label="API"
+                frac={usage.api.usd_mtd / usage.budget}
+                value={`$${usage.api.usd_mtd.toFixed(0)}/$${usage.budget.toFixed(0)} → ${nextMonthLabel(clock)}`}
+                colour={
+                  usage.api.usd_mtd / usage.budget > HUD.apiRedOver
+                    ? HUD.red
+                    : usage.api.usd_mtd / usage.budget > HUD.apiAmberOver
+                      ? HUD.amber
+                      : HUD.g
+                }
+                dim={usageMode === 'api' ? HUD.dimStrong : HUD.dim}
+              />
+            ) : usage?.api?.usd_mtd != null ? (
+              <HudRow colour={HUD.dim}>API ${usage.api.usd_mtd.toFixed(2)} this month</HudRow>
+            ) : (
+              <HudRow colour={HUD.dim}>API -- needs OPENAI_ADMIN_KEY</HudRow>
+            )}
+            {costs && (
+              <HudRow colour={HUD.dim}>
+                AZURE {formatTotals(costs.monthToDate.totals)} MTD ·{' '}
+                {formatTotals(costs.lastMonth.totals)} LAST
+              </HudRow>
+            )}
+          </HudPanel>
+        </div>
+        <HudPanel title={`${agentName.toUpperCase()} // TELEMETRY`}>
+          <HudGauge
+            label="CPU"
+            frac={(state?.cpuPercent ?? 0) / 100}
+            value={state?.cpuPercent != null ? `${state.cpuPercent.toFixed(0)}%` : '--'}
+            colour={(state?.cpuPercent ?? 0) > 85 ? HUD.amber : HUD.g}
+          />
+          <HudGauge
+            label="RAM"
+            frac={
+              state?.memTotalGb && state.memUsedGb != null
+                ? state.memUsedGb / state.memTotalGb
+                : (state?.memPercent ?? 0) / 100
+            }
+            value={
+              state?.memTotalGb && state.memUsedGb != null
+                ? `${state.memUsedGb.toFixed(1)}/${state.memTotalGb.toFixed(0)}G`
+                : state?.memPercent != null
+                  ? `${state.memPercent.toFixed(0)}%`
+                  : '--'
+            }
+          />
+          <HudGauge
+            label="LOAD"
+            frac={(state?.load1 ?? 0) / 4}
+            value={state?.load1 != null ? state.load1.toFixed(2) : '--'}
+            colour={(state?.load1 ?? 0) > 3 ? HUD.amber : HUD.g}
+          />
+          <HudGauge label="ACT" frac={activityPerMin / 20} value={`${activityPerMin}/min`} />
+          <div className="mt-[2px]">
+            <HudSparkline values={cpuHistory} />
           </div>
-          <ul className="mt-2 grid grid-cols-2 gap-x-4 gap-y-0.5">
-            {legend.map(([label, count]) => (
-              <li key={label} className="flex items-center gap-1.5">
-                <span
-                  className="h-1.5 w-1.5 rounded-full"
-                  style={{ backgroundColor: colourFor(label) }}
-                />
-                <span className="flex-1 truncate" style={{ color: HOLO_DIM }}>
-                  {label.toUpperCase()}
-                </span>
-                <span>{count}</span>
-              </li>
-            ))}
-          </ul>
-        </Panel>
+          <div className="mt-[6px]">
+            <HudRow>
+              NODES {stats?.nodeCount ?? 0} EDGES {stats?.relCount ?? 0} SHOWN {stats?.shown ?? 0}
+            </HudRow>
+            <HudRow>
+              READS {state?.recentReads ?? 0} WRITES {state?.recentWrites ?? 0} DREAM{' '}
+              {state?.lastDreamAt ? shortAgo(state.lastDreamAt) : '--'}
+            </HudRow>
+          </div>
+          {deepNow && (
+            <HudDeep label={`${deepNow.kind} ${activationText(deepNow)}`} since={deepNow.ts} />
+          )}
+        </HudPanel>
       </div>
 
       {/* Top-right: controls */}
@@ -1094,6 +1207,13 @@ export default function BrainView({
           <span className="h-2 w-2 rounded-full" style={{ backgroundColor: NEW_COLOUR }} /> NEW
         </span>
         <span className="flex items-center gap-1">
+          <span
+            className="h-2 w-5 rounded-full"
+            style={{ background: `linear-gradient(90deg, ${OTHER_COLOUR}, ${WRITE_COLOUR})` }}
+          />{' '}
+          OLDER → RECENT
+        </span>
+        <span className="flex items-center gap-1">
           <Zap size={10} /> DRAG TO TURN · WHEEL TO ZOOM · CLICK A NODE
         </span>
       </div>
@@ -1105,50 +1225,11 @@ export default function BrainView({
 // Small pieces
 // ---------------------------------------------------------------------------
 
-function Panel({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section
-      className="relative px-3 py-2"
-      style={{
-        border: `1px solid ${hexToRgba(HOLO, 0.35)}`,
-        backgroundColor: 'rgba(5, 10, 8, 0.6)',
-        boxShadow: `0 0 12px ${hexToRgba(HOLO, 0.08)} inset`,
-      }}
-    >
-      {[
-        ['top', 'left'],
-        ['top', 'right'],
-        ['bottom', 'left'],
-        ['bottom', 'right'],
-      ].map(([v, h]) => (
-        <span
-          key={`${v}${h}`}
-          className="absolute h-2.5 w-2.5"
-          style={{
-            [v]: -1,
-            [h]: -1,
-            borderTop: v === 'top' ? `2px solid ${HOLO}` : undefined,
-            borderBottom: v === 'bottom' ? `2px solid ${HOLO}` : undefined,
-            borderLeft: h === 'left' ? `2px solid ${HOLO}` : undefined,
-            borderRight: h === 'right' ? `2px solid ${HOLO}` : undefined,
-          }}
-        />
-      ))}
-      <p className="mb-1 text-[10px] tracking-[0.2em]" style={{ color: HOLO_DIM }}>
-        {title}
-      </p>
-      {children}
-    </section>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: number | string }) {
-  return (
-    <div className="flex items-baseline justify-between gap-2">
-      <span style={{ color: HOLO_DIM }}>{label}</span>
-      <span style={{ color: HOLO }}>{value}</span>
-    </div>
-  );
+/** "01 Oct" for the first of next month, when the API budget resets. */
+function nextMonthLabel(nowMs: number): string {
+  const d = new Date(nowMs);
+  const next = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+  return next.toLocaleDateString([], { day: '2-digit', month: 'short' });
 }
 
 function shortAgo(ts: number): string {

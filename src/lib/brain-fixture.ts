@@ -197,6 +197,24 @@ function build(): { nodes: BrainNode[]; rels: BrainRel[] } {
     'Discovery',
   ];
   const CONC = [
+    'Data classification',
+    'Retention policy',
+    'Least privilege',
+    'Blue-green deploy',
+    'Feature flags',
+    'On-call rota',
+    'Incident review',
+    'SLA credits',
+    'Quarterly business review',
+    'Renewal pricing',
+    'Discovery workshop',
+    'Pilot success criteria',
+    'Change freeze',
+    'Vendor lock-in',
+    'Total cost of ownership',
+    'Prompt injection',
+    'Tool permissions',
+    'Graph hygiene',
     'Zero trust',
     'Copilot licensing',
     'Data residency',
@@ -258,16 +276,42 @@ function build(): { nodes: BrainNode[]; rels: BrainRel[] } {
     bucket.push(n);
     return n;
   };
-  for (let k = 0; k < 18; k++)
-    add('Organization', `${ORG_A[k % ORG_A.length]} ${ORG_B[(k * 7) % ORG_B.length]}`, orgs);
-  for (let k = 0; k < 52; k++)
-    add('Person', `${FIRST[(k * 3) % FIRST.length]} ${LAST[(k * 5 + 2) % LAST.length]}`, people);
-  for (let k = 0; k < 16; k++)
-    add('Project', `${ORG_A[(k * 4 + 1) % ORG_A.length]} ${PROJ[k % PROJ.length]}`, projects);
+  for (let k = 0; k < 44; k++)
+    add(
+      'Organization',
+      `${ORG_A[k % ORG_A.length]} ${ORG_B[(k * 7 + Math.floor(k / ORG_A.length)) % ORG_B.length]}`,
+      orgs
+    );
+  for (let k = 0; k < 150; k++)
+    add(
+      'Person',
+      `${FIRST[(k * 3 + Math.floor(k / 20)) % FIRST.length]} ${LAST[(k * 5 + 2 + Math.floor(k / 15)) % LAST.length]}`,
+      people
+    );
+  for (let k = 0; k < 45; k++)
+    add(
+      'Project',
+      `${ORG_A[(k * 4 + 1 + Math.floor(k / 15)) % ORG_A.length]} ${PROJ[(k + Math.floor(k / 12)) % PROJ.length]}`,
+      projects
+    );
   for (const c of CONC) add('Concept', c, concepts);
-  const meetings = MEET.map((m, k) => add('Meeting', `${m} ${k + 1}`, []));
-  const decisions = DEC.map((d) => add('Decision', d, []));
-  const risks = RISK.map((r) => add('Risk', r, []));
+  const meetings = Array.from({ length: 36 }, (_, k) =>
+    add('Meeting', `${MEET[k % MEET.length]} ${k + 1}`, [])
+  );
+  const decisions = Array.from({ length: 21 }, (_, k) =>
+    add(
+      'Decision',
+      k < DEC.length ? DEC[k] : `${DEC[k % DEC.length]} (${Math.floor(k / DEC.length) + 1})`,
+      []
+    )
+  );
+  const risks = Array.from({ length: 18 }, (_, k) =>
+    add(
+      'Risk',
+      k < RISK.length ? RISK[k] : `${RISK[k % RISK.length]} (${Math.floor(k / RISK.length) + 1})`,
+      []
+    )
+  );
   const allOrgs = [...orgs, ...ORGS.map((o) => byName.get(o) as BrainNode)];
   for (const p of people) link(p.name, pickR(allOrgs).name, 'WORKS_AT');
   for (const pr of projects) {
@@ -290,8 +334,17 @@ function build(): { nodes: BrainNode[]; rels: BrainRel[] } {
     link(d.name, pickR(concepts).name, 'DISCUSSED');
   }
   for (const r of risks) link(pickR(projects).name, r.name, 'BLOCKED_BY');
-  for (let k = 0; k < 30; k++) link(pickR(people).name, pickR(people).name, 'INTRODUCED_BY');
-  for (let k = 0; k < 20; k++) link(pickR(allOrgs).name, pickR(allOrgs).name, 'PARTNERS_WITH');
+  for (let k = 0; k < 90; k++) link(pickR(people).name, pickR(people).name, 'INTRODUCED_BY');
+  for (let k = 0; k < 50; k++) link(pickR(allOrgs).name, pickR(allOrgs).name, 'PARTNERS_WITH');
+  for (let k = 0; k < 60; k++) link(pickR(people).name, pickR(concepts).name, 'INTERESTED_IN');
+  for (let k = 0; k < 40; k++) link(pickR(people).name, pickR(meetings).name, 'MET_WITH');
+  // A named contact to search for
+  const thomas = add('Person', 'Thomas Fulton', people);
+  link(thomas.name, pickR(allOrgs).name, 'WORKS_AT');
+  link(thomas.name, 'Cairn discovery call', 'MET_WITH');
+  link(thomas.name, pickR(projects).name, 'INTERESTED_IN');
+  link('Ben Weeks', thomas.name, 'INTRODUCED_BY');
+  link(thomas.name, pickR(concepts).name, 'DISCUSSED');
   return { nodes, rels };
 }
 
@@ -300,13 +353,23 @@ let extra = 0;
 let cpu = 23;
 
 /** A CPU figure that wanders like a real box, with the odd spike. */
-export function fixtureHostStats(): { cpuPercent: number; load1: number; memPercent: number } {
+export function fixtureHostStats(): {
+  cpuPercent: number;
+  load1: number;
+  memPercent: number;
+  memUsedGb: number;
+  memTotalGb: number;
+} {
   const spike = rand() < 0.08 ? 25 + rand() * 40 : 0;
   cpu = Math.max(3, Math.min(97, cpu + (rand() - 0.5) * 12 + spike * 0.5 - (cpu > 60 ? 6 : 0)));
+  const memTotalGb = 32;
+  const memUsedGb = Math.round((19.6 + cpu / 40) * 10) / 10;
   return {
     cpuPercent: Math.round(cpu * 10) / 10,
     load1: Math.round((cpu / 25) * 100) / 100,
-    memPercent: 61.4,
+    memPercent: Math.round((memUsedGb / memTotalGb) * 1000) / 10,
+    memUsedGb,
+    memTotalGb,
   };
 }
 
@@ -339,6 +402,13 @@ export function fixtureSnapshot(): BrainSnapshot {
       recentWrites: 2,
       eventsAvailable: true,
       ...fixtureHostStats(),
+      usage: {
+        mode: 'sub',
+        sub: { pct_left: 63, reset_at: Math.floor(now) + 3 * 86400 + 5400 },
+        api: { usd_mtd: 12.4 },
+        budget: 100,
+      },
+      boost: { active: false },
     },
     generatedAt: now,
   };

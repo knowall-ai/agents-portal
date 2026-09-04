@@ -49,6 +49,7 @@ import {
   SoulPanel,
 } from '@/components/agents';
 import { useApi } from '@/hooks';
+import { BACKDROPS, type Backdrop } from '@/components/agents/BrainView';
 import type {
   ActivityEvent,
   AgentBoost,
@@ -99,6 +100,10 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
   const tab: TabId = (TAB_IDS as readonly string[]).includes(requested ?? '')
     ? (requested as TabId)
     : 'overview';
+  const requestedBg = searchParams.get('bg');
+  const backdrop: Backdrop = (BACKDROPS as readonly string[]).includes(requestedBg ?? '')
+    ? (requestedBg as Backdrop)
+    : 'bridge';
   const setTab = (next: string) => {
     const query = new URLSearchParams(searchParams.toString());
     if (next === 'overview') query.delete('tab');
@@ -471,6 +476,9 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
                     agentName={agent.name}
                     agentStatus={agent.status}
                     brain={brain.data?.brain ?? null}
+                    costs={costs.data}
+                    boost={boost.data?.boost ?? null}
+                    backdrop={backdrop}
                     isLoading={brain.isLoading}
                     error={brain.error}
                   />
