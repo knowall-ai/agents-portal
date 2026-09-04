@@ -21,7 +21,7 @@ export default function SoulPanel({ soul, isLoading, error }: SoulPanelProps) {
       <EmptyState
         icon={<Heart size={28} />}
         title="No SOUL.md"
-        description="Add workspace/SOUL.md to the agent's repo, or set soulPath in the registry."
+        description="Add workspace/SOUL.md to the repo named by the agent's registry entry (repo), or point soulPath at it. Only registry-configured repos are read."
       />
     );
   }

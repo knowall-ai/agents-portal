@@ -96,7 +96,13 @@ export async function getSkills(ctx: UserContext, agent: AgentDetail): Promise<S
       const [repoLists, assistants] = await Promise.all([
         Promise.all(
           sources.map((source) =>
-            listRepoSkills(source.repo, source.path).catch((error) => {
+            // Repo skills come from the server-side GitHub token and are the same for
+            // every viewer, so cache them per repo rather than per user
+            cached(
+              `skills:repo:${source.repo}:${source.path}`,
+              () => listRepoSkills(source.repo, source.path),
+              10 * 60 * 1000
+            ).catch((error) => {
               console.warn(`GitHub skills lookup failed for ${agent.id} (${source.repo}):`, error);
               return [] as Skill[];
             })
