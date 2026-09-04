@@ -4,7 +4,7 @@ import { signIn, useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
-import { AgentDashboardIcon } from '@/components/common';
+import { AgentsPortalIcon } from '@/components/common';
 
 const errorMessages: Record<string, string> = {
   OAuthCallback: 'Microsoft sign-in failed. Check the redirect URI on the app registration.',
@@ -40,9 +40,9 @@ function LoginView() {
     >
       <div className="card w-full max-w-md p-8">
         <div className="mb-8 flex flex-col items-center">
-          <AgentDashboardIcon size={64} className="mb-4" />
+          <AgentsPortalIcon size={64} className="mb-4" />
           <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
-            <span style={{ color: 'var(--primary)' }}>Agent</span> Dashboard
+            <span style={{ color: 'var(--primary)' }}>Agents</span> Portal
           </h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>
             by KnowAll
@@ -99,7 +99,7 @@ function LoginView() {
 
         <div className="mt-8 border-t pt-6" style={{ borderColor: 'var(--border)' }}>
           <p className="text-center text-xs" style={{ color: 'var(--text-muted)' }}>
-            Agent Dashboard reads Azure Resource Graph as you. You&apos;ll only see agents in
+            Agents Portal reads Azure Resource Graph as you. You&apos;ll only see agents in
             subscriptions you have access to, including ones delegated via Azure Lighthouse.
           </p>
         </div>

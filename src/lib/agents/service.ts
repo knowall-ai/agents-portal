@@ -9,13 +9,21 @@ import {
   listFoundryProjects,
   listRecentRuns,
 } from '@/lib/providers/foundry';
-import { listRepoCommits, listRepoSkills } from '@/lib/providers/github';
+import { getRepoMarkdown, listRepoCommits, listRepoSkills } from '@/lib/providers/github';
 import { probeUrl } from '@/lib/providers/health';
-import { FOUNDRY_SCOPE, getResourceToken, type UserContext } from '@/lib/tokens';
+import { getUserLicensing } from '@/lib/providers/graph';
+import {
+  FOUNDRY_SCOPE,
+  GRAPH_DIRECTORY_SCOPE,
+  getResourceToken,
+  type UserContext,
+} from '@/lib/tokens';
 import type {
   ActivityEvent,
   AgentCosts,
   AgentDetail,
+  AgentLicensing,
+  AgentSoul,
   CostSourceStatus,
   CostsSummary,
   FoundryAssistant,
@@ -23,6 +31,7 @@ import type {
 } from '@/types';
 import { buildAgent, groupResources, sortAgents } from './discover';
 import { addTotals, buildAgentCosts, type CostInputs } from './costs';
+import { mergeSkillSources, skillSourcesFor } from './skills';
 import {
   fetchAnthropicCosts,
   fetchOpenAICosts,
@@ -90,19 +99,95 @@ export async function getSkills(ctx: UserContext, agent: AgentDetail): Promise<S
   return cached(
     `skills:${scope(ctx)}:${agent.id}`,
     async () => {
-      const entry = getRegistryEntry(agent.id);
-      const [repoSkills, assistants] = await Promise.all([
-        entry?.repo && entry.skillsPath
-          ? listRepoSkills(entry.repo, entry.skillsPath).catch((error) => {
-              console.warn(`GitHub skills lookup failed for ${agent.id}:`, error);
+      const sources = skillSourcesFor(getRegistryEntry(agent.id));
+      const [repoLists, assistants] = await Promise.all([
+        Promise.all(
+          sources.map((source) =>
+            // Repo skills come from the server-side GitHub token and are the same for
+            // every viewer, so cache them per repo rather than per user
+            cached(
+              `skills:repo:${source.repo}:${source.path}`,
+              () => listRepoSkills(source.repo, source.path),
+              10 * 60 * 1000
+            ).catch((error) => {
+              console.warn(`GitHub skills lookup failed for ${agent.id} (${source.repo}):`, error);
               return [] as Skill[];
             })
-          : Promise.resolve([] as Skill[]),
+          )
+        ),
         getAssistants(ctx, agent),
       ]);
-      return [...repoSkills, ...assistantsToSkills(assistants)];
+      return [...mergeSkillSources(repoLists), ...assistantsToSkills(assistants)];
     },
     10 * 60 * 1000
+  );
+}
+
+const SOUL_CANDIDATES = ['workspace/SOUL.md', 'SOUL.md'];
+
+/**
+ * The agent's SOUL.md (registry `soulPath`, else the OpenClaw defaults).
+ * Only registry-configured repos are read: `agent.repo` can come from an Azure
+ * tag, and tags must not be able to point the server-side GitHub token at
+ * arbitrary repositories.
+ */
+export async function getSoul(ctx: UserContext, agent: AgentDetail): Promise<AgentSoul | null> {
+  const entry = getRegistryEntry(agent.id);
+  const repo = entry?.repo;
+  if (!repo) return null;
+  return cached(
+    `soul:${scope(ctx)}:${agent.id}`,
+    async () => {
+      const candidates = [...(entry?.soulPath ? [entry.soulPath] : []), ...SOUL_CANDIDATES];
+      for (const path of candidates) {
+        const soul = await getRepoMarkdown(repo, path);
+        if (soul) return soul;
+      }
+      return null;
+    },
+    10 * 60 * 1000
+  );
+}
+
+/**
+ * Microsoft licences on the agent's own Entra account (registry `teamsUpn`)
+ * plus flat-fee subscriptions from the registry. Reading another user's
+ * licences needs the User.Read.All delegated permission with admin consent;
+ * without it the subscriptions still render and `licenseError` says why.
+ */
+const DIRECTORY_TTL = 30 * 60 * 1000;
+const DIRECTORY_ERROR_TTL = 60 * 1000;
+
+export async function getLicensing(ctx: UserContext, agent: AgentDetail): Promise<AgentLicensing> {
+  const entry = getRegistryEntry(agent.id);
+  const base: AgentLicensing = {
+    upn: entry?.teamsUpn,
+    licenses: [],
+    subscriptions: entry?.fixedCosts ?? [],
+  };
+  if (!entry?.teamsUpn) return base;
+  const upn = entry.teamsUpn;
+  return cached(
+    `licensing:${scope(ctx)}:${agent.id}`,
+    async () => {
+      try {
+        const token = await getResourceToken(ctx, GRAPH_DIRECTORY_SCOPE);
+        if (!token) {
+          return {
+            ...base,
+            licenseError:
+              'Microsoft Graph User.Read.All is not consented for this app — see docs/DEPLOYMENT.adoc',
+          };
+        }
+        return { ...base, ...(await getUserLicensing(token, upn)) };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(`Licence lookup failed for ${agent.id}:`, message);
+        return { ...base, licenseError: message };
+      }
+    },
+    // Keep successes for a while; retry failures (missing consent, Graph errors) quickly
+    (value) => (value.licenseError ? DIRECTORY_ERROR_TTL : DIRECTORY_TTL)
   );
 }
 

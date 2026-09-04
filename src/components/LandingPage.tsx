@@ -2,7 +2,7 @@
 
 import { signIn } from 'next-auth/react';
 import { Activity, Bot, Building2, Share2, Sparkles, CheckCircle } from 'lucide-react';
-import { AgentDashboardIcon } from '@/components/common';
+import { AgentsPortalIcon } from '@/components/common';
 
 const features = [
   {
@@ -45,9 +45,9 @@ export default function LandingPage() {
       <header className="border-b px-4 py-4" style={{ borderColor: 'var(--border)' }}>
         <div className="mx-auto flex max-w-4xl items-center justify-between">
           <div className="flex items-center gap-2">
-            <AgentDashboardIcon size={32} />
+            <AgentsPortalIcon size={32} />
             <span className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
-              <span style={{ color: 'var(--primary)' }}>Agent</span> Dashboard
+              <span style={{ color: 'var(--primary)' }}>Agents</span> Portal
             </span>
           </div>
           <button
@@ -111,7 +111,7 @@ export default function LandingPage() {
                 Open Source by <span style={{ color: 'var(--primary)' }}>KnowAll.ai</span>
               </h2>
               <p className="mb-6" style={{ color: 'var(--text-secondary)' }}>
-                Agent Dashboard is the operations view for the agents KnowAll builds. It shares its
+                Agents Portal is the operations view for the agents KnowAll builds. It shares its
                 stack and look with ZapDesk and Thyme, and is free for anyone running agents on
                 Azure.
               </p>
@@ -158,12 +158,12 @@ export default function LandingPage() {
         >
           <span>© {new Date().getFullYear()} KnowAll AI · MIT licensed</span>
           <a
-            href="https://github.com/knowall-ai/agent-dashboard"
+            href="https://github.com/knowall-ai/agents-portal"
             target="_blank"
             rel="noopener noreferrer"
             className="hover:text-[var(--primary)]"
           >
-            github.com/knowall-ai/agent-dashboard
+            github.com/knowall-ai/agents-portal
           </a>
         </div>
       </footer>

@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://agents.knowall.ai">
-    <img alt="Agent Dashboard banner with logo and tagline 'AI Agent Monitoring Across Azure Tenants'" src="public/assets/social-preview.svg" width="600">
+    <img alt="Agents Portal banner with logo and tagline 'AI Agent Monitoring Across Azure Tenants'" src="public/assets/social-preview.svg" width="600">
   </a>
 </p>
 
@@ -8,7 +8,7 @@
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="public/assets/logo.svg">
     <source media="(prefers-color-scheme: light)" srcset="public/assets/logo-light.svg">
-    <img alt="Agent Dashboard" src="public/assets/logo.svg" width="400">
+    <img alt="Agents Portal" src="public/assets/logo.svg" width="400">
   </picture>
 </p>
 
@@ -26,7 +26,7 @@
 
 ---
 
-**Agent Dashboard** is the operations view for the AI agents [KnowAll](https://www.knowall.ai) builds and runs — for itself and for its customers. Sign in with Microsoft, and every agent in the Azure subscriptions you can see is listed with its status, skills and recent activity. Built with the same stack and look as [ZapDesk](https://github.com/knowall-ai/zapdesk) and [Thyme](https://github.com/knowall-ai/thyme).
+**Agents Portal** is the operations view for the AI agents [KnowAll](https://www.knowall.ai) builds and runs — for itself and for its customers. Sign in with Microsoft, and every agent in the Azure subscriptions you can see is listed with its status, skills and recent activity. Built with the same stack and look as [ZapDesk](https://github.com/knowall-ai/zapdesk) and [Thyme](https://github.com/knowall-ai/thyme).
 
 ## Features
 
@@ -64,8 +64,8 @@ Azure Lighthouse delegates **Azure resources** (subscriptions or resource groups
 1. **Clone the repository**
 
    ```bash
-   git clone https://github.com/knowall-ai/agent-dashboard.git
-   cd agent-dashboard
+   git clone https://github.com/knowall-ai/agents-portal.git
+   cd agents-portal
    ```
 
 2. **Install dependencies**
@@ -97,7 +97,7 @@ Create a **multi-tenant** app registration so users from any tenant can sign in:
 ```bash
 # 1. Register the app with web redirect URIs (NextAuth callback path)
 APP_ID=$(az ad app create \
-  --display-name "Agent Dashboard" \
+  --display-name "Agents Portal" \
   --sign-in-audience AzureADMultipleOrgs \
   --web-redirect-uris \
     "http://localhost:3103/api/auth/callback/azure-ad" \
@@ -105,13 +105,13 @@ APP_ID=$(az ad app create \
   --query appId -o tsv)
 
 # 2. Delegated permissions:
-#    Microsoft Graph        User.Read, openid, profile, email, offline_access
+#    Microsoft Graph        User.Read, User.Read.All (agents' licences), openid, profile, email, offline_access
 #    Azure Service Mgmt     user_impersonation   (Resource Graph, Activity Log)
 #    Azure ML Services      user_impersonation   (AI Foundry Assistants API, https://ai.azure.com)
 az ad app permission add --id $APP_ID --api 00000003-0000-0000-c000-000000000000 \
   --api-permissions e1fe6dd8-ba31-4d61-89e7-88639da4683d=Scope 37f7f235-527c-4136-accd-4a02d197296e=Scope \
     14dad69e-099b-42c9-810b-d002981feec1=Scope 64a6cdd6-aab1-4aaf-94b8-3cc8405e90d0=Scope \
-    7427e0e9-2fba-42fe-b0c0-848c9e6a8182=Scope
+    7427e0e9-2fba-42fe-b0c0-848c9e6a8182=Scope a154be20-db9c-4678-8ab7-66f6cc099a59=Scope
 az ad app permission add --id $APP_ID --api 797f4846-ba00-4fd7-ba43-dac1f8f63013 \
   --api-permissions 41094075-9dad-400e-a0bd-54e686782033=Scope
 az ad app permission add --id $APP_ID --api 18a66f5f-dbdf-4c17-9dd7-1634712a9cbe \
@@ -149,7 +149,7 @@ See [docs/ONBOARDING.adoc](docs/ONBOARDING.adoc) for the full walkthrough, inclu
 ## Project Structure
 
 ```
-agent-dashboard/
+agents-portal/
 ├── config/
 │   └── agents.json            # Static agent registry (names, customers, repos)
 ├── src/

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Home, Activity, BookOpen, X, Github } from 'lucide-react';
-import { AgentDashboardIcon } from '@/components/common';
+import { AgentsPortalIcon } from '@/components/common';
 
 const mainNavItems = [
   { id: 'home', name: 'Agents', icon: <Home size={20} />, href: '/' },
@@ -34,9 +34,9 @@ export default function Sidebar({ isOpen = false, onClose, counts }: SidebarProp
       <div className="border-b p-4" style={{ borderColor: 'var(--border)' }}>
         <div className="flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2" onClick={() => onClose?.()}>
-            <AgentDashboardIcon size={32} />
+            <AgentsPortalIcon size={32} />
             <span className="text-xl font-semibold" style={{ color: 'var(--text-primary)' }}>
-              <span style={{ color: 'var(--primary)' }}>Agent</span> Dashboard
+              <span style={{ color: 'var(--primary)' }}>Agents</span> Portal
             </span>
           </Link>
           <button
@@ -105,7 +105,7 @@ export default function Sidebar({ isOpen = false, onClose, counts }: SidebarProp
 
         <div className="border-t p-3" style={{ borderColor: 'var(--border)' }}>
           <a
-            href="https://github.com/knowall-ai/agent-dashboard/blob/main/docs/ONBOARDING.adoc"
+            href="https://github.com/knowall-ai/agents-portal/blob/main/docs/ONBOARDING.adoc"
             target="_blank"
             rel="noopener noreferrer"
             className="nav-item"
@@ -114,7 +114,7 @@ export default function Sidebar({ isOpen = false, onClose, counts }: SidebarProp
             <span className="text-sm">Add an agent</span>
           </a>
           <a
-            href="https://github.com/knowall-ai/agent-dashboard"
+            href="https://github.com/knowall-ai/agents-portal"
             target="_blank"
             rel="noopener noreferrer"
             className="nav-item"

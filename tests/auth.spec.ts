@@ -9,7 +9,7 @@ test.describe('Authentication', () => {
 
     await page.goto('/login');
 
-    await expect(page.getByRole('heading', { name: 'Agent Dashboard' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Agents Portal' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Sign in with Microsoft' })).toBeVisible();
     await expect(page.getByText('Welcome back')).toBeVisible();
     await page.screenshot({ path: 'test-results/login-page.png' });

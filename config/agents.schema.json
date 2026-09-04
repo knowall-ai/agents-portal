@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Agent Dashboard registry",
+  "title": "Agents Portal registry",
   "type": "object",
   "required": ["agents"],
   "properties": {
@@ -21,6 +21,19 @@
           "healthUrl": { "type": "string", "format": "uri" },
           "repo": { "type": "string", "pattern": "^[^/]+/[^/]+$" },
           "skillsPath": { "type": "string" },
+          "skillSources": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["repo", "path"],
+              "additionalProperties": false,
+              "properties": {
+                "repo": { "type": "string", "pattern": "^[^/]+/[^/]+$" },
+                "path": { "type": "string" }
+              }
+            }
+          },
+          "soulPath": { "type": "string" },
           "resourceGroups": { "type": "array", "items": { "type": "string" } },
           "planned": { "type": "boolean" },
           "avatarUrl": { "type": "string" },

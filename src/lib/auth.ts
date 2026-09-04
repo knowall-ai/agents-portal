@@ -11,7 +11,7 @@ import AzureADProvider from 'next-auth/providers/azure-ad';
 const isDev = process.env.NODE_ENV === 'development';
 
 /** Cookie that remembers which Entra tenant the user chose to sign in to. */
-export const TENANT_COOKIE = 'agent-dashboard-tenant';
+export const TENANT_COOKIE = 'agents-portal-tenant';
 
 /** Resource scope requested at sign-in: Azure Resource Manager. */
 export const ARM_SCOPE = 'https://management.azure.com/user_impersonation';

@@ -1,4 +1,4 @@
-// Shared types for Agent Dashboard
+// Shared types for Agents Portal
 
 /** How the agent is built / hosted. */
 export type AgentKind = 'openclaw' | 'hermes' | 'foundry' | 'botframework' | 'unknown';
@@ -37,6 +37,14 @@ export interface AzureSubscription {
   managedByTenants: string[];
 }
 
+/** A repo folder holding <skill>/SKILL.md folders. */
+export interface SkillSource {
+  /** GitHub repo in owner/name form */
+  repo: string;
+  /** Path inside the repo, e.g. "skills" */
+  path: string;
+}
+
 /** Static registry entry from config/agents.json. */
 export interface AgentRegistryEntry {
   id: string;
@@ -53,6 +61,13 @@ export interface AgentRegistryEntry {
   repo?: string;
   /** Path inside the repo holding <skill>/SKILL.md folders */
   skillsPath?: string;
+  /**
+   * Shared skill packs the agent also loads at runtime (e.g. the T-Minus-15 and
+   * KnowAll plugin repos). A same-named skill in the agent's own repo shadows these.
+   */
+  skillSources?: SkillSource[];
+  /** Path to the agent's SOUL.md. Defaults to workspace/SOUL.md, then SOUL.md. */
+  soulPath?: string;
   /** Resource groups whose resources belong to this agent (case-insensitive) */
   resourceGroups?: string[];
   /** Agent not yet built or deployed — shown as "planned" */
@@ -67,6 +82,31 @@ export interface AgentRegistryEntry {
   anthropicWorkspaceId?: string;
   /** Flat monthly fees not visible in any API (e.g. ChatGPT subscription, ElevenLabs plan) */
   fixedCosts?: FixedCost[];
+}
+
+/** A Microsoft licence (SKU) assigned to the agent's Entra account. */
+export interface AgentLicense {
+  skuId: string;
+  skuPartNumber: string;
+  name: string;
+  /** Capabilities from the provisioned service plans (Teams, Exchange mailbox, …) */
+  capabilities: string[];
+  /** Provisioned service plans not listed as a capability */
+  otherPlans: number;
+}
+
+/** Licences and subscriptions behind an agent. */
+export interface AgentLicensing {
+  /** The agent's own Entra account, when it has one */
+  upn?: string;
+  displayName?: string;
+  accountEnabled?: boolean;
+  usageLocation?: string;
+  licenses: AgentLicense[];
+  /** Flat-fee subscriptions from the registry (ChatGPT, ElevenLabs, …) */
+  subscriptions: FixedCost[];
+  /** Why Microsoft licences could not be read, when they could not */
+  licenseError?: string;
 }
 
 export interface FixedCost {
@@ -124,6 +164,13 @@ export interface Skill {
   description?: string;
   source: 'github' | 'foundry';
   sourceLabel: string;
+  url?: string;
+}
+
+/** The agent's SOUL.md (identity / values) as committed to its repo. */
+export interface AgentSoul {
+  path: string;
+  markdown: string;
   url?: string;
 }
 

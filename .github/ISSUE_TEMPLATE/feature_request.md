@@ -1,6 +1,6 @@
 ---
 name: Feature Request
-about: Suggest an idea for Agent Dashboard
+about: Suggest an idea for Agents Portal
 title: '[FEATURE] '
 labels: enhancement
 assignees: ''
