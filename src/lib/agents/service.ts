@@ -112,14 +112,19 @@ export async function getSkills(ctx: UserContext, agent: AgentDetail): Promise<S
 
 const SOUL_CANDIDATES = ['workspace/SOUL.md', 'SOUL.md'];
 
-/** The agent's SOUL.md from its repo (registry `soulPath`, else the OpenClaw defaults). */
+/**
+ * The agent's SOUL.md (registry `soulPath`, else the OpenClaw defaults).
+ * Only registry-configured repos are read: `agent.repo` can come from an Azure
+ * tag, and tags must not be able to point the server-side GitHub token at
+ * arbitrary repositories.
+ */
 export async function getSoul(ctx: UserContext, agent: AgentDetail): Promise<AgentSoul | null> {
-  const repo = agent.repo;
+  const entry = getRegistryEntry(agent.id);
+  const repo = entry?.repo;
   if (!repo) return null;
   return cached(
     `soul:${scope(ctx)}:${agent.id}`,
     async () => {
-      const entry = getRegistryEntry(agent.id);
       const candidates = [...(entry?.soulPath ? [entry.soulPath] : []), ...SOUL_CANDIDATES];
       for (const path of candidates) {
         const soul = await getRepoMarkdown(repo, path);
