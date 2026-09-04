@@ -24,7 +24,22 @@
           "resourceGroups": { "type": "array", "items": { "type": "string" } },
           "planned": { "type": "boolean" },
           "avatarUrl": { "type": "string" },
-          "teamsUpn": { "type": "string", "format": "email" }
+          "teamsUpn": { "type": "string", "format": "email" },
+          "openaiProjectId": { "type": "string", "pattern": "^proj_" },
+          "anthropicWorkspaceId": { "type": "string", "pattern": "^wrkspc_" },
+          "fixedCosts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["label", "amount", "currency"],
+              "additionalProperties": false,
+              "properties": {
+                "label": { "type": "string" },
+                "amount": { "type": "number", "minimum": 0 },
+                "currency": { "type": "string", "pattern": "^[A-Z]{3}$" }
+              }
+            }
+          }
         }
       }
     }

@@ -62,6 +62,15 @@
 |**`az webapp config ssl create` fails with "Missing one DNS record"**
 |Either the CNAME has not propagated yet (wait a few minutes and re-run) or it was added to the wrong DNS. `knowall.ai` is served by Microsoft 365 DNS, not the Azure DNS zone — add records in the Microsoft 365 admin center. Check with `dig +short agents.knowall.ai`.
 
+|**Cost tile shows "n/a" or the breakdown says "Azure: lookup failed"**
+|The user lacks *Cost Management Reader* on the subscription, or Cost Management returned 429 (rate limited — it retries twice, then the cached value is reused for 15 minutes). Check the server log for the exact status.
+
+|**Costs are missing for OpenAI / Anthropic**
+|"not configured" means `OPENAI_ADMIN_KEY` / `ANTHROPIC_ADMIN_KEY` is unset on the server; "not linked to this agent" means the registry entry has no `openaiProjectId` / `anthropicWorkspaceId`. Spend under the ChatGPT subscription is not in any API — add it as a `fixedCosts` line.
+
+|**Cost figures look low for today**
+|Azure Cost Management lags usage by up to 24 hours, and month-to-date resets on the 1st (UTC).
+
 |**Production deploy workflow fails at "Login to Azure"**
 |The `AZURE_CREDENTIALS` secret must be the JSON from `az ad sp create-for-rbac --sdk-auth` for a principal with Contributor on the App Service. Re-create it and set the secret again with `gh secret set AZURE_CREDENTIALS -R knowall-ai/agent-dashboard`.
 |===

@@ -9,6 +9,7 @@ import { listAgentResources, listSubscriptions } from '@/lib/providers/azure';
 import { listAssistants, listFoundryProjects } from '@/lib/providers/foundry';
 import { probeUrl } from '@/lib/providers/health';
 import { buildAgent, groupResources, sortAgents } from '@/lib/agents/discover';
+import { queryAzureCosts } from '@/lib/providers/costs';
 
 function azToken(scope: string): string {
   return execSync(`az account get-access-token --scope ${scope} --query accessToken -o tsv`, {
@@ -42,6 +43,15 @@ try {
   console.warn('No AI Foundry token available — skipping assistants');
 }
 
+const costRows = await queryAzureCosts(
+  armToken,
+  subscriptions[0]?.subscriptionId ?? '',
+  'MonthToDate'
+).catch((e) => {
+  console.warn('Cost query failed:', e instanceof Error ? e.message : e);
+  return [];
+});
+
 for (const agent of agents) {
   const badge = agent.delegated ? ' [Lighthouse]' : '';
   console.log(
@@ -57,6 +67,17 @@ for (const agent of agents) {
     const probe = await probeUrl(agent.portalUrl);
     console.log(
       `  probe: ${probe.url} → ${probe.reachable ? 'reachable' : 'unreachable'} (HTTP ${probe.httpStatus ?? 'n/a'})`
+    );
+  }
+  const groups = new Set(agent.resourceGroups);
+  const byCurrency = new Map<string, number>();
+  for (const row of costRows) {
+    if (!groups.has(row.resourceGroup)) continue;
+    byCurrency.set(row.currency, (byCurrency.get(row.currency) ?? 0) + row.amount);
+  }
+  if (byCurrency.size) {
+    console.log(
+      `  cost MTD: ${[...byCurrency].map(([c, v]) => `${v.toFixed(2)} ${c}`).join(', ')}`
     );
   }
   const projects = await listFoundryProjects(armToken, agent.resources);

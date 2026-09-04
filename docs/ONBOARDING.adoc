@@ -131,6 +131,27 @@ and set `healthUrl` to `https://<agent>.knowall.ai/health`.
 * *OpenClaw agents* usually have their own Entra user. Upload a photo to that account (`az rest --method put --url "https://graph.microsoft.com/v1.0/users/<upn>/photo/$value" --body @photo.jpg`) and copy it into `public/agents/<id>.png`, then set `avatarUrl` and `teamsUpn`.
 * *Bots* get a Teams link automatically from their Bot Service resource, provided the bot has the Teams channel enabled and the user has the app installed.
 
+== 7. Costs
+
+Azure costs need no setup beyond the user having *Cost Management Reader* on the subscription. To attribute LLM API spend and flat fees:
+
+[source,json]
+----
+{
+  "id": "sallie",
+  "openaiProjectId": "proj_xxxxxxxx",
+  "anthropicWorkspaceId": "wrkspc_xxxxxxxx",
+  "fixedCosts": [
+    { "label": "ChatGPT subscription", "amount": 200, "currency": "USD" },
+    { "label": "ElevenLabs Creator", "amount": 22, "currency": "USD" }
+  ]
+}
+----
+
+* Find the OpenAI project id under *Settings → Organization → Projects*; the Anthropic workspace id under *Settings → Workspaces*.
+* Set `OPENAI_ADMIN_KEY` / `ANTHROPIC_ADMIN_KEY` on the server (organisation admin keys, read-only use). Without them the breakdown says "not configured" rather than showing zero.
+* Give each agent its own OpenAI project / Anthropic workspace, otherwise spend cannot be separated.
+
 == Checklist
 
 * [ ] Resources tagged `agent=<slug>` *or* resource group listed in `config/agents.json`
@@ -139,4 +160,5 @@ and set `healthUrl` to `https://<agent>.knowall.ai/health`.
 * [ ] Portal / health URL set
 * [ ] GitHub repo and `skillsPath` set (OpenClaw agents)
 * [ ] `avatarUrl` and, for agents with their own account, `teamsUpn` set
+* [ ] `openaiProjectId` / `anthropicWorkspaceId` / `fixedCosts` set so the cost breakdown is complete
 * [ ] Lighthouse delegation in place (customer-hosted agents)

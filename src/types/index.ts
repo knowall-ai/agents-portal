@@ -61,6 +61,18 @@ export interface AgentRegistryEntry {
   avatarUrl?: string;
   /** Entra user principal name of the agent's own account, for a Teams chat deep link */
   teamsUpn?: string;
+  /** OpenAI project id (proj_…) whose API spend belongs to this agent */
+  openaiProjectId?: string;
+  /** Anthropic workspace id (wrkspc_…) whose API spend belongs to this agent */
+  anthropicWorkspaceId?: string;
+  /** Flat monthly fees not visible in any API (e.g. ChatGPT subscription, ElevenLabs plan) */
+  fixedCosts?: FixedCost[];
+}
+
+export interface FixedCost {
+  label: string;
+  amount: number;
+  currency: string;
 }
 
 export interface AgentSummary {
@@ -146,4 +158,46 @@ export interface Tenant {
   displayName?: string;
   defaultDomain?: string;
   current: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Costs
+// ---------------------------------------------------------------------------
+
+export type CostSource = 'azure' | 'openai' | 'anthropic' | 'fixed';
+
+export interface CostLine {
+  source: CostSource;
+  label: string;
+  amount: number;
+  currency: string;
+}
+
+/** Totals keyed by ISO currency code — costs are never converted between currencies. */
+export type CurrencyTotals = Record<string, number>;
+
+export interface CostPeriod {
+  lines: CostLine[];
+  totals: CurrencyTotals;
+}
+
+export interface CostSourceStatus {
+  source: CostSource;
+  status: 'ok' | 'not-configured' | 'no-mapping' | 'error';
+  detail?: string;
+}
+
+export interface AgentCosts {
+  agentId: string;
+  monthToDate: CostPeriod;
+  lastMonth: CostPeriod;
+  sources: CostSourceStatus[];
+  generatedAt: string;
+}
+
+export interface CostsSummary {
+  agents: { agentId: string; monthToDate: CurrencyTotals; lastMonth: CurrencyTotals }[];
+  totals: { monthToDate: CurrencyTotals; lastMonth: CurrencyTotals };
+  sources: CostSourceStatus[];
+  generatedAt: string;
 }

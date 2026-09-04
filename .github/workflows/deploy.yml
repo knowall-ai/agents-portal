@@ -18,6 +18,8 @@ permissions:
 env:
   AZURE_WEBAPP_NAME: agent-dashboard-knowallai
   APP_URL: https://agents.knowall.ai
+  # Smoke test the App Service host directly so the check does not depend on DNS
+  SMOKE_URL: https://agent-dashboard-knowallai.azurewebsites.net
   BUN_VERSION: 'latest'
 
 jobs:
@@ -83,7 +85,7 @@ jobs:
       - name: Smoke test
         run: |
           for i in $(seq 1 20); do
-            if curl -fsS "${APP_URL}/api/health" | grep -q '"status":"ok"'; then
+            if curl -fsS "${SMOKE_URL}/api/health" | grep -q '"status":"ok"'; then
               echo "Health check passed"; exit 0
             fi
             sleep 10

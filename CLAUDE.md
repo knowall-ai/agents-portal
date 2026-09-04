@@ -25,6 +25,7 @@ Agent Dashboard monitors the AI agents KnowAll AI builds and runs for itself and
 - **Status** = derived from compute state (`src/lib/agents/discover.ts` → `deriveStatus`) and downgraded to `degraded` if the portal probe fails
 - **Skills** = `SKILL.md` folders in the agent's GitHub repo + tools on its Foundry assistants
 - **Activity** = Azure Activity Log + GitHub commits + Foundry runs, merged and sorted
+- **Costs** = Azure Cost Management by resource group (user token) + OpenAI/Anthropic admin cost APIs by project/workspace mapping + `fixedCosts` from the registry; aggregation is pure in `src/lib/agents/costs.ts`
 - **Tenant** = the Entra tenant the user signed in to. Azure Resource Graph returns every subscription the user's ARM token can read, which includes subscriptions delegated via Azure Lighthouse
 
 ### Token Flow
@@ -125,6 +126,8 @@ bun run lint:fix       # Auto-fix lint
 | `AZURE_AD_CLIENT_SECRET` | Entra app registration client secret               | Yes                           |
 | `AZURE_AD_TENANT_ID`     | Default sign-in tenant (`common` for multi-tenant) | No (default: `common`)        |
 | `GITHUB_TOKEN`           | Token with Contents: read on agent repos           | For private agent repos       |
+| `OPENAI_ADMIN_KEY`       | OpenAI organisation admin key (cost report)        | For OpenAI API spend          |
+| `ANTHROPIC_ADMIN_KEY`    | Anthropic organisation admin key (cost report)     | For Anthropic API spend       |
 | `AGENT_TAG_KEYS`         | Comma-separated tag keys that name an agent        | No (default: `agent,project`) |
 | `CACHE_TTL_SECONDS`      | Cache TTL for Azure / GitHub / Foundry lookups     | No (default: 60)              |
 

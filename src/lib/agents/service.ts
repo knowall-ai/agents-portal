@@ -12,8 +12,26 @@ import {
 import { listRepoCommits, listRepoSkills } from '@/lib/providers/github';
 import { probeUrl } from '@/lib/providers/health';
 import { FOUNDRY_SCOPE, getResourceToken, type UserContext } from '@/lib/tokens';
-import type { ActivityEvent, AgentDetail, FoundryAssistant, Skill } from '@/types';
+import type {
+  ActivityEvent,
+  AgentCosts,
+  AgentDetail,
+  CostSourceStatus,
+  CostsSummary,
+  FoundryAssistant,
+  Skill,
+} from '@/types';
 import { buildAgent, groupResources, sortAgents } from './discover';
+import { addTotals, buildAgentCosts, type CostInputs } from './costs';
+import {
+  fetchAnthropicCosts,
+  fetchOpenAICosts,
+  monthWindows,
+  queryAzureCosts,
+  type AzureCostRow,
+  type LlmCostRow,
+  type Timeframe,
+} from '@/lib/providers/costs';
 
 function scope(ctx: UserContext): string {
   return `${ctx.tenantId}:${ctx.userId}`;
@@ -150,4 +168,113 @@ export async function getAllActivity(ctx: UserContext, limit = 60): Promise<Acti
       return true;
     })
     .slice(0, limit);
+}
+
+// ---------------------------------------------------------------------------
+// Costs
+// ---------------------------------------------------------------------------
+
+const COST_TTL = 15 * 60 * 1000; // billing APIs are rate limited and change slowly
+const TIMEFRAMES: Timeframe[] = ['MonthToDate', 'TheLastMonth'];
+
+async function loadCostInputs(ctx: UserContext, agents: AgentDetail[]): Promise<CostInputs> {
+  const subscriptionIds = [
+    ...new Set(agents.flatMap((a) => a.resources.map((r) => r.subscriptionId))),
+  ];
+  const windows = monthWindows();
+  const sources: CostSourceStatus[] = [];
+
+  const empty = (): Record<Timeframe, AzureCostRow[]> => ({ MonthToDate: [], TheLastMonth: [] });
+  const azure = empty();
+  let azureError: string | undefined;
+  await Promise.all(
+    subscriptionIds.flatMap((sub) =>
+      TIMEFRAMES.map(async (tf) => {
+        try {
+          const rows = await cached(
+            `costs:azure:${scope(ctx)}:${sub}:${tf}`,
+            () => queryAzureCosts(ctx.armToken, sub, tf),
+            COST_TTL
+          );
+          azure[tf].push(...rows);
+        } catch (error) {
+          azureError = error instanceof Error ? error.message : String(error);
+          console.warn(`Azure cost query failed for ${sub}/${tf}:`, azureError);
+        }
+      })
+    )
+  );
+  sources.push(
+    azureError
+      ? { source: 'azure', status: 'error', detail: azureError }
+      : { source: 'azure', status: 'ok' }
+  );
+
+  const llm = async (
+    source: 'openai' | 'anthropic',
+    key: string | undefined,
+    fetcher: (window: { start: Date; end: Date }, key: string) => Promise<LlmCostRow[]>
+  ): Promise<Record<Timeframe, LlmCostRow[]>> => {
+    const result: Record<Timeframe, LlmCostRow[]> = { MonthToDate: [], TheLastMonth: [] };
+    if (!key) {
+      sources.push({
+        source,
+        status: 'not-configured',
+        detail: `Set ${source === 'openai' ? 'OPENAI_ADMIN_KEY' : 'ANTHROPIC_ADMIN_KEY'} on the server`,
+      });
+      return result;
+    }
+    try {
+      for (const tf of TIMEFRAMES) {
+        // Org-wide figures: cache once for everyone, attribution happens per agent
+        result[tf] = await cached(
+          `costs:${source}:${tf}`,
+          () => fetcher(windows[tf], key),
+          COST_TTL
+        );
+      }
+      sources.push({ source, status: 'ok' });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      console.warn(`${source} cost lookup failed:`, detail);
+      sources.push({ source, status: 'error', detail });
+    }
+    return result;
+  };
+
+  const [openai, anthropic] = await Promise.all([
+    llm('openai', process.env.OPENAI_ADMIN_KEY, fetchOpenAICosts),
+    llm('anthropic', process.env.ANTHROPIC_ADMIN_KEY, fetchAnthropicCosts),
+  ]);
+
+  return { azure, openai, anthropic, sources };
+}
+
+export async function getAgentCosts(ctx: UserContext, agent: AgentDetail): Promise<AgentCosts> {
+  const inputs = await loadCostInputs(ctx, [agent]);
+  return buildAgentCosts(agent, getRegistryEntry(agent.id), inputs);
+}
+
+/** Month-to-date and last-month totals for every visible agent. */
+export async function getCostsSummary(ctx: UserContext): Promise<CostsSummary> {
+  const agents = await listAgents(ctx);
+  const inputs = await loadCostInputs(ctx, agents);
+  const perAgent = agents.map((agent) =>
+    buildAgentCosts(agent, getRegistryEntry(agent.id), inputs)
+  );
+  const totals = { monthToDate: {}, lastMonth: {} };
+  for (const costs of perAgent) {
+    addTotals(totals.monthToDate, costs.monthToDate.totals);
+    addTotals(totals.lastMonth, costs.lastMonth.totals);
+  }
+  return {
+    agents: perAgent.map((c) => ({
+      agentId: c.agentId,
+      monthToDate: c.monthToDate.totals,
+      lastMonth: c.lastMonth.totals,
+    })),
+    totals,
+    sources: inputs.sources,
+    generatedAt: new Date().toISOString(),
+  };
 }

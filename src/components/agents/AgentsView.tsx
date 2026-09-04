@@ -12,12 +12,14 @@ import {
   Clock,
   LayoutGrid,
   List,
+  Receipt,
   RefreshCw,
 } from 'lucide-react';
 import { EmptyState, LoadingSpinner, kindLabels } from '@/components/common';
 import { AgentCard, AgentTable } from '@/components/agents';
 import { useApi } from '@/hooks';
-import type { AgentKind, AgentStatus, AgentSummary } from '@/types';
+import { formatTotals } from '@/lib/format';
+import type { AgentKind, AgentStatus, AgentSummary, CostsSummary, CurrencyTotals } from '@/types';
 
 type ViewMode = 'list' | 'grid';
 const VIEW_KEY = 'agent-dashboard-agents-view';
@@ -32,6 +34,15 @@ export default function AgentsView() {
     status === 'authenticated' ? '/api/agents' : null,
     60_000
   );
+  const costsApi = useApi<CostsSummary>(
+    status === 'authenticated' ? '/api/costs' : null,
+    15 * 60_000
+  );
+  const costByAgent = useMemo(() => {
+    const map = new Map<string, CurrencyTotals>();
+    for (const a of costsApi.data?.agents ?? []) map.set(a.agentId, a.monthToDate);
+    return map;
+  }, [costsApi.data]);
 
   // Remember the chosen view per browser
   useEffect(() => {
@@ -90,10 +101,12 @@ export default function AgentsView() {
   const attention = count('degraded') + count('offline');
   const kpis: {
     title: string;
-    value: number;
+    value: number | string;
     icon: React.ReactNode;
     color: string;
     status: string;
+    loading?: boolean;
+    hint?: string;
   }[] = [
     {
       title: 'Online',
@@ -130,6 +143,23 @@ export default function AgentsView() {
       color: 'var(--primary)',
       status: '',
     },
+    {
+      title: 'Cost this month',
+      value: costsApi.data
+        ? formatTotals(costsApi.data.totals.monthToDate, '—')
+        : costsApi.error
+          ? 'n/a'
+          : '',
+      icon: <Receipt size={22} />,
+      color: 'var(--status-degraded)',
+      status: '',
+      loading: costsApi.isLoading && !costsApi.data,
+      hint: costsApi.data
+        ? `Last month ${formatTotals(costsApi.data.totals.lastMonth, '—')}`
+        : costsApi.error
+          ? costsApi.error
+          : undefined,
+    },
   ];
 
   return (
@@ -151,7 +181,7 @@ export default function AgentsView() {
       </div>
 
       {/* KPIs */}
-      <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
+      <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
         {kpis.map((kpi) => {
           const active = kpi.status !== '' && statusFilter === kpi.status;
           return (
@@ -161,19 +191,28 @@ export default function AgentsView() {
               className="card p-4 transition-colors hover:bg-[var(--surface-hover)]"
               style={active ? { borderColor: kpi.color } : undefined}
               aria-pressed={active}
+              title={kpi.hint}
             >
               <div className="flex items-start justify-between">
                 <div>
                   <p className="mb-1 text-xs" style={{ color: 'var(--text-muted)' }}>
                     {kpi.title}
                   </p>
-                  {isLoading && !data ? (
+                  {(isLoading && !data) || kpi.loading ? (
                     <div className="flex h-8 items-center">
                       <LoadingSpinner size="sm" />
                     </div>
                   ) : (
-                    <p className="text-2xl font-bold" style={{ color: kpi.color }}>
+                    <p
+                      className={`font-bold ${typeof kpi.value === 'string' && kpi.value.length > 8 ? 'text-base' : 'text-2xl'}`}
+                      style={{ color: kpi.color }}
+                    >
                       {kpi.value}
+                    </p>
+                  )}
+                  {kpi.hint && (
+                    <p className="truncate text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                      {kpi.hint}
                     </p>
                   )}
                 </div>
@@ -307,7 +346,7 @@ export default function AgentsView() {
           />
         </div>
       ) : view === 'list' ? (
-        <AgentTable agents={filtered} />
+        <AgentTable agents={filtered} costs={costByAgent} />
       ) : (
         Object.entries(byCustomer).map(([customer, list]) => (
           <section key={customer} className="mb-8">

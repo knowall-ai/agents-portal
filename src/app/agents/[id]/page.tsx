@@ -12,6 +12,7 @@ import {
   Github,
   Globe,
   MessageSquare,
+  Receipt,
   RefreshCw,
   Share2,
   Sparkles,
@@ -27,9 +28,15 @@ import {
   LoadingSpinner,
   StatusBadge,
 } from '@/components/common';
-import { ActivityFeed, FoundryAssistants, ResourceTable, SkillList } from '@/components/agents';
+import {
+  ActivityFeed,
+  CostBreakdown,
+  FoundryAssistants,
+  ResourceTable,
+  SkillList,
+} from '@/components/agents';
 import { useApi } from '@/hooks';
-import type { ActivityEvent, AgentDetail, FoundryAssistant, Skill } from '@/types';
+import type { ActivityEvent, AgentCosts, AgentDetail, FoundryAssistant, Skill } from '@/types';
 
 export default function AgentPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -45,6 +52,7 @@ export default function AgentPage({ params }: { params: Promise<{ id: string }> 
     ready ? `/api/agents/${id}/activity` : null,
     120_000
   );
+  const costs = useApi<AgentCosts>(ready ? `/api/agents/${id}/costs` : null, 15 * 60_000);
 
   const agent = detail.data?.agent;
 
@@ -144,6 +152,7 @@ export default function AgentPage({ params }: { params: Promise<{ id: string }> 
                     detail.refetch();
                     skills.refetch();
                     activity.refetch();
+                    costs.refetch();
                   }}
                   className="btn-secondary flex items-center gap-2 text-sm"
                 >
@@ -244,6 +253,20 @@ export default function AgentPage({ params }: { params: Promise<{ id: string }> 
                     <FoundryAssistants assistants={detail.data.assistants} />
                   </section>
                 )}
+
+                <section className="card">
+                  <h2
+                    className="flex items-center gap-2 border-b p-4 text-lg font-semibold"
+                    style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                  >
+                    <Receipt size={18} style={{ color: 'var(--primary)' }} /> Costs
+                  </h2>
+                  <CostBreakdown
+                    costs={costs.data}
+                    isLoading={costs.isLoading}
+                    error={costs.error}
+                  />
+                </section>
 
                 <section className="card">
                   <h2

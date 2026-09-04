@@ -3,9 +3,16 @@
 import Link from 'next/link';
 import { ExternalLink, Github, MessageSquare, Share2 } from 'lucide-react';
 import { AgentAvatar, EnvironmentBadge, KindBadge, StatusBadge } from '@/components/common';
-import type { AgentSummary } from '@/types';
+import { formatTotals } from '@/lib/format';
+import type { AgentSummary, CurrencyTotals } from '@/types';
 
-export default function AgentTable({ agents }: { agents: AgentSummary[] }) {
+interface AgentTableProps {
+  agents: AgentSummary[];
+  /** Month-to-date cost per agent id, when loaded */
+  costs?: Map<string, CurrencyTotals>;
+}
+
+export default function AgentTable({ agents, costs }: AgentTableProps) {
   return (
     <div className="card overflow-x-auto">
       <table className="w-full text-sm" data-testid="agent-table">
@@ -18,6 +25,7 @@ export default function AgentTable({ agents }: { agents: AgentSummary[] }) {
             <th className="px-4 py-3 font-medium">Env</th>
             <th className="px-4 py-3 font-medium">Resource groups</th>
             <th className="px-4 py-3 text-right font-medium">Resources</th>
+            <th className="px-4 py-3 text-right font-medium">Cost (MTD)</th>
             <th className="px-4 py-3 font-medium">Links</th>
           </tr>
         </thead>
@@ -77,6 +85,12 @@ export default function AgentTable({ agents }: { agents: AgentSummary[] }) {
               </td>
               <td className="px-4 py-3 text-right" style={{ color: 'var(--text-secondary)' }}>
                 {agent.resourceCount}
+              </td>
+              <td
+                className="px-4 py-3 text-right font-mono whitespace-nowrap"
+                style={{ color: 'var(--text-secondary)' }}
+              >
+                {costs ? formatTotals(costs.get(agent.id) ?? {}, '—') : ''}
               </td>
               <td className="px-4 py-3 whitespace-nowrap">
                 <span className="flex items-center gap-2" style={{ color: 'var(--text-muted)' }}>

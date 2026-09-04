@@ -168,6 +168,37 @@ Each agent card, row and detail header shows a profile image with a status dot. 
 |`https://teams.microsoft.com/l/chat/0/0?users=28:<Microsoft App ID>` — the app ID is read from the Bot Service's `msaAppId` in Resource Graph
 |===
 
+=== Costs
+
+Costs are shown for the current calendar month (month to date) and the previous month, per agent and in total. Amounts stay in each provider's billing currency; nothing is converted, so a total reads "£31.20 · $12.40".
+
+[cols="1,2,2,2"]
+|===
+|Source |Where it comes from |Attribution |Access needed
+
+|Azure
+|Cost Management query API, one call per subscription grouped by resource group and service (`ActualCost`, `MonthToDate` / `TheLastMonth`)
+|Rows whose resource group belongs to the agent
+|Signed-in user needs *Cost Management Reader* (or Reader/Contributor/Owner) on the subscription. Lighthouse-delegated subscriptions work when the delegation includes that role.
+
+|OpenAI API
+|`GET /v1/organization/costs` grouped by `project_id`, using `OPENAI_ADMIN_KEY`
+|`openaiProjectId` in the registry
+|Server-side admin key
+
+|Anthropic API
+|`GET /v1/organizations/cost_report` grouped by `workspace_id`, using `ANTHROPIC_ADMIN_KEY`
+|`anthropicWorkspaceId` in the registry
+|Server-side admin key
+
+|Subscriptions
+|`fixedCosts` in the registry — flat monthly fees invisible to any API (ChatGPT plan, ElevenLabs, Beyond Presence, …)
+|Listed on the agent
+|None
+|===
+
+Billing APIs are rate limited and slow-moving, so results are cached for 15 minutes. Each source reports a status (`ok`, `not-configured`, `no-mapping`, `error`) which the breakdown shows as a footnote rather than silently omitting a figure. Azure Cost Management lags usage by up to 24 hours.
+
 == Pages
 
 [cols="1,3"]
@@ -175,13 +206,13 @@ Each agent card, row and detail header shows a profile image with a status dot. 
 |Route |Content
 
 |`/`
-|Landing page when signed out. When signed in: KPI tiles (Online, Needs attention, Planned, Customers, Total) above a filterable agent list. List view is the default; a card view grouped by customer is remembered per browser. Filters (customer, status, kind, search) live in the query string so KPI tiles and sidebar links can deep-link to them.
+|Landing page when signed out. When signed in: KPI tiles (Online, Needs attention, Planned, Customers, Total, Cost this month) above a filterable agent list with a month-to-date cost column. List view is the default; a card view grouped by customer is remembered per browser. Filters (customer, status, kind, search) live in the query string so KPI tiles and sidebar links can deep-link to them.
 
 |`/agents`
 |Redirects to `/` preserving query parameters (kept for old links)
 
 |`/agents/:id`
-|Agent detail: header with avatar, status, kind, environment and Lighthouse badge; Chat in Teams, Portal and Repo buttons; subscription / resource group / tenant / reachability tiles; Azure resources table; AI Foundry assistants (model, tools, project); skills; recent activity
+|Agent detail: header with avatar, status, kind, environment and Lighthouse badge; Chat in Teams, Portal and Repo buttons; subscription / resource group / tenant / reachability tiles; Azure resources table; AI Foundry assistants (model, tools, project); cost breakdown (month to date vs last month by source); skills; recent activity
 
 |`/activity`
 |Merged activity feed across all agents (Azure Activity Log, GitHub commits, Foundry runs), de-duplicated when agents share a repo
@@ -234,6 +265,12 @@ All routes require a session unless noted; they return `401` when unauthenticate
 
 |`GET /api/activity?limit=60`
 |Merged feed across all agents
+
+|`GET /api/costs`
+|Month-to-date and last-month totals per agent and overall, plus per-source status
+
+|`GET /api/agents/:id/costs`
+|Cost breakdown for one agent
 
 |`GET /api/tenants`
 |Tenants the user belongs to, with the current one flagged
