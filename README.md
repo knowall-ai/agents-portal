@@ -34,6 +34,7 @@
 - **Automatic Discovery** - Agents are found through Azure Resource Graph from tags (`agent=<name>`) or resource groups listed in `config/agents.json`
 - **Every Kind of Agent** - OpenClaw agents on VMs (Sallie), Azure AI Foundry assistants (Winnie), Bot Framework bots (Zaplie)
 - **Status** - Derived from VM power state and App Service state, confirmed by probing the agent's portal
+- **Profile & Teams** - Each agent has an avatar and a _Chat in Teams_ button (agent account or bot)
 - **Skills** - Read from the agent's GitHub repo (`SKILL.md` folders) and from the tools wired into its Foundry assistants
 - **Recent Activity** - Azure Activity Log events, GitHub commits and AI Foundry runs merged into one feed
 - **Azure Lighthouse Aware** - Customer subscriptions delegated to your tenant show up automatically, flagged with a Lighthouse badge

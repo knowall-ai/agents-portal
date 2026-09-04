@@ -4,7 +4,7 @@
 
 == Unit tests (Vitest)
 
-Pure logic in `src/lib/agents/discover.ts` — grouping, status derivation, Lighthouse detection — is covered by `src/lib/agents/discover.test.ts`.
+Pure logic in `src/lib/agents/discover.ts` — grouping, status derivation, Lighthouse detection, Teams deep links and the URL / repo guards for tag-sourced values — is covered by `src/lib/agents/discover.test.ts`.
 
 [source,bash]
 ----
@@ -14,7 +14,7 @@ bun run test:unit:watch
 
 == End-to-end tests (Playwright)
 
-Tests in `tests/` run against the dev server on port 3103 (started automatically). They cover the unauthenticated surface: landing page, login page, metadata and API auth guards. They do not need Azure credentials.
+Tests in `tests/` run against the dev server on port 3103 (started automatically). They cover the unauthenticated surface: landing page, login page, metadata, the `/agents` redirect and API auth guards. They do not need Azure credentials.
 
 [source,bash]
 ----
@@ -28,8 +28,15 @@ Screenshots are written to `test-results/` and console errors fail the login-pag
 == Manual checks (signed in)
 
 . Sign in with a KnowAll account.
-. *Home*: stat tiles show counts; Sallie, Zaplie, Winnie and Allie are listed.
-. *Agents*: filters by customer, status and kind work; search matches resource groups.
-. *Agent → Sallie*: VM shown as running, reachability *Responding (HTTP 302)*, skills listed from GitHub, commits in activity.
-. *Agent → Winnie*: AI Foundry assistants table lists the Winnie assistants with models and tools; runs appear in activity.
+. *Home*: KPI tiles show counts and filter the list when clicked; Sallie, Zaplie, Winnie, Allie and Pennie are listed with avatars and status dots.
+. *List / card toggle*: the choice survives a reload.
+. *Filters*: customer, status and kind narrow the list; header search matches resource groups.
+. *Agent → Sallie*: VM state and reachability shown (a `302` to sign-in counts as responding), *Chat in Teams* opens a chat with sallie@…, skills listed from GitHub, VM start/deallocate and commits in activity.
+. *Agent → Winnie*: AI Foundry assistants table lists the Winnie assistants with models and tools; *Chat in Teams* opens the bot; runs appear in activity.
+. *Activity*: no duplicate entries for agents that share a repo (Zaplie / Zaplie (Test)).
+. *Browser console*: no errors on any page (the Next.js dev overlay shows an issue count bottom-left).
 . *Tenant switcher*: lists your tenants; switching re-signs-in and changes the agent list.
+
+== CI
+
+Every pull request to `main` runs Lint, Format, Type Check, Unit Tests and Build (`.github/workflows/ci.yml`) plus the PR title/body lint. All six are required checks, together with one approving review. The production deploy workflow repeats the checks before building.

@@ -46,4 +46,22 @@
 
 |**Dev server errors after switching branches**
 |`rm -rf .next && bun run dev`.
+
+|**Agent shows Not responding although the portal URL works in a browser**
+|The probe only follows `https` URLs whose host resolves to a public address. `http://` URLs, `localhost`, `*.local`/`*.internal` names and private IP ranges are refused deliberately. Use the public `https` hostname.
+
+|**"Chat in Teams" is missing for an agent**
+|Set `teamsUpn` in `config/agents.json` for agents with their own Entra account. Bots need a Bot Service resource in a subscription you can read; the link uses its Microsoft App ID.
+
+|**Avatar shows initials instead of the image**
+|`avatarUrl` must be a path under `public/` (e.g. `/agents/sallie.png`) or an `https` URL. Check the file exists and the browser network tab for a 404.
+
+|**`az webapp create` fails with "Linux Runtime 'NODE\|20-lts' is not supported"**
+|App Service has retired Node 20 for new sites. Use `--runtime "NODE:22-lts"` (`az webapp list-runtimes --os-type linux` lists what is available).
+
+|**`az webapp config ssl create` fails with "Missing one DNS record"**
+|The CNAME was created moments earlier and App Service's resolver has not seen it yet. Wait a minute and re-run; the hostname binding itself succeeds first because it only needs the `asuid` TXT record.
+
+|**Production deploy workflow fails at "Login to Azure"**
+|The `AZURE_CREDENTIALS` secret must be the JSON from `az ad sp create-for-rbac --sdk-auth` for a principal with Contributor on the App Service. Re-create it and set the secret again with `gh secret set AZURE_CREDENTIALS -R knowall-ai/agent-dashboard`.
 |===

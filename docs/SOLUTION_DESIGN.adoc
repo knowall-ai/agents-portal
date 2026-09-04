@@ -151,6 +151,45 @@ The reachability probe uses `redirect: 'manual'`; agent portals behind Entra SSO
 
 Every Resource Graph row carries `tenantId` — the tenant that owns the resource. When it differs from the tenant in the user's session, the agent is flagged `delegated` and shows a *Lighthouse* badge.
 
+=== Agent identity: avatars and Teams
+
+Each agent card, row and detail header shows a profile image with a status dot. The image comes from `avatarUrl` in the registry (a path under `public/agents/` or an `https` URL) or the `agent-avatar` tag, falling back to initials on the brand gradient.
+
+"Chat in Teams" opens a Teams deep link built by `teamsChatUrl()` in `discover.ts`:
+
+[cols="1,3"]
+|===
+|Agent type |Link
+
+|Has its own Entra account (OpenClaw agents such as Sallie, Pennie)
+|`https://teams.microsoft.com/l/chat/0/0?users=<teamsUpn>` — `teamsUpn` from the registry
+
+|Bot Framework / Foundry bot with a Bot Service resource
+|`https://teams.microsoft.com/l/chat/0/0?users=28:<Microsoft App ID>` — the app ID is read from the Bot Service's `msaAppId` in Resource Graph
+|===
+
+== Pages
+
+[cols="1,3"]
+|===
+|Route |Content
+
+|`/`
+|Landing page when signed out. When signed in: KPI tiles (Online, Needs attention, Planned, Customers, Total) above a filterable agent list. List view is the default; a card view grouped by customer is remembered per browser. Filters (customer, status, kind, search) live in the query string so KPI tiles and sidebar links can deep-link to them.
+
+|`/agents`
+|Redirects to `/` preserving query parameters (kept for old links)
+
+|`/agents/:id`
+|Agent detail: header with avatar, status, kind, environment and Lighthouse badge; Chat in Teams, Portal and Repo buttons; subscription / resource group / tenant / reachability tiles; Azure resources table; AI Foundry assistants (model, tools, project); skills; recent activity
+
+|`/activity`
+|Merged activity feed across all agents (Azure Activity Log, GitHub commits, Foundry runs), de-duplicated when agents share a repo
+
+|`/login`
+|Microsoft sign-in
+|===
+
 == Data Sources per Agent Kind
 
 [cols="1,2,2,2"]
@@ -216,6 +255,16 @@ All routes require a session unless noted; they return `401` when unauthenticate
 == Security Considerations
 
 * The dashboard never holds credentials with more access than the signed-in user; Azure RBAC decides what is visible.
-* Only `GITHUB_TOKEN` is a server-held secret, and it needs Contents: read only.
+* Access and refresh tokens stay inside the encrypted NextAuth JWT cookie and are only read server-side (`getUserContext`); the session object sent to the browser carries no tokens.
+* Only `GITHUB_TOKEN` and the Entra client secret are server-held secrets. The GitHub token needs Contents: read only.
+* Values that originate from Azure resource tags are untrusted because anyone with Contributor on a resource can set them:
+** `agent-url` / `portalUrl` must be `https`, and the reachability probe refuses hosts that resolve to loopback, link-local (including the 169.254.169.254 metadata endpoint) or private ranges. Response bodies are never read.
+** `agent-repo` / `repo` must match `owner/name` before it is placed in a GitHub API path.
+** `agent-avatar` / `avatarUrl` must be a same-origin path or an `https` URL.
+* The Activity Log OData filter escapes quotes in resource group names.
+* Every response carries HSTS, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, a referrer policy and a permissions policy; the `X-Powered-By` header is disabled.
 * Tokens are never logged; NextAuth logging is redacted.
 * The tenant cookie is `httpOnly`, `sameSite=lax`, validated against a GUID pattern.
+* Hosting: HTTPS only, TLS 1.2 minimum, FTPS disabled, App Service managed certificate.
+
+See `SECURITY.md` for the reporting policy.
