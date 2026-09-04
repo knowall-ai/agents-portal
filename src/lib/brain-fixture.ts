@@ -346,15 +346,18 @@ function build(): { nodes: BrainNode[]; rels: BrainRel[] } {
     role: 'Project sponsor',
     lives: 'Belfast',
     hobby: 'Hill walking',
-    pet: 'Dog',
+    pet: 'Frida (Shar-Pei)',
+    studying: 'TU Dublin, Evolving Technologies',
   };
   add('Concept', 'Belfast', concepts);
   add('Concept', 'Hill walking', concepts);
-  add('Concept', 'Dog', concepts);
+  add('Concept', 'Frida the Shar-Pei', concepts);
+  add('Concept', 'TU Dublin', concepts);
   link(thomas.name, 'Irish FA', 'WORKS_AT');
   link(thomas.name, 'Belfast', 'LIVES_IN');
   link(thomas.name, 'Hill walking', 'ENJOYS');
-  link(thomas.name, 'Dog', 'HAS_PET');
+  link(thomas.name, 'Frida the Shar-Pei', 'HAS_PET');
+  link(thomas.name, 'TU Dublin', 'STUDIES_AT');
   link(thomas.name, 'Ticketing assistant', 'SPONSORS');
   link(thomas.name, 'Ben Weeks', 'MET_WITH');
   add('Concept', 'Football', concepts);
