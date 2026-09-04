@@ -151,10 +151,14 @@ interface RawCommit {
 export async function listRepoCommits(
   repo: string,
   agent: { id: string; name: string },
-  limit = 15
+  limit = 15,
+  sinceDays = 365
 ): Promise<ActivityEvent[]> {
   if (!isValidRepo(repo)) throw new Error(`Invalid repo slug: ${repo}`);
-  const commits = await ghJson<RawCommit[]>(`/repos/${repo}/commits?per_page=${limit}`);
+  const since = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000).toISOString();
+  const commits = await ghJson<RawCommit[]>(
+    `/repos/${repo}/commits?per_page=${Math.min(100, limit)}&since=${since}`
+  );
   return commits.map((c) => ({
     id: `github:${agent.id}:${c.sha}`,
     agentId: agent.id,

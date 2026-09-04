@@ -29,7 +29,7 @@ Agents Portal monitors the AI agents KnowAll AI builds and runs for itself and i
 - **Boost** = the one write action: `POST /api/agents/[id]/boost` runs the agent's `boost.sh` on its VM via ARM `runCommand` with the user's token (OpenAI Fast mode for N hours, VM reverts itself). Gated by Azure RBAC, audited in the Activity Log
 - **Brain** = the agent's Reverie graph memory drawn live: `GET /api/agents/[id]/brain` (snapshot) and `/brain/events` (SSE proxy) read `reverie serve` on the agent VM at the registry's `brainUrl` with `REVERIE_TOKEN`; `BRAIN_FIXTURE=1` serves a built-in graph for development
 - **Soul** = the agent's `SOUL.md` (`soulPath`, default `workspace/SOUL.md` then `SOUL.md`) rendered on its page
-- **Activity** = Azure Activity Log + GitHub commits + Foundry runs, merged and sorted
+- **Activity** = Azure Activity Log + GitHub commits (last year, up to 100) + Foundry runs, merged and sorted; the Overview shows a year-long contributions calendar of it, the Activity tab a 3-day bar chart (`src/lib/activity-buckets.ts`) with VM CPU from Azure Monitor (`GET /api/agents/[id]/metrics?hours=`) as a line
 - **Costs** = Azure Cost Management by resource group (user token) + OpenAI/Anthropic admin cost APIs by project/workspace mapping + `fixedCosts` from the registry; aggregation is pure in `src/lib/agents/costs.ts`
 - **Tenant** = the Entra tenant the user signed in to. Azure Resource Graph returns every subscription the user's ARM token can read, which includes subscriptions delegated via Azure Lighthouse
 

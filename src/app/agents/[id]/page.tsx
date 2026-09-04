@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, use } from 'react';
+import { Suspense, use, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
@@ -22,6 +22,8 @@ import {
   ShieldCheck,
   Sparkles,
   Activity,
+  BarChart3,
+  CalendarDays,
   Brain,
   Zap,
 } from 'lucide-react';
@@ -37,6 +39,8 @@ import {
   type TabDef,
 } from '@/components/common';
 import {
+  ActivityCalendar,
+  ActivityChart,
   ActivityFeed,
   BoostControl,
   BrainView,
@@ -52,6 +56,7 @@ import { useApi } from '@/hooks';
 import { BACKDROPS, type Backdrop } from '@/components/agents/BrainView';
 import type {
   ActivityEvent,
+  AgentMetrics,
   AgentBoost,
   AgentBrain,
   AgentCosts,
@@ -74,6 +79,8 @@ const TAB_IDS = [
 ] as const;
 type TabId = (typeof TAB_IDS)[number];
 const RECENT_ACTIVITY = 8;
+/** The Activity tab lists this many; the chart above it uses everything fetched */
+const ACTIVITY_FEED_LIMIT = 50;
 
 export default function AgentPage(props: { params: Promise<{ id: string }> }) {
   // useSearchParams needs a Suspense boundary in the App Router
@@ -118,6 +125,9 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
   );
   const skills = useApi<{ skills: Skill[] }>(ready ? `/api/agents/${id}/skills` : null);
   const soul = useApi<{ soul: AgentSoul | null }>(ready ? `/api/agents/${id}/soul` : null);
+  const metrics = useApi<{ metrics: AgentMetrics }>(
+    ready ? `/api/agents/${id}/metrics?hours=72` : null
+  );
   const activity = useApi<{ events: ActivityEvent[] }>(
     ready ? `/api/agents/${id}/activity` : null,
     120_000
@@ -144,6 +154,18 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
         0
       )
     : undefined;
+  // One CPU line for the agent: the mean across its VMs at each sample time
+  const mergedCpu = useMemo(() => {
+    const series = metrics.data?.metrics.cpu ?? [];
+    if (series.length === 0) return null;
+    const byTs = new Map<number, number[]>();
+    for (const vm of series)
+      for (const p of vm.points)
+        if (p.value !== null) byTs.set(p.ts, [...(byTs.get(p.ts) ?? []), p.value]);
+    return [...byTs.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([ts, values]) => ({ ts, value: values.reduce((n, v) => n + v, 0) / values.length }));
+  }, [metrics.data]);
   const tabs: TabDef[] = [
     { id: 'overview', label: 'Overview', icon: <LayoutGrid size={14} /> },
     ...(brain.data?.brain.available
@@ -370,6 +392,18 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
             <div role="tabpanel" id={`agent-panel-${tab}`} aria-labelledby={`agent-${tab}`}>
               {tab === 'overview' && (
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                  <section className="card lg:col-span-3">
+                    <h2
+                      className="flex items-center gap-2 border-b p-4 text-lg font-semibold"
+                      style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                    >
+                      <CalendarDays size={18} style={{ color: 'var(--primary)' }} /> Activity
+                    </h2>
+                    <ActivityCalendar
+                      events={activity.data?.events ?? null}
+                      isLoading={activity.isLoading}
+                    />
+                  </section>
                   <div className="space-y-6 lg:col-span-2">
                     {boost.data?.boost.supported && (
                       <section className="card">
@@ -440,7 +474,7 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
                     )}
                   </div>
 
-                  <section className="card self-start">
+                  <section className="card">
                     <h2
                       className="flex items-center gap-2 border-b p-4 text-lg font-semibold"
                       style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
@@ -554,19 +588,36 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
               )}
 
               {tab === 'activity' && (
-                <section className="card">
-                  <h2
-                    className="flex items-center gap-2 border-b p-4 text-lg font-semibold"
-                    style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-                  >
-                    <Activity size={18} style={{ color: 'var(--primary)' }} /> Activity
-                  </h2>
-                  <ActivityFeed
-                    events={activity.data?.events ?? null}
-                    isLoading={activity.isLoading}
-                    error={activity.error}
-                  />
-                </section>
+                <div className="space-y-6">
+                  <section className="card">
+                    <h2
+                      className="flex items-center gap-2 border-b p-4 text-lg font-semibold"
+                      style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                    >
+                      <BarChart3 size={18} style={{ color: 'var(--primary)' }} /> Last 3 days
+                    </h2>
+                    <ActivityChart
+                      events={activity.data?.events ?? null}
+                      hours={72}
+                      isLoading={activity.isLoading}
+                      cpu={mergedCpu}
+                    />
+                  </section>
+                  <section className="card">
+                    <h2
+                      className="flex items-center gap-2 border-b p-4 text-lg font-semibold"
+                      style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                    >
+                      <Activity size={18} style={{ color: 'var(--primary)' }} /> Activity
+                    </h2>
+                    <ActivityFeed
+                      events={activity.data?.events ?? null}
+                      isLoading={activity.isLoading}
+                      error={activity.error}
+                      limit={ACTIVITY_FEED_LIMIT}
+                    />
+                  </section>
+                </div>
               )}
             </div>
           </>

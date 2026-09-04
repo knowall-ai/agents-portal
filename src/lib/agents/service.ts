@@ -5,6 +5,7 @@ import { getRegistry, getRegistryEntry } from '@/lib/registry';
 import {
   findVm,
   listActivityLog,
+  listVmCpu,
   listAgentResources,
   listRoleAssignments,
   listSubscriptions,
@@ -34,6 +35,7 @@ import type {
   AgentBrain,
   AgentCosts,
   AgentDetail,
+  AgentMetrics,
   AgentLicensing,
   AgentPermissions,
   AgentSoul,
@@ -481,7 +483,7 @@ export async function getActivity(ctx: UserContext, agent: AgentDetail): Promise
     });
 
     const github = agent.repo
-      ? listRepoCommits(agent.repo, who).catch((error) => {
+      ? listRepoCommits(agent.repo, who, 100).catch((error) => {
           console.warn(`GitHub commits failed for ${agent.repo}:`, error);
           return [] as ActivityEvent[];
         })
@@ -502,7 +504,35 @@ export async function getActivity(ctx: UserContext, agent: AgentDetail): Promise
     return results
       .flat()
       .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
-      .slice(0, 50);
+      .slice(0, ACTIVITY_LIMIT);
+  });
+}
+
+/** Enough events for the 12-week calendar and the 3-day chart; the feeds trim what they show. */
+const ACTIVITY_LIMIT = 400;
+
+/** VM CPU series for the agent's virtual machines over the last `hours`. */
+export async function getMetrics(
+  ctx: UserContext,
+  agent: AgentDetail,
+  hours: number
+): Promise<AgentMetrics> {
+  const intervalMinutes = hours > 24 ? 60 : 30;
+  return cached(`metrics:${scope(ctx)}:${agent.id}:${hours}`, async () => {
+    const vms = agent.resources.filter(
+      (r) => r.type.toLowerCase() === 'microsoft.compute/virtualmachines'
+    );
+    const cpu = await Promise.all(
+      vms.map(async (vm) => ({
+        resourceId: vm.id,
+        name: vm.name,
+        points: await listVmCpu(ctx.armToken, vm.id, hours, intervalMinutes).catch((error) => {
+          console.warn(`CPU metrics failed for ${vm.name}:`, error);
+          return [];
+        }),
+      }))
+    );
+    return { hours, intervalMinutes, cpu };
   });
 }
 

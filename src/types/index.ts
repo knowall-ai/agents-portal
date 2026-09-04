@@ -393,6 +393,28 @@ export interface ActivityEvent {
   url?: string;
 }
 
+/** One metric sample from Azure Monitor */
+export interface MetricPoint {
+  /** epoch ms */
+  ts: number;
+  /** average over the interval; null when Azure has no sample */
+  value: number | null;
+}
+
+export interface VmCpuSeries {
+  resourceId: string;
+  name: string;
+  points: MetricPoint[];
+}
+
+export interface AgentMetrics {
+  /** Window the series cover, in hours */
+  hours: number;
+  /** Sample interval, in minutes */
+  intervalMinutes: number;
+  cpu: VmCpuSeries[];
+}
+
 export interface Tenant {
   tenantId: string;
   displayName?: string;
