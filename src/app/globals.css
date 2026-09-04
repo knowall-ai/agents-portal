@@ -166,8 +166,10 @@ body {
   /* Tabs (agent page) */
   .tab {
     @apply -mb-px inline-flex items-center gap-2 border-b-2 border-transparent px-3 py-2.5 text-sm font-medium transition-colors;
+
     color: var(--text-secondary);
   }
+
   .tab:hover {
     color: var(--text-primary);
     background: var(--surface-hover);
@@ -183,6 +185,7 @@ body {
   }
   .tab-count {
     @apply rounded px-1.5 py-0.5 text-[11px] font-normal;
+
     background: var(--surface-hover);
     color: var(--text-muted);
   }

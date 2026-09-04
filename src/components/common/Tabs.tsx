@@ -54,7 +54,8 @@ export default function Tabs({ tabs, active, onChange, idPrefix = 'tab' }: TabsP
             role="tab"
             type="button"
             aria-selected={selected}
-            aria-controls={`${idPrefix}-panel-${tab.id}`}
+            // only the active tab's panel is rendered, so only it is referenced
+            aria-controls={selected ? `${idPrefix}-panel-${tab.id}` : undefined}
             tabIndex={selected ? 0 : -1}
             className="tab"
             onClick={() => onChange(tab.id)}
