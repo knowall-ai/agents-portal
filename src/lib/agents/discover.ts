@@ -62,6 +62,7 @@ export function normaliseKind(value?: string): AgentKind | undefined {
   if (!value) return undefined;
   const v = value.toLowerCase();
   if (v === 'openclaw') return 'openclaw';
+  if (v === 'hermes') return 'hermes';
   if (/foundry|assistant/.test(v)) return 'foundry';
   if (/bot/.test(v)) return 'botframework';
   return 'unknown';

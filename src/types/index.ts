@@ -1,7 +1,7 @@
 // Shared types for Agent Dashboard
 
 /** How the agent is built / hosted. */
-export type AgentKind = 'openclaw' | 'foundry' | 'botframework' | 'unknown';
+export type AgentKind = 'openclaw' | 'hermes' | 'foundry' | 'botframework' | 'unknown';
 
 /** Derived health of an agent. */
 export type AgentStatus = 'online' | 'degraded' | 'offline' | 'planned' | 'unknown';

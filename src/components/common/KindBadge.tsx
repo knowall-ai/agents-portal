@@ -1,10 +1,11 @@
 'use client';
 
-import { Bot, Brain, Server, HelpCircle } from 'lucide-react';
+import { Bot, Brain, Feather, HelpCircle, Server } from 'lucide-react';
 import type { AgentKind } from '@/types';
 
 export const kindLabels: Record<AgentKind, string> = {
   openclaw: 'OpenClaw',
+  hermes: 'Hermes',
   foundry: 'AI Foundry',
   botframework: 'Bot Framework',
   unknown: 'Unknown',
@@ -12,6 +13,7 @@ export const kindLabels: Record<AgentKind, string> = {
 
 const icons: Record<AgentKind, React.ReactNode> = {
   openclaw: <Server size={12} />,
+  hermes: <Feather size={12} />,
   foundry: <Brain size={12} />,
   botframework: <Bot size={12} />,
   unknown: <HelpCircle size={12} />,
