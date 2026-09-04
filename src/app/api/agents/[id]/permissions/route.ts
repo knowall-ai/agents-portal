@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { getUserContext } from '@/lib/tokens';
+import { forbiddenForViewers, getUserContext } from '@/lib/tokens';
 import { getAgent, getPermissions } from '@/lib/agents/service';
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -7,6 +7,7 @@ type RouteContext = { params: Promise<{ id: string }> };
 export async function GET(req: NextRequest, { params }: RouteContext) {
   const ctx = await getUserContext(req);
   if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!ctx.isAdmin) return forbiddenForViewers();
 
   const { id } = await params;
   try {

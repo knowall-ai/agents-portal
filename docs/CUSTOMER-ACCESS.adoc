@@ -1,0 +1,81 @@
+= Customer access
+:toc:
+
+How a customer signs in to the Agents Portal with their own Microsoft account and sees only their agent. Nothing about the customer is hard-coded in the portal: Azure decides what they can see, Entra app roles decide what the portal shows.
+
+== How it works
+
+[cols="1,3"]
+|===
+| Layer | Decides
+
+| *Entra B2B guest*
+| The customer is invited as a guest in the KnowAll tenant and signs in with their own work account (their enterprise credentials, their MFA). The portal's app registration is multi-tenant, so the login page just needs the KnowAll tenant selected.
+
+| *Azure RBAC*
+| _Which_ agents they see. The portal queries Azure Resource Graph with the signed-in user's own token, and Resource Graph only returns resources that token can read. `Reader` on the agent's resource group is all it takes: every other agent is invisible without a line of portal code.
+
+| *App roles*
+| _What_ the portal shows. The app registration defines `Portal.Admin` (KnowAll staff) and `Portal.Viewer` (customers). Viewers get Overview, Skills, Activity and Brain for their agent. Costs, Licences, Permissions and Boost are hidden and their API routes answer 403.
+|===
+
+== Runbook: give a customer access to their agent
+
+The example is the Irish FA's sponsor for *Winnie (dev)* in `rg-winnie-dev`. Replace the placeholders; never commit real addresses to this repo.
+
+=== 1. Define the app roles (once)
+
+In *Entra admin centre → App registrations → Agents Portal → App roles*, add two roles for *Users/Groups*:
+
+[cols="1,1,1"]
+|===
+| Display name | Value | Description
+
+| Portal Admin | `Portal.Admin` | KnowAll staff: every tab, costs, permissions, Boost
+| Portal Viewer | `Portal.Viewer` | Customers: read-only view of their own agents
+|===
+
+Then in *Enterprise applications → Agents Portal → Users and groups*, assign `Portal.Admin` to the KnowAll staff group. Finally set `PORTAL_REQUIRE_ROLES=1` on the App Service so a token without a role is a viewer.
+
+=== 2. Invite the customer as a guest
+
+[source,bash]
+----
+# Invite with their work address; they accept once and sign in with their own account thereafter
+az rest --method POST --url https://graph.microsoft.com/v1.0/invitations \
+  --body '{"invitedUserEmailAddress":"<customer-upn>","inviteRedirectUrl":"https://agents.knowall.ai","sendInvitationMessage":true}'
+
+# Their object id in the KnowAll tenant (the guest, not their home identity)
+az ad user list --filter "mail eq '<customer-upn>'" --query "[0].id" -o tsv
+----
+
+=== 3. Grant Reader on their agent's resource group
+
+[source,bash]
+----
+az role assignment create --assignee-object-id <guest-object-id> --assignee-principal-type User \
+  --role Reader --scope /subscriptions/<sub-id>/resourceGroups/rg-winnie-dev
+----
+
+For a Foundry agent the assistants list also needs `Azure AI User` on the Foundry project so the `https://ai.azure.com` token exchange succeeds; VM-hosted agents need nothing more.
+
+=== 4. Assign the Viewer role
+
+*Enterprise applications → Agents Portal → Users and groups → Add user/group*: pick the guest, role `Portal Viewer`. Or with Graph:
+
+[source,bash]
+----
+az rest --method POST \
+  --url https://graph.microsoft.com/v1.0/users/<guest-object-id>/appRoleAssignments \
+  --body '{"principalId":"<guest-object-id>","resourceId":"<portal-service-principal-id>","appRoleId":"<Portal.Viewer-role-id>"}'
+----
+
+=== 5. What the customer sees
+
+* Sign in at `https://agents.knowall.ai`, choosing the KnowAll AI tenant.
+* The Agents screen lists only agents in resource groups they can read (Winnie dev). No cost KPI or cost column.
+* The agent page shows Overview, Skills, Activity and Brain. No Costs, Licences, Permissions or Boost, and the header has Chat in Teams but nothing operational.
+
+== Why not a `customer` field in the registry?
+
+Registry and tag values describe agents, not people. Tying visibility to them would mean maintaining a second permission system in a JSON file. Azure RBAC is already the source of truth for who can read what, it is audited, and it is what the customer's own IT team can review. The portal only adds the coarse Admin/Viewer split on top.

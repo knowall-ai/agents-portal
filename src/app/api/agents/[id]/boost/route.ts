@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { getUserContext } from '@/lib/tokens';
+import { forbiddenForViewers, getUserContext } from '@/lib/tokens';
 import { getAgent, getBoost, setBoost } from '@/lib/agents/service';
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -14,6 +14,7 @@ function statusFor(error: unknown): number {
 export async function GET(req: NextRequest, { params }: RouteContext) {
   const ctx = await getUserContext(req);
   if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!ctx.isAdmin) return forbiddenForViewers();
 
   const { id } = await params;
   const refresh = req.nextUrl.searchParams.get('refresh') === '1';
@@ -35,6 +36,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
 export async function POST(req: NextRequest, { params }: RouteContext) {
   const ctx = await getUserContext(req);
   if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!ctx.isAdmin) return forbiddenForViewers();
 
   const { id } = await params;
   let body: { action?: string; hours?: number } = {};

@@ -92,7 +92,9 @@ export default function AgentPage(props: { params: Promise<{ id: string }> }) {
 
 function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { status } = useSession();
+  const { data: session, status } = useSession();
+  // Customers (Portal.Viewer) get a read-only subset; undefined while the session loads
+  const isAdmin = session?.user.isAdmin ?? false;
   const ready = status === 'authenticated';
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -124,14 +126,15 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
     ready ? `/api/agents/${id}/activity` : null,
     120_000
   );
-  const costs = useApi<AgentCosts>(ready ? `/api/agents/${id}/costs` : null, 15 * 60_000);
+  const admin = ready && isAdmin;
+  const costs = useApi<AgentCosts>(admin ? `/api/agents/${id}/costs` : null, 15 * 60_000);
   const licensing = useApi<{ licensing: AgentLicensing }>(
-    ready ? `/api/agents/${id}/licenses` : null
+    admin ? `/api/agents/${id}/licenses` : null
   );
   const permissions = useApi<{ permissions: AgentPermissions }>(
-    ready ? `/api/agents/${id}/permissions` : null
+    admin ? `/api/agents/${id}/permissions` : null
   );
-  const boost = useApi<{ boost: AgentBoost }>(ready ? `/api/agents/${id}/boost` : null, 60_000);
+  const boost = useApi<{ boost: AgentBoost }>(admin ? `/api/agents/${id}/boost` : null, 60_000);
   const brain = useApi<{ brain: AgentBrain }>(ready ? `/api/agents/${id}/brain` : null);
 
   const agent = detail.data?.agent;
@@ -158,19 +161,23 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
           },
         ]
       : []),
-    { id: 'costs', label: 'Costs', icon: <Receipt size={14} /> },
-    {
-      id: 'licences',
-      label: 'Licences',
-      icon: <BadgeCheck size={14} />,
-      count: licensing.data?.licensing.licenses.length,
-    },
-    {
-      id: 'permissions',
-      label: 'Permissions',
-      icon: <ShieldCheck size={14} />,
-      count: permissionCount,
-    },
+    ...(isAdmin ? [{ id: 'costs', label: 'Costs', icon: <Receipt size={14} /> }] : []),
+    ...(isAdmin
+      ? [
+          {
+            id: 'licences',
+            label: 'Licences',
+            icon: <BadgeCheck size={14} />,
+            count: licensing.data?.licensing.licenses.length,
+          },
+          {
+            id: 'permissions',
+            label: 'Permissions',
+            icon: <ShieldCheck size={14} />,
+            count: permissionCount,
+          },
+        ]
+      : []),
     {
       id: 'skills',
       label: 'Skills',
@@ -374,7 +381,7 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
               {tab === 'overview' && (
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
                   <div className="space-y-6 lg:col-span-2">
-                    {boost.data?.boost.supported && (
+                    {isAdmin && boost.data?.boost.supported && (
                       <section className="card">
                         <h2
                           className="flex items-center gap-2 border-b p-4 text-lg font-semibold"
