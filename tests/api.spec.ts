@@ -22,6 +22,7 @@ test.describe('API routes', () => {
     '/api/agents/sallie/soul',
     '/api/agents/sallie/licenses',
     '/api/agents/sallie/permissions',
+    '/api/agents/sallie/boost',
     '/api/agents/sallie/activity',
     '/api/agents/sallie/costs',
     '/api/costs',
@@ -34,6 +35,11 @@ test.describe('API routes', () => {
       expect(response.status()).toBe(401);
     });
   }
+
+  test('boost POST requires authentication', async ({ request }) => {
+    const response = await request.post('/api/agents/sallie/boost', { data: { action: 'on' } });
+    expect(response.status()).toBe(401);
+  });
 
   test('tenant select validates the tenant id', async ({ request }) => {
     const bad = await request.post('/api/tenants/select', { data: { tenantId: 'not-a-guid' } });

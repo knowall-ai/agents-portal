@@ -339,3 +339,90 @@ export async function listRoleAssignments(
     (a, b) => a.name.localeCompare(b.name) || (a.scope ?? '').localeCompare(b.scope ?? '')
   );
 }
+
+// ---------------------------------------------------------------------------
+// VM run-command: the portal's only write path. Gated by the user's own RBAC
+// on the VM and recorded in the Azure Activity Log under their identity.
+// ---------------------------------------------------------------------------
+
+export interface VmRef {
+  subscriptionId: string;
+  resourceGroup: string;
+  name: string;
+}
+
+/** The agent's VM, when it has one. */
+export function findVm(resources: AzureResource[]): VmRef | undefined {
+  const vm = resources.find((r) => r.type === 'microsoft.compute/virtualmachines');
+  return vm
+    ? { subscriptionId: vm.subscriptionId, resourceGroup: vm.resourceGroup, name: vm.name }
+    : undefined;
+}
+
+export interface RunCommandResult {
+  stdout: string;
+  stderr: string;
+}
+
+/** Split a run-command message into its [stdout] and [stderr] sections. Exported for tests. */
+export function parseRunCommandMessage(message: string): RunCommandResult {
+  const out = message.indexOf('[stdout]');
+  const err = message.indexOf('[stderr]');
+  if (out === -1) return { stdout: message.trim(), stderr: '' };
+  const stdout = message.slice(out + '[stdout]'.length, err === -1 ? undefined : err).trim();
+  const stderr = err === -1 ? '' : message.slice(err + '[stderr]'.length).trim();
+  return { stdout, stderr };
+}
+
+const VM_NAME = /^[A-Za-z0-9._-]{1,64}$/;
+
+interface RunCommandOperation {
+  status?: string;
+  properties?: { output?: { value?: { message?: string }[] } };
+}
+
+/**
+ * Run a shell script on a VM with the user's ARM token (RunShellScript).
+ * Waits for the async operation to finish; rejects with the ARM error (403 etc.).
+ */
+export async function runVmScript(
+  token: string,
+  vm: VmRef,
+  script: string[],
+  timeoutMs = 180_000
+): Promise<RunCommandResult> {
+  if (!VM_NAME.test(vm.name) || !VM_NAME.test(vm.resourceGroup)) {
+    throw new Error(`Invalid VM reference: ${vm.resourceGroup}/${vm.name}`);
+  }
+  const path = `/subscriptions/${vm.subscriptionId}/resourceGroups/${vm.resourceGroup}/providers/Microsoft.Compute/virtualMachines/${vm.name}/runCommand?api-version=2024-07-01`;
+  const start = await fetch(`${ARM}${path}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ commandId: 'RunShellScript', script }),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!start.ok) {
+    const body = await start.text();
+    throw new Error(`ARM ${start.status} runCommand: ${body.slice(0, 300)}`);
+  }
+  const poll = start.headers.get('azure-asyncoperation') ?? start.headers.get('location');
+  const deadline = Date.now() + timeoutMs;
+  let result: RunCommandOperation = start.status === 200 ? await start.json() : {};
+  while (poll && (!result.status || result.status === 'InProgress')) {
+    if (Date.now() > deadline) throw new Error('Run command timed out');
+    await new Promise((resolve) => setTimeout(resolve, 4_000));
+    const response = await fetch(poll, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (response.status === 202) continue; // Location-style polling: not finished yet
+    if (!response.ok) throw new Error(`ARM ${response.status} polling run command`);
+    result = await response.json();
+    result.status ??= 'Succeeded';
+  }
+  if (result.status && result.status !== 'Succeeded') {
+    throw new Error(`Run command ${result.status}`);
+  }
+  const message = result.properties?.output?.value?.map((v) => v.message ?? '').join('\n') ?? '';
+  return parseRunCommandMessage(message);
+}

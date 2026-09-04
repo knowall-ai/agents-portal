@@ -20,6 +20,7 @@ flowchart LR
     App --> Foundry["Azure AI Foundry<br/>Assistants API"]
     App --> GitHub["GitHub REST API<br/>skills · SOUL.md · commits"]
     App --> Graph["Microsoft Graph<br/>agent account · licences · roles · app permissions"]
+    App -->|runCommand: boost on/off| VM["Agent VM<br/>(boost.sh, auto-revert timer)"]
     App --> Portal["Agent portals<br/>(health probe)"]
 
     subgraph KnowAll["KnowAll tenant"]
