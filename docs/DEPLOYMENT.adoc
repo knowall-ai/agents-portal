@@ -50,13 +50,32 @@ az webapp config appsettings set -g KnowAllAIRG -n agent-dashboard-knowallai --s
 
 === 3. Custom domain and TLS
 
-The `knowall.ai` zone is hosted in Azure DNS (resource group `knowallairg`).
+IMPORTANT: `knowall.ai` is delegated to Microsoft 365's name servers (`ns1-4.bdm.microsoftonline.com`), so DNS records are managed in the **Microsoft 365 admin center → Settings → Domains → knowall.ai → DNS records**. The Azure DNS zone `knowall.ai` in `knowallairg` is *not* authoritative; records added there have no effect.
 
+. Get the verification ID:
++
 [source,bash]
 ----
-VERIFY=$(az webapp show -g KnowAllAIRG -n agent-dashboard-knowallai --query customDomainVerificationId -o tsv)
-az network dns record-set txt add-record -g knowallairg -z knowall.ai -n asuid.agents -v "$VERIFY"
-az network dns record-set cname set-record -g knowallairg -z knowall.ai -n agents -c agent-dashboard-knowallai.azurewebsites.net
+az webapp show -g KnowAllAIRG -n agent-dashboard-knowallai --query customDomainVerificationId -o tsv
+----
+. In the Microsoft 365 admin center add two records:
++
+[cols="1,2,3"]
+|===
+|Type |Name |Value
+
+|TXT
+|`asuid.agents`
+|the verification ID above
+
+|CNAME
+|`agents`
+|`agent-dashboard-knowallai.azurewebsites.net`
+|===
+. Bind the hostname and issue the free managed certificate (retry the `ssl create` if it reports a missing DNS record — propagation takes a few minutes):
++
+[source,bash]
+----
 az webapp config hostname add -g KnowAllAIRG --webapp-name agent-dashboard-knowallai --hostname agents.knowall.ai
 THUMB=$(az webapp config ssl create -g KnowAllAIRG -n agent-dashboard-knowallai --hostname agents.knowall.ai --query thumbprint -o tsv)
 az webapp config ssl bind -g KnowAllAIRG -n agent-dashboard-knowallai --certificate-thumbprint "$THUMB" --ssl-type SNI
