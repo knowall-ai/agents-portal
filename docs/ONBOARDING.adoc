@@ -164,7 +164,7 @@ Azure costs need no setup beyond the user having *Cost Management Reader* on the
 * [ ] `agent-customer` / `customer` set
 * [ ] `environment` set
 * [ ] Portal / health URL set
-* [ ] GitHub repo, `skillsPath` and `skillSources` set (OpenClaw agents); `SOUL.md` present in the repo
+* [ ] GitHub repo and `skillsPath` set (OpenClaw agents); `skillSources` if the agent loads shared skill packs; `SOUL.md` in the repo if you want the Soul card
 * [ ] `avatarUrl` and, for agents with their own account, `teamsUpn` set
 * [ ] `openaiProjectId` / `anthropicWorkspaceId` / `fixedCosts` set so the cost breakdown is complete
 * [ ] Lighthouse delegation in place (customer-hosted agents)

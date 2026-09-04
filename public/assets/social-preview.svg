@@ -28,7 +28,7 @@
   <polyline points="556.9,203.8 575.6,203.8 586.9,173.8 601.9,230 615,188.8 624.4,203.8 643.1,203.8" fill="none" stroke="#ffffff" stroke-width="10.3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <text x="600" y="340" text-anchor="middle" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="72" font-weight="700">
-    <tspan fill="#22c55e">Agent</tspan><tspan fill="#f3f4f6">&#160;Dashboard</tspan>
+    <tspan fill="#22c55e">Agents</tspan><tspan fill="#f3f4f6">&#160;Portal</tspan>
   </text>
 
   <text x="600" y="400" text-anchor="middle" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="28" fill="#9ca3af">AI Agent Monitoring Across Azure Tenants</text>

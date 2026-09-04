@@ -42,7 +42,7 @@ function LoginView() {
         <div className="mb-8 flex flex-col items-center">
           <AgentsPortalIcon size={64} className="mb-4" />
           <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
-            <span style={{ color: 'var(--primary)' }}>Agent</span> Dashboard
+            <span style={{ color: 'var(--primary)' }}>Agents</span> Portal
           </h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>
             by KnowAll

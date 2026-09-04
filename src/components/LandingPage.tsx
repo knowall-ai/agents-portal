@@ -47,7 +47,7 @@ export default function LandingPage() {
           <div className="flex items-center gap-2">
             <AgentsPortalIcon size={32} />
             <span className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
-              <span style={{ color: 'var(--primary)' }}>Agent</span> Dashboard
+              <span style={{ color: 'var(--primary)' }}>Agents</span> Portal
             </span>
           </div>
           <button

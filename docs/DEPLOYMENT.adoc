@@ -44,9 +44,11 @@ az webapp config appsettings set -g KnowAllAIRG -n agent-dashboard-knowallai --s
   NEXTAUTH_URL=https://agents.knowall.ai APP_URL=https://agents.knowall.ai \
   NEXTAUTH_SECRET=$(openssl rand -hex 32) \
   AZURE_AD_TENANT_ID=common AZURE_AD_CLIENT_ID=<app-id> AZURE_AD_CLIENT_SECRET=<production-secret> \
-  GITHUB_TOKEN=<fine-grained token, Contents: read on agent repos and shared skill-pack repos (knowall-ai/claude-plugins is private)> \
+  GITHUB_TOKEN=<github-token> \
   SCM_DO_BUILD_DURING_DEPLOYMENT=false WEBSITE_HEALTHCHECK_MAXPINGFAILURES=5 CACHE_TTL_SECONDS=60
 ----
+
+`GITHUB_TOKEN` is a fine-grained token with *Contents: read* on every agent repo and on the shared skill-pack repos listed in `skillSources` (`knowall-ai/claude-plugins` is private).
 
 === 3. Custom domain and TLS
 

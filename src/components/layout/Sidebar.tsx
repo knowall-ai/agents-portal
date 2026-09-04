@@ -36,7 +36,7 @@ export default function Sidebar({ isOpen = false, onClose, counts }: SidebarProp
           <Link href="/" className="flex items-center gap-2" onClick={() => onClose?.()}>
             <AgentsPortalIcon size={32} />
             <span className="text-xl font-semibold" style={{ color: 'var(--text-primary)' }}>
-              <span style={{ color: 'var(--primary)' }}>Agent</span> Dashboard
+              <span style={{ color: 'var(--primary)' }}>Agents</span> Portal
             </span>
           </Link>
           <button

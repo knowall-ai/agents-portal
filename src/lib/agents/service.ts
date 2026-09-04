@@ -120,7 +120,7 @@ export async function getSoul(ctx: UserContext, agent: AgentDetail): Promise<Age
     `soul:${scope(ctx)}:${agent.id}`,
     async () => {
       const entry = getRegistryEntry(agent.id);
-      const candidates = entry?.soulPath ? [entry.soulPath] : SOUL_CANDIDATES;
+      const candidates = [...(entry?.soulPath ? [entry.soulPath] : []), ...SOUL_CANDIDATES];
       for (const path of candidates) {
         const soul = await getRepoMarkdown(repo, path);
         if (soul) return soul;
