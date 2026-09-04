@@ -423,6 +423,15 @@ function build(): { nodes: BrainNode[]; rels: BrainRel[] } {
   link(satoshi.name, 'Hal Finney', 'WORKS_WITH');
   link('Jack Dorsey', satoshi.name, 'INTERESTED_IN');
   link('Michael Saylor', 'Bitcoin whitepaper', 'DISCUSSED');
+  // Tie his corner into the rest of the graph so it sits inside the brain
+  link('Adam Back', 'Bitcoin whitepaper', 'DISCUSSED');
+  link('Nick Szabo', 'Cryptography', 'INTERESTED_IN');
+  link('Alan Turing', 'Cryptography', 'INTERESTED_IN');
+  link('Hal Finney', 'Genesis block', 'DISCUSSED');
+  link('Michael Saylor', 'Proof of work', 'DISCUSSED');
+  link('Vitalik Buterin', 'Proof of work', 'DISCUSSED');
+  link('Jack Dorsey', 'Bitcoin', 'INTERESTED_IN');
+  link('Brian Armstrong', 'Bitcoin', 'INTERESTED_IN');
   (byName.get('Jack Dorsey') as BrainNode).props = {
     name: 'Jack Dorsey',
     role: 'Co-founder, Block',

@@ -997,6 +997,13 @@ export default function BrainView({
   };
   const onMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (dragRef.current) {
+      // A real drag hands the camera back to the user: the focus panel stays,
+      // but the view no longer glides back to the focused node
+      if (
+        focusRef.current &&
+        (Math.abs(e.clientX - dragRef.current.x) > 4 || Math.abs(e.clientY - dragRef.current.y) > 4)
+      )
+        focusRef.current = null;
       angleRef.current = dragRef.current.angle - (e.clientX - dragRef.current.x) * 0.006;
       tiltRef.current = Math.min(
         1.3,
