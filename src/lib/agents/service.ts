@@ -433,8 +433,8 @@ export type BrainSource = { kind: 'fixture' } | { kind: 'reverie'; url: string; 
  * Where an agent's brain view reads from. Only the registry's `brainUrl` is
  * honoured (never a tag) because the server-side REVERIE_TOKEN is sent to it.
  */
-export function brainSource(agent: AgentDetail): BrainSource | null {
-  if (process.env.BRAIN_FIXTURE === '1') return { kind: 'fixture' };
+export function brainSource(agent: AgentDetail, demo = false): BrainSource | null {
+  if (demo || process.env.BRAIN_FIXTURE === '1') return { kind: 'fixture' };
   const url = getRegistryEntry(agent.id)?.brainUrl;
   const token = process.env.REVERIE_TOKEN;
   if (!url || !token || !isValidBrainUrl(url)) return null;
@@ -445,8 +445,9 @@ export function brainSource(agent: AgentDetail): BrainSource | null {
  * Snapshot of the agent's graph memory. Cached briefly; a failed refresh serves
  * the last good snapshot for a short while (see cache.ts) before erroring.
  */
-export async function getBrain(agent: AgentDetail): Promise<AgentBrain> {
-  const source = brainSource(agent);
+export async function getBrain(agent: AgentDetail, demo = false): Promise<AgentBrain> {
+  const source = brainSource(agent, demo);
+  const liveAvailable = brainSource(agent)?.kind === 'reverie';
   if (!source) {
     const entry = getRegistryEntry(agent.id);
     return {
@@ -459,14 +460,14 @@ export async function getBrain(agent: AgentDetail): Promise<AgentBrain> {
     };
   }
   if (source.kind === 'fixture')
-    return { available: true, fixture: true, snapshot: fixtureSnapshot() };
+    return { available: true, fixture: true, liveAvailable, snapshot: fixtureSnapshot() };
   try {
     const snapshot = await cached(
       `brain:${agent.id}`,
       () => fetchBrainSnapshot(source.url, source.token),
       15 * 1000
     );
-    return { available: true, snapshot };
+    return { available: true, liveAvailable, snapshot };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.warn(`Brain snapshot failed for ${agent.id}:`, message);

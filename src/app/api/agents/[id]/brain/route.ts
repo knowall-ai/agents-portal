@@ -14,7 +14,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     const agent = await getAgent(ctx, id);
     if (!agent) return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
     return NextResponse.json(
-      { brain: await getBrain(agent) },
+      { brain: await getBrain(agent, req.nextUrl.searchParams.get('demo') === '1') },
       { headers: { 'Cache-Control': 'no-store, private' } }
     );
   } catch (error) {

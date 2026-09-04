@@ -28,7 +28,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
   const { id } = await params;
   const agent = await getAgent(ctx, id);
   if (!agent) return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
-  const source = brainSource(agent);
+  const source = brainSource(agent, req.nextUrl.searchParams.get('demo') === '1');
   if (!source) return NextResponse.json({ error: 'No brain configured' }, { status: 404 });
 
   if (source.kind === 'fixture') {

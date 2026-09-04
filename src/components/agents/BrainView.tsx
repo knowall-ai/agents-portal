@@ -169,6 +169,10 @@ interface BrainViewProps {
   backdrop?: Backdrop;
   isLoading: boolean;
   error?: string | null;
+  /** The built-in demo graph is being shown instead of (or in the absence of) a live brain */
+  demo?: boolean;
+  /** Offered when there is no live brain (turn demo on) or demo is showing (turn it off) */
+  onDemoChange?: (demo: boolean) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -185,6 +189,8 @@ export default function BrainView({
   backdrop = 'bridge',
   isLoading,
   error,
+  demo = false,
+  onDemoChange,
 }: BrainViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -494,7 +500,7 @@ export default function BrainView({
     let stopped = false;
     const connect = () => {
       if (stopped) return;
-      source = new EventSource(`/api/agents/${agentId}/brain/events`);
+      source = new EventSource(`/api/agents/${agentId}/brain/events${demo ? '?demo=1' : ''}`);
       wire(source);
     };
     const wire = (source: EventSource) => {
@@ -546,7 +552,7 @@ export default function BrainView({
       clearTimeout(retry);
       source?.close();
     };
-  }, [agentId, brain?.available, snapshot, applyActivation, applyDiff]);
+  }, [agentId, demo, brain?.available, snapshot, applyActivation, applyDiff]);
 
   // ---- render loop -------------------------------------------------------------
   // The canvas only mounts once a snapshot has arrived, so start the loop then
@@ -1115,13 +1121,25 @@ export default function BrainView({
   if (error && !brain) return <EmptyState title="Could not load brain" description={error} />;
   if (!brain?.available) {
     return (
-      <EmptyState
-        icon={<Sparkles size={28} />}
-        title="No brain connected"
-        description={
-          brain?.error ?? 'Set brainUrl in the registry and REVERIE_TOKEN on the server.'
-        }
-      />
+      <div className="flex flex-col items-center gap-4 py-10">
+        <EmptyState
+          icon={<Sparkles size={28} />}
+          title="No brain connected"
+          description={
+            brain?.error ??
+            'This agent has no Reverie graph memory yet. Set brainUrl in the registry and REVERIE_TOKEN on the server to connect one.'
+          }
+        />
+        {onDemoChange && (
+          <button
+            type="button"
+            className="btn-secondary flex items-center gap-2 text-sm"
+            onClick={() => onDemoChange(true)}
+          >
+            <Sparkles size={14} /> Show the demo graph
+          </button>
+        )}
+      </div>
     );
   }
   if (!snapshot) return <EmptyState title="Brain unavailable" description={brain.error} />;
@@ -1173,11 +1191,25 @@ export default function BrainView({
                 ? '○ STREAM CONNECTING'
                 : '○ STREAM OFFLINE'}
           </span>
-          {brain.fixture && (
-            <span style={{ color: HUD.amber }} title="Built-in sample graph, not an agent's memory">
-              DEMO DATA
-            </span>
-          )}
+          {brain.fixture &&
+            (brain.liveAvailable && onDemoChange ? (
+              <button
+                type="button"
+                className="pointer-events-auto underline-offset-2 hover:underline"
+                style={{ color: HUD.amber }}
+                title="Built-in sample graph, not this agent's memory. Click to switch to the live brain."
+                onClick={() => onDemoChange(false)}
+              >
+                DEMO DATA · SWITCH TO LIVE
+              </button>
+            ) : (
+              <span
+                style={{ color: HUD.amber }}
+                title="Built-in sample graph, not this agent's memory"
+              >
+                DEMO DATA
+              </span>
+            ))}
         </div>
         <div className="pointer-events-auto relative">
           <input
