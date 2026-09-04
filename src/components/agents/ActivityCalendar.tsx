@@ -43,7 +43,9 @@ export default function ActivityCalendar({ events, isLoading }: ActivityCalendar
   }, [showChart]);
   // Size the squares so a year fills the card, like the contributions graph on GitHub
   const blockMargin = 3;
-  const blockSize = Math.max(9, Math.min(22, Math.floor((width - 44) / (WEEKS + 1)) - blockMargin));
+  // weekday labels take ~34px; the rest is 53 columns of square + gap
+  const blockSize = Math.max(9, Math.floor((width - 34) / (WEEKS + 1)) - blockMargin);
+
   const { data, byDay, totals } = useMemo(() => {
     const byDay = new Map<string, DayTotals>();
     const today = new Date();
