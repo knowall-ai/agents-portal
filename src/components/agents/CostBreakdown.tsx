@@ -44,14 +44,23 @@ export default function CostBreakdown({ costs, isLoading, error }: CostBreakdown
   rows.sort((a, b) => a.source.localeCompare(b.source) || b.amount - a.amount);
 
   const problems = costs.sources.filter((s) => s.status !== 'ok');
+  const azureFailed = costs.sources.some((s) => s.source === 'azure' && s.status === 'error');
 
   return (
     <div>
       {rows.length === 0 ? (
         <EmptyState
-          icon={<Receipt size={28} />}
-          title="No costs recorded this month or last"
-          description="Azure costs appear once Cost Management has processed usage (up to 24 hours)."
+          icon={azureFailed ? <AlertTriangle size={28} /> : <Receipt size={28} />}
+          title={
+            azureFailed
+              ? 'Azure costs unavailable right now'
+              : 'No costs recorded this month or last'
+          }
+          description={
+            azureFailed
+              ? 'The Azure cost lookup failed — details below. Refresh in a couple of minutes.'
+              : 'Azure costs appear once Cost Management has processed usage (up to 24 hours).'
+          }
         />
       ) : (
         <div className="overflow-x-auto">

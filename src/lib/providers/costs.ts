@@ -100,7 +100,18 @@ export async function queryAzureCosts(
     });
     if (!response.ok) {
       const text = await response.text();
-      throw new Error(`Cost Management ${response.status}: ${text.slice(0, 200)}`);
+      if (response.status === 429) {
+        throw new Error(
+          'Azure Cost Management is rate limiting requests (429); it will be retried in a few minutes'
+        );
+      }
+      let message = text.slice(0, 200);
+      try {
+        message = (JSON.parse(text) as { error?: { message?: string } }).error?.message ?? message;
+      } catch {
+        // keep raw text
+      }
+      throw new Error(`Cost Management ${response.status}: ${message}`);
     }
     const data = (await response.json()) as CostQueryResponse;
     const col = (name: string) =>
