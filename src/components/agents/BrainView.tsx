@@ -345,8 +345,11 @@ export default function BrainView({
     return () => document.removeEventListener('fullscreenchange', onChange);
   }, []);
   const toggleFull = () => {
-    if (document.fullscreenElement) void document.exitFullscreen();
-    else void wrapRef.current?.requestFullscreen();
+    // The browser may refuse (no user gesture, embedded frame); nothing to do then
+    const request = document.fullscreenElement
+      ? document.exitFullscreen()
+      : wrapRef.current?.requestFullscreen();
+    request?.catch(() => undefined);
   };
 
   // ---- highlights -----------------------------------------------------------
