@@ -3,7 +3,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { forceCenter, forceCollide, forceLink, forceManyBody, forceSimulation } from 'd3-force-3d';
 import type { Simulation, SimulationLinkDatum, SimulationNodeDatum } from 'd3-force-3d';
-import { Moon, Pause, Play, RotateCcw, Sparkles, Sun, Zap } from 'lucide-react';
+import {
+  Maximize2,
+  Minimize2,
+  Moon,
+  Pause,
+  Play,
+  RotateCcw,
+  Sparkles,
+  Sun,
+  Zap,
+} from 'lucide-react';
 import { EmptyState, LoadingSpinner } from '@/components/common';
 import {
   HUD,
@@ -45,6 +55,21 @@ const LABEL_COLOURS: Record<string, string> = {
   Risk: '#ffb000',
 };
 const OTHER_COLOUR = '#94a3b8';
+
+/** The rotation and vertical pan that put `node` front and centre, from its live position. */
+function focusTarget(node: SimNode, zoom: number, tilt: number): { angle: number; panY: number } {
+  const x = node.x ?? 0;
+  const y = node.y ?? 0;
+  const z = node.z ?? 0;
+  // rx = x cosθ + z sinθ = 0 at θ = atan2(-x, z); +π puts the node on the camera side
+  const angle = Math.atan2(-x, z) + Math.PI;
+  const rho = Math.hypot(x, z);
+  const ry = y * Math.cos(tilt) + rho * Math.sin(tilt);
+  const rz2 = y * Math.sin(tilt) - rho * Math.cos(tilt);
+  const scale = (FOCAL / Math.max(FOCAL * 0.2, FOCAL + rz2)) * zoom;
+  // cy sits 80px above the middle of the canvas; land the node just above centre
+  return { angle, panY: -ry * scale + 64 };
+}
 const READ_COLOUR = '#9dff0a'; // recall — the HUD lime
 const WRITE_COLOUR = '#f0ffcd'; // remember / connect — the HUD core white
 const NEW_COLOUR = '#ffffff';
@@ -58,20 +83,32 @@ const HIGHLIGHT_MS: Record<string, number> = {
 };
 const FEED_MAX = 60;
 const CANVAS_HEIGHT = 720;
-const OVERLAY_WIDTH = 320;
 // Avatar-renderer palette (robot_avatar.py): lime glow, pale core, amber warnings
 const HOLO = '#9dff0a';
 const HOLO_CORE = '#f0ffcd';
 const HOLO_DIM = '#7c8f7c';
 const HOLO_AMBER = '#ffb000';
 const FOCAL = 1100;
-const DEFAULT_ZOOM = 1.08;
+const DEFAULT_ZOOM = 1;
 const TILT = 0.32;
 /** radians per second — one full turn every ~2.5 minutes */
 const AUTO_ROTATE = 0.042;
 /** Backdrop plates (public/brain), in the style of the avatar renderer's scenes */
 export const BACKDROPS = ['none', 'bridge', 'rain-city', 'cyber-sky'] as const;
 export type Backdrop = (typeof BACKDROPS)[number];
+/** Where each plate's emitter sits, as fractions of the image; the graph floats over it */
+const PLATE_ANCHOR: Record<Exclude<Backdrop, 'none'>, { x: number; y: number }> = {
+  bridge: { x: 0.46, y: 0.84 },
+  'rain-city': { x: 0.42, y: 0.64 },
+  'cyber-sky': { x: 0.47, y: 0.845 },
+};
+interface Plate {
+  img: CanvasImageSource;
+  w: number;
+  h: number;
+  ax: number;
+  ay: number;
+}
 /** How fast recency fades: live activity over ~20 min, graph timestamps over ~12 h */
 const RECENCY_LIVE_TAU = 20 * 60;
 const RECENCY_GRAPH_TAU = 12 * 3600; // radians per frame ≈ one turn every 48 s
@@ -155,7 +192,11 @@ export default function BrainView({
   const linkFlashRef = useRef<Map<string, number>>(new Map());
   const angleRef = useRef(0.6);
   const zoomRef = useRef(DEFAULT_ZOOM);
-  const dragRef = useRef<{ x: number; y: number; angle: number } | null>(null);
+  const tiltRef = useRef(TILT);
+  /** true once the user has wheel-zoomed; auto-fit stays off until reset */
+  const userZoomRef = useRef(false);
+  const dragRef = useRef<{ x: number; y: number; angle: number; tilt: number } | null>(null);
+  const [isFull, setIsFull] = useState(false);
   const hoverRef = useRef<SimNode | null>(null);
   const rotateRef = useRef(true);
   const dreamingRef = useRef(false);
@@ -163,12 +204,8 @@ export default function BrainView({
   /** When each node was last touched and with what colour, for the recency gradient */
   const recencyRef = useRef<Map<string, { at: number; colour: string; live: boolean }>>(new Map());
   const panRef = useRef({ y: 0 });
-  const backdropRef = useRef<HTMLImageElement | null>(null);
-  const focusRef = useRef<{ angle: number; panY: number } | null>(null);
-  const packetsRef = useRef<Map<string, number>>(new Map());
-  const dustRef = useRef<{ x: number; y: number; vx: number; vy: number; s: number; p: number }[]>(
-    []
-  );
+  const backdropRef = useRef<Plate | null>(null);
+  const focusRef = useRef<SimNode | null>(null);
 
   const [feed, setFeed] = useState<BrainActivation[]>([]);
   const [stats, setStats] = useState<BrainStats | null>(null);
@@ -269,7 +306,23 @@ export default function BrainView({
     const img = new Image();
     img.src = `/brain/bg-${backdrop}.jpg`;
     img.onload = () => {
-      backdropRef.current = img;
+      // Brighten once at load so the plate reads without a per-frame filter
+      const lit = document.createElement('canvas');
+      lit.width = img.width;
+      lit.height = img.height;
+      const lctx = lit.getContext('2d');
+      if (lctx) {
+        lctx.filter = 'brightness(1.5) saturate(1.1)';
+        lctx.drawImage(img, 0, 0);
+      }
+      const anchor = PLATE_ANCHOR[backdrop];
+      backdropRef.current = {
+        img: lctx ? lit : img,
+        w: img.width,
+        h: img.height,
+        ax: anchor.x,
+        ay: anchor.y,
+      };
     };
     return () => {
       backdropRef.current = null;
@@ -280,6 +333,16 @@ export default function BrainView({
     const timer = setInterval(() => setClock(Date.now()), 30_000);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    const onChange = () => setIsFull(document.fullscreenElement === wrapRef.current);
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+  const toggleFull = () => {
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void wrapRef.current?.requestFullscreen();
+  };
 
   // ---- highlights -----------------------------------------------------------
   const highlight = useCallback((ids: string[], kind: string, colour: string) => {
@@ -450,7 +513,7 @@ export default function BrainView({
     const resize = () => {
       const dpr = window.devicePixelRatio || 1;
       const w = wrap.clientWidth;
-      const h = CANVAS_HEIGHT;
+      const h = wrap.clientHeight;
       canvas.width = Math.floor(w * dpr);
       canvas.height = Math.floor(h * dpr);
       canvas.style.width = `${w}px`;
@@ -469,34 +532,25 @@ export default function BrainView({
     const observer = new ResizeObserver(resize);
     observer.observe(wrap);
 
-    if (dustRef.current.length === 0) {
-      dustRef.current = Array.from({ length: 90 }, () => ({
-        x: Math.random() * 1600,
-        y: Math.random() * CANVAS_HEIGHT,
-        vx: (Math.random() - 0.5) * 0.25,
-        vy: -0.05 - Math.random() * 0.2,
-        s: Math.random() < 0.15 ? 2 : 1,
-        p: Math.random() * 6.28,
-      }));
-    }
-    const dust = dustRef.current;
     const draw = () => {
       const t = performance.now();
       const dt = Math.min(0.05, (t - last) / 1000);
       last = t;
       const frame = t * 0.06; // ≈ frames at 60 fps, continuous across restarts
       const w = wrap.clientWidth;
-      const h = CANVAS_HEIGHT;
-      const cx = w / 2 + OVERLAY_WIDTH / 2 - 40;
-      const cy = h / 2 - 62 + panRef.current.y;
+      const h = wrap.clientHeight;
+      const cx = w / 2 + 40;
+      const cy = h / 2 - 80 + panRef.current.y;
       const now = Date.now();
-      const focus = focusRef.current;
+      const focus = focusRef.current
+        ? focusTarget(focusRef.current, zoomRef.current, tiltRef.current)
+        : null;
       if (focus && !dragRef.current) {
         // ease the graph round so the focused node sits front and centre
         let delta = focus.angle - angleRef.current;
         delta = Math.atan2(Math.sin(delta), Math.cos(delta));
-        angleRef.current += delta * Math.min(1, dt * 4.5);
-        panRef.current.y += (focus.panY - panRef.current.y) * Math.min(1, dt * 5);
+        angleRef.current += delta * Math.min(1, dt * 2);
+        panRef.current.y += (focus.panY - panRef.current.y) * Math.min(1, dt * 2);
       } else {
         if (rotateRef.current && !dragRef.current) angleRef.current += AUTO_ROTATE * dt;
         panRef.current.y += (0 - panRef.current.y) * Math.min(1, dt * 3);
@@ -504,14 +558,28 @@ export default function BrainView({
       const a = angleRef.current;
       const cosA = Math.cos(a);
       const sinA = Math.sin(a);
-      const cosT = Math.cos(TILT);
-      const sinT = Math.sin(TILT);
+      const cosT = Math.cos(tiltRef.current);
+      const sinT = Math.sin(tiltRef.current);
+      // Auto-fit: keep the whole graph inside the view however the layout breathes
+      if (!userZoomRef.current) {
+        let sum = 0;
+        for (const n of nodesRef.current) {
+          const x = n.x ?? 0;
+          const y = n.y ?? 0;
+          const z = n.z ?? 0;
+          sum += x * x + y * y + z * z;
+        }
+        const rms = Math.sqrt(sum / Math.max(1, nodesRef.current.length));
+        const fit = (Math.min(w - 400, h) * 0.5) / Math.max(80, rms * 1.9);
+        zoomRef.current +=
+          (Math.min(2.5, Math.max(0.3, fit)) - zoomRef.current) * Math.min(1, dt * 1.5);
+      }
       const zoom = zoomRef.current;
       const asleep = statusRef.current === 'offline';
       const dreaming = dreamingRef.current;
       const tint = dreaming ? [139, 92, 246] : [34, 197, 94];
 
-      // ---- backdrop: deep field, perspective floor grid, holo rings, dust ----
+      // ---- backdrop: deep field, perspective floor grid, holo rings ----
       const bg = ctx.createRadialGradient(cx, cy, 20, cx, cy, Math.max(w, h) * 0.75);
       bg.addColorStop(0, dreaming ? '#161029' : '#0c1a22');
       bg.addColorStop(0.55, '#090d14');
@@ -520,64 +588,91 @@ export default function BrainView({
       ctx.fillRect(0, 0, w, h);
       const plate = backdropRef.current;
       if (plate) {
-        // cover-fit the plate, then darken it so the graph and HUD stay legible
-        const scale = Math.max(w / plate.width, h / plate.height);
-        const pw = plate.width * scale;
-        const ph = plate.height * scale;
-        ctx.drawImage(plate, (w - pw) / 2, (h - ph) / 2, pw, ph);
-        const shade = ctx.createRadialGradient(cx, cy, 60, cx, cy, Math.max(w, h) * 0.7);
-        shade.addColorStop(0, 'rgba(5, 7, 11, 0.22)');
-        shade.addColorStop(1, 'rgba(5, 7, 11, 0.1)');
-        ctx.fillStyle = shade;
-        ctx.fillRect(0, 0, w, h);
-      }
+        // Scale and place the plate so its emitter sits right under the graph
+        // while the image still covers the canvas; the floor is the emitter
+        const need = Math.max(cx / plate.ax, (w - cx) / (1 - plate.ax), w);
+        const s = Math.max(need / plate.w, h / plate.h);
+        const pw = plate.w * s;
+        const ph = plate.h * s;
+        const ox = cx - plate.ax * pw;
+        const oy = Math.min(0, Math.max(h - ph, h - 68 - plate.ay * ph));
+        ctx.drawImage(plate.img, ox, oy, pw, ph);
+        floorY = oy + plate.ay * ph;
 
-      const horizon = h * 0.6;
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(0, horizon, w, h - horizon);
-      ctx.clip();
-      ctx.strokeStyle = `rgba(${tint[0]}, ${tint[1]}, ${tint[2]}, 0.09)`;
-      ctx.lineWidth = 1;
-      for (let i = -14; i <= 14; i++) {
+        // The emitter lights the plate and throws a cone up to the hologram
+        const flicker = 0.03 * Math.sin(frame / 6) + 0.02 * Math.sin(frame / 17);
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.translate(cx, floorY);
+        ctx.scale(1, 0.22);
+        const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, 160);
+        glow.addColorStop(0, `rgba(${tint[0]}, ${tint[1]}, ${tint[2]}, ${0.4 + flicker})`);
+        glow.addColorStop(1, `rgba(${tint[0]}, ${tint[1]}, ${tint[2]}, 0)`);
+        ctx.fillStyle = glow;
+        ctx.fillRect(-170, -170, 340, 340);
+        ctx.restore();
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        const cone = ctx.createLinearGradient(0, floorY, 0, cy - 60);
+        cone.addColorStop(0, `rgba(${tint[0]}, ${tint[1]}, ${tint[2]}, ${0.16 + flicker})`);
+        cone.addColorStop(1, `rgba(${tint[0]}, ${tint[1]}, ${tint[2]}, 0)`);
+        ctx.fillStyle = cone;
         ctx.beginPath();
-        ctx.moveTo(cx + i * 22, horizon);
-        ctx.lineTo(cx + i * 260, h + 40);
-        ctx.stroke();
-      }
-      const scrollT = (frame * 0.004) % 1;
-      for (let k = 0; k < 14; k++) {
-        const t = (k + scrollT) / 14;
-        const y = horizon + (h - horizon) * t * t;
-        ctx.strokeStyle = `rgba(${tint[0]}, ${tint[1]}, ${tint[2]}, ${0.03 + t * 0.12})`;
+        ctx.moveTo(cx - 110, floorY);
+        ctx.lineTo(cx + 110, floorY);
+        ctx.lineTo(cx + 320, cy - 60);
+        ctx.lineTo(cx - 320, cy - 60);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      } else {
+        const horizon = h * 0.6;
+        ctx.save();
         ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(w, y);
-        ctx.stroke();
-      }
-      ctx.restore();
+        ctx.rect(0, horizon, w, h - horizon);
+        ctx.clip();
+        ctx.strokeStyle = `rgba(${tint[0]}, ${tint[1]}, ${tint[2]}, 0.09)`;
+        ctx.lineWidth = 1;
+        for (let i = -14; i <= 14; i++) {
+          ctx.beginPath();
+          ctx.moveTo(cx + i * 22, horizon);
+          ctx.lineTo(cx + i * 260, h + 40);
+          ctx.stroke();
+        }
+        const scrollT = (frame * 0.004) % 1;
+        for (let k = 0; k < 14; k++) {
+          const t = (k + scrollT) / 14;
+          const y = horizon + (h - horizon) * t * t;
+          ctx.strokeStyle = `rgba(${tint[0]}, ${tint[1]}, ${tint[2]}, ${0.03 + t * 0.12})`;
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(w, y);
+          ctx.stroke();
+        }
+        ctx.restore();
 
-      // holographic base rings under the graph
-      ctx.save();
-      ctx.translate(cx, cy + 210);
-      ctx.scale(1, 0.28);
-      for (let ring = 0; ring < 3; ring++) {
-        const rr = 150 + ring * 70 + Math.sin(frame / 30 + ring) * 4;
-        ctx.strokeStyle = `rgba(${tint[0]}, ${tint[1]}, ${tint[2]}, ${0.18 - ring * 0.05})`;
-        ctx.lineWidth = ring === 0 ? 1.5 : 1;
-        ctx.setLineDash(ring === 1 ? [6, 10] : []);
+        // holographic base rings under the graph
+        ctx.save();
+        ctx.translate(cx, cy + 210);
+        ctx.scale(1, 0.28);
+        for (let ring = 0; ring < 3; ring++) {
+          const rr = 150 + ring * 70 + Math.sin(frame / 30 + ring) * 4;
+          ctx.strokeStyle = `rgba(${tint[0]}, ${tint[1]}, ${tint[2]}, ${0.18 - ring * 0.05})`;
+          ctx.lineWidth = ring === 0 ? 1.5 : 1;
+          ctx.setLineDash(ring === 1 ? [6, 10] : []);
+          ctx.beginPath();
+          ctx.arc(0, 0, rr, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.setLineDash([]);
+        // rotating sweep
+        const sweep = (frame / 90) % (Math.PI * 2);
+        ctx.strokeStyle = `rgba(${tint[0]}, ${tint[1]}, ${tint[2]}, 0.35)`;
         ctx.beginPath();
-        ctx.arc(0, 0, rr, 0, Math.PI * 2);
+        ctx.arc(0, 0, 290, sweep, sweep + 0.6);
         ctx.stroke();
+        ctx.restore();
       }
-      ctx.setLineDash([]);
-      // rotating sweep
-      const sweep = (frame / 90) % (Math.PI * 2);
-      ctx.strokeStyle = `rgba(${tint[0]}, ${tint[1]}, ${tint[2]}, 0.35)`;
-      ctx.beginPath();
-      ctx.arc(0, 0, 290, sweep, sweep + 0.6);
-      ctx.stroke();
-      ctx.restore();
 
       if (dreaming) {
         const pulse = 0.5 + 0.5 * Math.sin(frame / 40);
@@ -587,20 +682,6 @@ export default function BrainView({
         ctx.fillStyle = aura;
         ctx.fillRect(0, 0, w, h);
       }
-
-      // dust motes
-      ctx.fillStyle = `rgba(${tint[0]}, ${tint[1]}, ${tint[2]}, 0.35)`;
-      for (const m of dust) {
-        m.x += m.vx;
-        m.y += m.vy;
-        if (m.x < 0) m.x = w;
-        if (m.x > w) m.x = 0;
-        if (m.y < 0) m.y = h;
-        if (m.y > h) m.y = 0;
-        ctx.globalAlpha = 0.15 + 0.35 * Math.abs(Math.sin(frame / 60 + m.p));
-        ctx.fillRect(m.x, m.y, m.s, m.s);
-      }
-      ctx.globalAlpha = 1;
 
       // ---- project ----
       const nodes = nodesRef.current;
@@ -634,15 +715,14 @@ export default function BrainView({
       // The graph is drawn on its own layer so it can be mirrored onto the floor
       let bottom = 0;
       for (const n of nodes) bottom = Math.max(bottom, (n.sy as number) + (n.sr as number));
-      floorY += (Math.min(h - 84, bottom + 16) - floorY) * Math.min(1, dt * 2);
+      if (!plate) floorY += (Math.min(h - 84, bottom + 16) - floorY) * Math.min(1, dt * 2);
       const main = ctx;
       lctx.clearRect(0, 0, w, h);
       {
         const ctx = lctx;
-        // ---- edges (additive) with light packets on active ones ----
+        // ---- edges (additive); active ones glow ----
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
-        const packets = packetsRef.current;
         for (const l of linksRef.current) {
           const s = l.source as SimNode;
           const t = l.target as SimNode;
@@ -658,7 +738,9 @@ export default function BrainView({
           const hovered =
             focused || (hoverRef.current && (hoverRef.current === s || hoverRef.current === t));
           const grad = ctx.createLinearGradient(s.sx, s.sy as number, t.sx, t.sy as number);
-          const base = lit ? 0.45 : hovered ? 0.55 : firing ? 0.35 : 0.05 + depth * 0.1;
+          const base =
+            (lit ? 0.45 : hovered ? 0.55 : firing ? 0.35 : 0.05 + depth * 0.1) *
+            (focusId !== undefined && !focused ? 0.5 : 1);
           grad.addColorStop(0, hexToRgba(colourFor(s.label), base));
           grad.addColorStop(1, hexToRgba(colourFor(t.label), base));
           ctx.strokeStyle = lit ? hexToRgba(WRITE_COLOUR, 0.55) : grad;
@@ -667,23 +749,6 @@ export default function BrainView({
           ctx.moveTo(s.sx, s.sy as number);
           ctx.lineTo(t.sx, t.sy as number);
           ctx.stroke();
-          if (lit || hs || ht || firing) {
-            // light packet travelling source -> target
-            const prog = ((packets.get(l.id) ?? Math.random()) + (firing ? 0.03 : 0.012)) % 1;
-            packets.set(l.id, prog);
-            const px = s.sx + (t.sx - s.sx) * prog;
-            const py = (s.sy as number) + ((t.sy as number) - (s.sy as number)) * prog;
-            const pc = lit ? WRITE_COLOUR : firing && !hs && !ht ? HOLO_CORE : READ_COLOUR;
-            const pg = ctx.createRadialGradient(px, py, 0, px, py, 7);
-            pg.addColorStop(0, hexToRgba(pc, 0.9));
-            pg.addColorStop(1, hexToRgba(pc, 0));
-            ctx.fillStyle = pg;
-            ctx.beginPath();
-            ctx.arc(px, py, 7, 0, Math.PI * 2);
-            ctx.fill();
-          } else {
-            packets.delete(l.id);
-          }
           if (lit || hovered) {
             ctx.fillStyle = 'rgba(203, 213, 225, 0.8)';
             ctx.font = `${Math.max(9, 10 * depth)}px ui-monospace, monospace`;
@@ -717,7 +782,9 @@ export default function BrainView({
           if (hl && hl.until < now) highlightsRef.current.delete(n.id);
           const active = hl && hl.until > now ? hl : undefined;
           const hovered = hoverRef.current === n || focusId === n.id;
-          const fog = asleep ? 0.35 : Math.min(1, 0.35 + depth * 0.55);
+          const related = focusId !== undefined && (n.id === focusId || neighbours.has(n.id));
+          const dimmed = focusId !== undefined && !related;
+          const fog = (asleep ? 0.35 : Math.min(1, 0.35 + depth * 0.55)) * (dimmed ? 0.55 : 1);
 
           // halo (additive)
           ctx.save();
@@ -763,7 +830,14 @@ export default function BrainView({
             ctx.lineWidth = 1.5;
             ctx.stroke();
           }
-          const related = focusId !== undefined && (n.id === focusId || neighbours.has(n.id));
+          if (related) {
+            const isFocus = n.id === focusId;
+            ctx.strokeStyle = hexToRgba(isFocus ? HOLO_CORE : HOLO, isFocus ? 0.95 : 0.7);
+            ctx.lineWidth = isFocus ? 2 : 1;
+            ctx.beginPath();
+            ctx.arc(x, y, r + (isFocus ? 8 + Math.sin(frame / 8) * 2 : 4), 0, Math.PI * 2);
+            ctx.stroke();
+          }
           const wellConnected = n.degree >= labelThreshold && (focusId === undefined || related);
           if (hovered || active || related || wellConnected) {
             const size = Math.max(9, 11 * depth);
@@ -822,7 +896,7 @@ export default function BrainView({
         Math.max(w, h) * 0.75
       );
       vig.addColorStop(0, 'rgba(0,0,0,0)');
-      vig.addColorStop(1, `rgba(0,0,0,${plate ? 0.3 : 0.55})`);
+      vig.addColorStop(1, `rgba(0,0,0,${plate ? 0.2 : 0.55})`);
       ctx.fillStyle = vig;
       ctx.fillRect(0, 0, w, h);
       ctx.fillStyle = 'rgba(255,255,255,0.025)';
@@ -874,18 +948,29 @@ export default function BrainView({
   };
 
   const onMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    dragRef.current = { x: e.clientX, y: e.clientY, angle: angleRef.current };
+    dragRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      angle: angleRef.current,
+      tilt: tiltRef.current,
+    };
   };
   const onMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (dragRef.current) {
-      angleRef.current = dragRef.current.angle + (e.clientX - dragRef.current.x) * 0.006;
+      angleRef.current = dragRef.current.angle - (e.clientX - dragRef.current.x) * 0.006;
+      tiltRef.current = Math.min(
+        1.3,
+        Math.max(-0.4, dragRef.current.tilt + (e.clientY - dragRef.current.y) * 0.004)
+      );
       return;
     }
     hoverRef.current = pick(e);
     e.currentTarget.style.cursor = hoverRef.current ? 'pointer' : 'grab';
   };
   const onMouseUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const moved = dragRef.current && Math.abs(e.clientX - dragRef.current.x) > 4;
+    const moved =
+      dragRef.current &&
+      (Math.abs(e.clientX - dragRef.current.x) > 4 || Math.abs(e.clientY - dragRef.current.y) > 4);
     dragRef.current = null;
     if (!moved) focusNode(pick(e));
   };
@@ -905,21 +990,21 @@ export default function BrainView({
       focusRef.current = null;
       return;
     }
-    const x = node.x ?? 0;
-    const y = node.y ?? 0;
-    const z = node.z ?? 0;
-    // rx = x cosθ + z sinθ = 0 at θ = atan2(-x, z); +π puts the node on the camera side
-    const theta = Math.atan2(-x, z) + Math.PI;
-    const rho = Math.hypot(x, z);
-    const ry = y * Math.cos(TILT) + rho * Math.sin(TILT);
-    const rz2 = y * Math.sin(TILT) - rho * Math.cos(TILT);
-    const scale = (FOCAL / (FOCAL + rz2)) * zoomRef.current;
-    focusRef.current = { angle: theta, panY: -ry * scale + 10 };
+    focusRef.current = node;
   };
 
-  const onWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
-    zoomRef.current = Math.min(3, Math.max(0.4, zoomRef.current * (e.deltaY > 0 ? 0.92 : 1.08)));
-  };
+  // Wheel zoom must be a non-passive native listener so it can stop the page scrolling
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      userZoomRef.current = true;
+      zoomRef.current = Math.min(3, Math.max(0.4, zoomRef.current * (e.deltaY > 0 ? 0.92 : 1.08)));
+    };
+    canvas.addEventListener('wheel', onWheel, { passive: false });
+    return () => canvas.removeEventListener('wheel', onWheel);
+  }, [ready]);
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -984,7 +1069,11 @@ export default function BrainView({
   const moodColour = asleep ? 'var(--text-muted)' : dreaming ? '#a78bfa' : 'var(--status-online)';
 
   return (
-    <div ref={wrapRef} className="relative overflow-hidden" style={{ height: CANVAS_HEIGHT }}>
+    <div
+      ref={wrapRef}
+      className="relative overflow-hidden"
+      style={{ height: isFull ? '100vh' : CANVAS_HEIGHT, backgroundColor: '#05070b' }}
+    >
       <canvas
         ref={canvasRef}
         onMouseDown={onMouseDown}
@@ -994,7 +1083,6 @@ export default function BrainView({
           dragRef.current = null;
           hoverRef.current = null;
         }}
-        onWheel={onWheel}
         style={{ display: 'block', cursor: 'grab' }}
       />
 
@@ -1244,13 +1332,22 @@ export default function BrainView({
           type="button"
           className="btn-secondary flex items-center gap-1 px-2 py-1 text-xs"
           onClick={() => {
-            zoomRef.current = DEFAULT_ZOOM;
+            userZoomRef.current = false;
             angleRef.current = 0.6;
+            tiltRef.current = TILT;
             focusNode(null);
           }}
           title="Reset view"
         >
           <RotateCcw size={12} />
+        </button>
+        <button
+          type="button"
+          className="btn-secondary flex items-center gap-1 px-2 py-1 text-xs"
+          onClick={toggleFull}
+          title={isFull ? 'Exit full page' : 'Full page'}
+        >
+          {isFull ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
         </button>
       </div>
 

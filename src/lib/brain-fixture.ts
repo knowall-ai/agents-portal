@@ -338,13 +338,35 @@ function build(): { nodes: BrainNode[]; rels: BrainRel[] } {
   for (let k = 0; k < 50; k++) link(pickR(allOrgs).name, pickR(allOrgs).name, 'PARTNERS_WITH');
   for (let k = 0; k < 60; k++) link(pickR(people).name, pickR(concepts).name, 'INTERESTED_IN');
   for (let k = 0; k < 40; k++) link(pickR(people).name, pickR(meetings).name, 'MET_WITH');
-  // A named contact to search for
+  // A real contact to search for: the Irish FA's project sponsor for Winnie.
+  // Facts as remembered from calls; the dog's name is not recorded yet.
   const thomas = add('Person', 'Thomas Fulton', people);
-  link(thomas.name, pickR(allOrgs).name, 'WORKS_AT');
-  link(thomas.name, 'Cairn discovery call', 'MET_WITH');
-  link(thomas.name, pickR(projects).name, 'INTERESTED_IN');
-  link('Ben Weeks', thomas.name, 'INTRODUCED_BY');
-  link(thomas.name, pickR(concepts).name, 'DISCUSSED');
+  thomas.props = {
+    name: thomas.name,
+    role: 'Project sponsor',
+    lives: 'Belfast',
+    hobby: 'Hill walking',
+    pet: 'Dog',
+  };
+  add('Concept', 'Belfast', concepts);
+  add('Concept', 'Hill walking', concepts);
+  add('Concept', 'Dog', concepts);
+  link(thomas.name, 'Irish FA', 'WORKS_AT');
+  link(thomas.name, 'Belfast', 'LIVES_IN');
+  link(thomas.name, 'Hill walking', 'ENJOYS');
+  link(thomas.name, 'Dog', 'HAS_PET');
+  link(thomas.name, 'Ticketing assistant', 'SPONSORS');
+  link(thomas.name, 'Ben Weeks', 'MET_WITH');
+  add('Concept', 'Football', concepts);
+  link(thomas.name, 'Football', 'ENJOYS');
+  const norrie = add('Person', 'Norrie Clarke', people);
+  norrie.props = { name: norrie.name, role: 'Head of Fan Experience' };
+  link(norrie.name, 'Irish FA', 'WORKS_AT');
+  link(thomas.name, norrie.name, 'COLLEAGUE_OF');
+  const jordan = add('Person', 'Jordan Armstrong', people);
+  jordan.props = { name: jordan.name, role: 'Account manager' };
+  link(jordan.name, 'Eir Evo', 'WORKS_AT');
+  link(thomas.name, jordan.name, 'WORKS_WITH');
   return { nodes, rels };
 }
 
