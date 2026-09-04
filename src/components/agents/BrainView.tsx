@@ -33,20 +33,22 @@ import type {
 // ---------------------------------------------------------------------------
 
 const LABEL_COLOURS: Record<string, string> = {
-  Person: '#22c55e',
-  Organization: '#3b82f6',
-  Project: '#f97316',
-  Product: '#a855f7',
-  Concept: '#eab308',
-  Meeting: '#06b6d4',
-  Decision: '#ec4899',
-  Risk: '#ef4444',
+  // One green/teal family (the portal's --primary and the HUD lime) so the
+  // graph reads as one hologram; type is told by brightness and temperature
+  Person: '#4ade80',
+  Organization: '#2dd4bf',
+  Project: '#22c55e',
+  Product: '#5eead4',
+  Concept: '#a3e635',
+  Meeting: '#34d399',
+  Decision: '#bef264',
+  Risk: '#ffb000',
 };
-const OTHER_COLOUR = '#9ca3af';
-const READ_COLOUR = '#67e8f9'; // recall
-const WRITE_COLOUR = '#86efac'; // remember / connect
+const OTHER_COLOUR = '#94a3b8';
+const READ_COLOUR = '#9dff0a'; // recall — the HUD lime
+const WRITE_COLOUR = '#f0ffcd'; // remember / connect — the HUD core white
 const NEW_COLOUR = '#ffffff';
-const FORGET_COLOUR = '#f87171';
+const FORGET_COLOUR = '#ffb000'; // the HUD amber
 const HIGHLIGHT_MS: Record<string, number> = {
   recall: 9000,
   remember: 11000,
@@ -63,9 +65,10 @@ const HOLO_CORE = '#f0ffcd';
 const HOLO_DIM = '#7c8f7c';
 const HOLO_AMBER = '#ffb000';
 const FOCAL = 1100;
-const DEFAULT_ZOOM = 1.3;
+const DEFAULT_ZOOM = 1.08;
 const TILT = 0.32;
-const AUTO_ROTATE = 0.0022;
+/** radians per second — one full turn every ~2.5 minutes */
+const AUTO_ROTATE = 0.042;
 /** Backdrop plates (public/brain), in the style of the avatar renderer's scenes */
 export const BACKDROPS = ['none', 'bridge', 'rain-city', 'cyber-sky'] as const;
 export type Backdrop = (typeof BACKDROPS)[number];
@@ -171,9 +174,18 @@ export default function BrainView({
   const [stats, setStats] = useState<BrainStats | null>(null);
   const [state, setState] = useState<BrainState | null>(null);
   const [selected, setSelected] = useState<SimNode | null>(null);
+  useEffect(() => {
+    selectedRef.current = selected;
+  }, [selected]);
   const [rotating, setRotating] = useState(true);
   const [streamStatus, setStreamStatus] = useState<'connecting' | 'live' | 'offline'>('connecting');
   const [tick, setTick] = useState(0);
+  // Mirrored into refs so the render loop reads them without restarting
+  const statusRef = useRef(agentStatus);
+  const selectedRef = useRef<SimNode | null>(null);
+  useEffect(() => {
+    statusRef.current = agentStatus;
+  }, [agentStatus]);
   const [clock, setClock] = useState(() => Date.now());
   const [cpuHistory, setCpuHistory] = useState<number[]>([]);
   const [names, setNames] = useState<{ id: string; name: string; label: string }[]>([]);
@@ -416,14 +428,24 @@ export default function BrainView({
   }, [agentId, brain?.available, snapshot, applyActivation, applyDiff]);
 
   // ---- render loop -------------------------------------------------------------
+  // The canvas only mounts once a snapshot has arrived, so start the loop then
+  const ready = !!snapshot;
   useEffect(() => {
+    if (!ready) return;
     const canvas = canvasRef.current;
     const wrap = wrapRef.current;
     if (!canvas || !wrap) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+    // Graph and its reflection are composed on offscreen layers each frame
+    const layer = document.createElement('canvas');
+    const mirror = document.createElement('canvas');
+    const lctx = layer.getContext('2d');
+    const mctx = mirror.getContext('2d');
+    if (!lctx || !mctx) return;
     let raf = 0;
-    let frame = 0;
+    let last = performance.now();
+    let floorY = CANVAS_HEIGHT * 0.8;
 
     const resize = () => {
       const dpr = window.devicePixelRatio || 1;
@@ -434,6 +456,14 @@ export default function BrainView({
       canvas.style.width = `${w}px`;
       canvas.style.height = `${h}px`;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      for (const [c, cctx] of [
+        [layer, lctx],
+        [mirror, mctx],
+      ] as const) {
+        c.width = canvas.width;
+        c.height = canvas.height;
+        cctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
     };
     resize();
     const observer = new ResizeObserver(resize);
@@ -451,22 +481,25 @@ export default function BrainView({
     }
     const dust = dustRef.current;
     const draw = () => {
-      frame += 1;
+      const t = performance.now();
+      const dt = Math.min(0.05, (t - last) / 1000);
+      last = t;
+      const frame = t * 0.06; // ≈ frames at 60 fps, continuous across restarts
       const w = wrap.clientWidth;
       const h = CANVAS_HEIGHT;
       const cx = w / 2 + OVERLAY_WIDTH / 2 - 40;
-      const cy = h / 2 - 10 + panRef.current.y;
+      const cy = h / 2 - 62 + panRef.current.y;
       const now = Date.now();
       const focus = focusRef.current;
       if (focus && !dragRef.current) {
         // ease the graph round so the focused node sits front and centre
         let delta = focus.angle - angleRef.current;
         delta = Math.atan2(Math.sin(delta), Math.cos(delta));
-        angleRef.current += delta * 0.07;
-        panRef.current.y += (focus.panY - panRef.current.y) * 0.08;
+        angleRef.current += delta * Math.min(1, dt * 4.5);
+        panRef.current.y += (focus.panY - panRef.current.y) * Math.min(1, dt * 5);
       } else {
-        if (rotateRef.current && !dragRef.current) angleRef.current += AUTO_ROTATE;
-        panRef.current.y += (0 - panRef.current.y) * 0.05;
+        if (rotateRef.current && !dragRef.current) angleRef.current += AUTO_ROTATE * dt;
+        panRef.current.y += (0 - panRef.current.y) * Math.min(1, dt * 3);
       }
       const a = angleRef.current;
       const cosA = Math.cos(a);
@@ -474,9 +507,9 @@ export default function BrainView({
       const cosT = Math.cos(TILT);
       const sinT = Math.sin(TILT);
       const zoom = zoomRef.current;
-      const asleep = agentStatus === 'offline';
+      const asleep = statusRef.current === 'offline';
       const dreaming = dreamingRef.current;
-      const tint = dreaming ? [139, 92, 246] : [34, 211, 238];
+      const tint = dreaming ? [139, 92, 246] : [34, 197, 94];
 
       // ---- backdrop: deep field, perspective floor grid, holo rings, dust ----
       const bg = ctx.createRadialGradient(cx, cy, 20, cx, cy, Math.max(w, h) * 0.75);
@@ -491,12 +524,10 @@ export default function BrainView({
         const scale = Math.max(w / plate.width, h / plate.height);
         const pw = plate.width * scale;
         const ph = plate.height * scale;
-        ctx.globalAlpha = 0.85;
         ctx.drawImage(plate, (w - pw) / 2, (h - ph) / 2, pw, ph);
-        ctx.globalAlpha = 1;
         const shade = ctx.createRadialGradient(cx, cy, 60, cx, cy, Math.max(w, h) * 0.7);
-        shade.addColorStop(0, 'rgba(5, 7, 11, 0.55)');
-        shade.addColorStop(1, 'rgba(5, 7, 11, 0.35)');
+        shade.addColorStop(0, 'rgba(5, 7, 11, 0.22)');
+        shade.addColorStop(1, 'rgba(5, 7, 11, 0.1)');
         ctx.fillStyle = shade;
         ctx.fillRect(0, 0, w, h);
       }
@@ -597,153 +628,189 @@ export default function BrainView({
         fires.set(l.id, now + 900 + Math.random() * 600);
       }
       for (const [id, until] of fires) if (until < now) fires.delete(id);
-      const focusId = selected?.id;
+      const focusId = selectedRef.current?.id;
       const neighbours = new Set<string>();
 
-      // ---- edges (additive) with light packets on active ones ----
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      const packets = packetsRef.current;
-      for (const l of linksRef.current) {
-        const s = l.source as SimNode;
-        const t = l.target as SimNode;
-        if (s.sx === undefined || t.sx === undefined) continue;
-        const depth = ((s.depth ?? 1) + (t.depth ?? 1)) / 2;
-        const flash = linkFlashRef.current.get(l.id);
-        const hs = highlightsRef.current.get(s.id);
-        const ht = highlightsRef.current.get(t.id);
-        const lit = (flash && flash > now) || (hs && ht);
-        const firing = fires.has(l.id);
-        const focused = focusId !== undefined && (s.id === focusId || t.id === focusId);
-        if (focused) neighbours.add(s.id === focusId ? t.id : s.id);
-        const hovered =
-          focused || (hoverRef.current && (hoverRef.current === s || hoverRef.current === t));
-        const grad = ctx.createLinearGradient(s.sx, s.sy as number, t.sx, t.sy as number);
-        const base = lit ? 0.45 : hovered ? 0.55 : firing ? 0.35 : 0.05 + depth * 0.1;
-        grad.addColorStop(0, hexToRgba(colourFor(s.label), base));
-        grad.addColorStop(1, hexToRgba(colourFor(t.label), base));
-        ctx.strokeStyle = lit ? hexToRgba(WRITE_COLOUR, 0.55) : grad;
-        ctx.lineWidth = lit || hovered ? 1.6 : 0.8;
-        ctx.beginPath();
-        ctx.moveTo(s.sx, s.sy as number);
-        ctx.lineTo(t.sx, t.sy as number);
-        ctx.stroke();
-        if (lit || hs || ht || firing) {
-          // light packet travelling source -> target
-          const prog = ((packets.get(l.id) ?? Math.random()) + (firing ? 0.03 : 0.012)) % 1;
-          packets.set(l.id, prog);
-          const px = s.sx + (t.sx - s.sx) * prog;
-          const py = (s.sy as number) + ((t.sy as number) - (s.sy as number)) * prog;
-          const pc = lit ? WRITE_COLOUR : firing && !hs && !ht ? HOLO_CORE : READ_COLOUR;
-          const pg = ctx.createRadialGradient(px, py, 0, px, py, 7);
-          pg.addColorStop(0, hexToRgba(pc, 0.9));
-          pg.addColorStop(1, hexToRgba(pc, 0));
-          ctx.fillStyle = pg;
-          ctx.beginPath();
-          ctx.arc(px, py, 7, 0, Math.PI * 2);
-          ctx.fill();
-        } else {
-          packets.delete(l.id);
-        }
-        if (lit || hovered) {
-          ctx.fillStyle = 'rgba(203, 213, 225, 0.8)';
-          ctx.font = `${Math.max(9, 10 * depth)}px ui-monospace, monospace`;
-          ctx.fillText(
-            l.type,
-            (s.sx + t.sx) / 2 + 4,
-            ((s.sy as number) + (t.sy as number)) / 2 - 3
-          );
-        }
-      }
-      ctx.restore();
-
-      // ---- nodes, far to near, as lit spheres ----
-      const ordered = [...nodes].sort((p, q) => (p.depth ?? 0) - (q.depth ?? 0));
-      // Label sparingly: the best-connected nodes only, and none of the unrelated ones
-      // while something is focused, so the picture reads around what you're inspecting
-      const labelThreshold =
-        nodes.length > 200 ? 9 : nodes.length > 120 ? 7 : nodes.length > 30 ? 5 : 2;
-      for (const n of ordered) {
-        const x = n.sx as number;
-        const y = n.sy as number;
-        const r = n.sr as number;
-        const depth = n.depth ?? 1;
-        const baseColour = colourFor(n.label);
-        const rec = recencyRef.current.get(n.id);
-        const recency = rec
-          ? Math.exp(-((now - rec.at) / 1000) / (rec.live ? RECENCY_LIVE_TAU : RECENCY_GRAPH_TAU))
-          : 0;
-        const colour = rec ? mixHex(baseColour, rec.colour, Math.min(0.9, recency)) : baseColour;
-        const hl = highlightsRef.current.get(n.id);
-        if (hl && hl.until < now) highlightsRef.current.delete(n.id);
-        const active = hl && hl.until > now ? hl : undefined;
-        const hovered = hoverRef.current === n || selected?.id === n.id;
-        const fog = asleep ? 0.35 : Math.min(1, 0.35 + depth * 0.55);
-
-        // halo (additive)
+      // The graph is drawn on its own layer so it can be mirrored onto the floor
+      let bottom = 0;
+      for (const n of nodes) bottom = Math.max(bottom, (n.sy as number) + (n.sr as number));
+      floorY += (Math.min(h - 84, bottom + 16) - floorY) * Math.min(1, dt * 2);
+      const main = ctx;
+      lctx.clearRect(0, 0, w, h);
+      {
+        const ctx = lctx;
+        // ---- edges (additive) with light packets on active ones ----
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
-        const haloR = r * (active ? 3.2 : 2.1 + recency * 1.6);
-        const halo = ctx.createRadialGradient(x, y, r * 0.6, x, y, haloR);
-        halo.addColorStop(
-          0,
-          hexToRgba(active ? active.colour : colour, (active ? 0.5 : 0.22 + recency * 0.3) * fog)
-        );
-        halo.addColorStop(1, hexToRgba(active ? active.colour : colour, 0));
-        ctx.fillStyle = halo;
-        ctx.beginPath();
-        ctx.arc(x, y, haloR, 0, Math.PI * 2);
-        ctx.fill();
-        if (active) {
-          const life = (active.until - now) / (HIGHLIGHT_MS[active.kind] ?? 8000);
-          const ring = r + 6 + (1 - life) * 26;
-          ctx.strokeStyle = hexToRgba(active.colour, 0.6 * life);
-          ctx.lineWidth = 1.5;
+        const packets = packetsRef.current;
+        for (const l of linksRef.current) {
+          const s = l.source as SimNode;
+          const t = l.target as SimNode;
+          if (s.sx === undefined || t.sx === undefined) continue;
+          const depth = ((s.depth ?? 1) + (t.depth ?? 1)) / 2;
+          const flash = linkFlashRef.current.get(l.id);
+          const hs = highlightsRef.current.get(s.id);
+          const ht = highlightsRef.current.get(t.id);
+          const lit = (flash && flash > now) || (hs && ht);
+          const firing = fires.has(l.id);
+          const focused = focusId !== undefined && (s.id === focusId || t.id === focusId);
+          if (focused) neighbours.add(s.id === focusId ? t.id : s.id);
+          const hovered =
+            focused || (hoverRef.current && (hoverRef.current === s || hoverRef.current === t));
+          const grad = ctx.createLinearGradient(s.sx, s.sy as number, t.sx, t.sy as number);
+          const base = lit ? 0.45 : hovered ? 0.55 : firing ? 0.35 : 0.05 + depth * 0.1;
+          grad.addColorStop(0, hexToRgba(colourFor(s.label), base));
+          grad.addColorStop(1, hexToRgba(colourFor(t.label), base));
+          ctx.strokeStyle = lit ? hexToRgba(WRITE_COLOUR, 0.55) : grad;
+          ctx.lineWidth = lit || hovered ? 1.6 : 0.8;
           ctx.beginPath();
-          ctx.arc(x, y, ring, 0, Math.PI * 2);
+          ctx.moveTo(s.sx, s.sy as number);
+          ctx.lineTo(t.sx, t.sy as number);
           ctx.stroke();
-          const ring2 = r + 6 + (((1 - life) * 26 + 13) % 26);
-          ctx.strokeStyle = hexToRgba(active.colour, 0.3 * life);
-          ctx.beginPath();
-          ctx.arc(x, y, ring2, 0, Math.PI * 2);
-          ctx.stroke();
+          if (lit || hs || ht || firing) {
+            // light packet travelling source -> target
+            const prog = ((packets.get(l.id) ?? Math.random()) + (firing ? 0.03 : 0.012)) % 1;
+            packets.set(l.id, prog);
+            const px = s.sx + (t.sx - s.sx) * prog;
+            const py = (s.sy as number) + ((t.sy as number) - (s.sy as number)) * prog;
+            const pc = lit ? WRITE_COLOUR : firing && !hs && !ht ? HOLO_CORE : READ_COLOUR;
+            const pg = ctx.createRadialGradient(px, py, 0, px, py, 7);
+            pg.addColorStop(0, hexToRgba(pc, 0.9));
+            pg.addColorStop(1, hexToRgba(pc, 0));
+            ctx.fillStyle = pg;
+            ctx.beginPath();
+            ctx.arc(px, py, 7, 0, Math.PI * 2);
+            ctx.fill();
+          } else {
+            packets.delete(l.id);
+          }
+          if (lit || hovered) {
+            ctx.fillStyle = 'rgba(203, 213, 225, 0.8)';
+            ctx.font = `${Math.max(9, 10 * depth)}px ui-monospace, monospace`;
+            ctx.fillText(
+              l.type,
+              (s.sx + t.sx) / 2 + 4,
+              ((s.sy as number) + (t.sy as number)) / 2 - 3
+            );
+          }
         }
         ctx.restore();
 
-        // sphere shading
-        const sphere = ctx.createRadialGradient(x - r * 0.35, y - r * 0.35, r * 0.1, x, y, r);
-        sphere.addColorStop(0, hexToRgba('#ffffff', 0.9 * fog));
-        sphere.addColorStop(0.35, hexToRgba(colour, fog));
-        sphere.addColorStop(1, hexToRgba(colour, 0.35 * fog));
-        ctx.fillStyle = sphere;
-        ctx.beginPath();
-        ctx.arc(x, y, r, 0, Math.PI * 2);
-        ctx.fill();
-        if (hovered) {
-          ctx.strokeStyle = '#f3f4f6';
-          ctx.lineWidth = 1.5;
-          ctx.stroke();
-        }
-        const related = focusId !== undefined && (n.id === focusId || neighbours.has(n.id));
-        const wellConnected = n.degree >= labelThreshold && (focusId === undefined || related);
-        if (hovered || active || related || wellConnected) {
-          const size = Math.max(9, 11 * depth);
-          ctx.font = `${hovered || active || related ? 600 : 400} ${size}px ui-sans-serif, system-ui, sans-serif`;
-          const tw = ctx.measureText(n.name).width;
-          // holographic caption: hairline + text
-          ctx.strokeStyle = hexToRgba(colour, 0.35 * fog);
-          ctx.lineWidth = 1;
+        // ---- nodes, far to near, as lit spheres ----
+        const ordered = [...nodes].sort((p, q) => (p.depth ?? 0) - (q.depth ?? 0));
+        // Label sparingly: the best-connected nodes only, and none of the unrelated ones
+        // while something is focused, so the picture reads around what you're inspecting
+        const labelThreshold =
+          nodes.length > 200 ? 9 : nodes.length > 120 ? 7 : nodes.length > 30 ? 5 : 2;
+        for (const n of ordered) {
+          const x = n.sx as number;
+          const y = n.sy as number;
+          const r = n.sr as number;
+          const depth = n.depth ?? 1;
+          const baseColour = colourFor(n.label);
+          const rec = recencyRef.current.get(n.id);
+          const recency = rec
+            ? Math.exp(-((now - rec.at) / 1000) / (rec.live ? RECENCY_LIVE_TAU : RECENCY_GRAPH_TAU))
+            : 0;
+          const colour = rec ? mixHex(baseColour, rec.colour, Math.min(0.9, recency)) : baseColour;
+          const hl = highlightsRef.current.get(n.id);
+          if (hl && hl.until < now) highlightsRef.current.delete(n.id);
+          const active = hl && hl.until > now ? hl : undefined;
+          const hovered = hoverRef.current === n || focusId === n.id;
+          const fog = asleep ? 0.35 : Math.min(1, 0.35 + depth * 0.55);
+
+          // halo (additive)
+          ctx.save();
+          ctx.globalCompositeOperation = 'lighter';
+          const haloR = r * (active ? 3.2 : 2.1 + recency * 1.6);
+          const halo = ctx.createRadialGradient(x, y, r * 0.6, x, y, haloR);
+          halo.addColorStop(
+            0,
+            hexToRgba(active ? active.colour : colour, (active ? 0.5 : 0.22 + recency * 0.3) * fog)
+          );
+          halo.addColorStop(1, hexToRgba(active ? active.colour : colour, 0));
+          ctx.fillStyle = halo;
           ctx.beginPath();
-          ctx.moveTo(x + r + 2, y);
-          ctx.lineTo(x + r + 8, y);
-          ctx.stroke();
-          ctx.fillStyle = 'rgba(5, 7, 11, 0.45)';
-          ctx.fillRect(x + r + 8, y - size * 0.8, tw + 6, size + 4);
-          ctx.fillStyle =
-            hovered || active || related ? '#f3f4f6' : `rgba(226, 232, 240, ${0.4 + fog * 0.5})`;
-          ctx.fillText(n.name, x + r + 11, y + size * 0.35);
+          ctx.arc(x, y, haloR, 0, Math.PI * 2);
+          ctx.fill();
+          if (active) {
+            const life = (active.until - now) / (HIGHLIGHT_MS[active.kind] ?? 8000);
+            const ring = r + 6 + (1 - life) * 26;
+            ctx.strokeStyle = hexToRgba(active.colour, 0.6 * life);
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(x, y, ring, 0, Math.PI * 2);
+            ctx.stroke();
+            const ring2 = r + 6 + (((1 - life) * 26 + 13) % 26);
+            ctx.strokeStyle = hexToRgba(active.colour, 0.3 * life);
+            ctx.beginPath();
+            ctx.arc(x, y, ring2, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+          ctx.restore();
+
+          // sphere shading
+          const sphere = ctx.createRadialGradient(x - r * 0.35, y - r * 0.35, r * 0.1, x, y, r);
+          sphere.addColorStop(0, hexToRgba('#ffffff', 0.9 * fog));
+          sphere.addColorStop(0.35, hexToRgba(colour, fog));
+          sphere.addColorStop(1, hexToRgba(colour, 0.35 * fog));
+          ctx.fillStyle = sphere;
+          ctx.beginPath();
+          ctx.arc(x, y, r, 0, Math.PI * 2);
+          ctx.fill();
+          if (hovered) {
+            ctx.strokeStyle = '#f3f4f6';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+          }
+          const related = focusId !== undefined && (n.id === focusId || neighbours.has(n.id));
+          const wellConnected = n.degree >= labelThreshold && (focusId === undefined || related);
+          if (hovered || active || related || wellConnected) {
+            const size = Math.max(9, 11 * depth);
+            ctx.font = `${hovered || active || related ? 600 : 400} ${size}px ui-sans-serif, system-ui, sans-serif`;
+            const tw = ctx.measureText(n.name).width;
+            // holographic caption: hairline + text
+            ctx.strokeStyle = hexToRgba(colour, 0.35 * fog);
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(x + r + 2, y);
+            ctx.lineTo(x + r + 8, y);
+            ctx.stroke();
+            ctx.fillStyle = 'rgba(5, 7, 11, 0.45)';
+            ctx.fillRect(x + r + 8, y - size * 0.8, tw + 6, size + 4);
+            ctx.fillStyle =
+              hovered || active || related ? '#f3f4f6' : `rgba(226, 232, 240, ${0.4 + fog * 0.5})`;
+            ctx.fillText(n.name, x + r + 11, y + size * 0.35);
+          }
         }
       }
+
+      // ---- floor: soft shadow under the graph, then a squashed, fading reflection ----
+      ctx.save();
+      ctx.translate(cx, floorY);
+      ctx.scale(1, 0.16);
+      const shadow = ctx.createRadialGradient(0, 0, 0, 0, 0, 280);
+      shadow.addColorStop(0, 'rgba(0, 0, 0, 0.6)');
+      shadow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = shadow;
+      ctx.fillRect(-320, -320, 640, 640);
+      ctx.restore();
+      main.drawImage(layer, 0, 0, w, h);
+      mctx.clearRect(0, 0, w, h);
+      mctx.save();
+      mctx.translate(0, floorY);
+      mctx.scale(1, -0.55);
+      mctx.translate(0, -floorY);
+      mctx.drawImage(layer, 0, 0, w, h);
+      mctx.restore();
+      mctx.globalCompositeOperation = 'destination-in';
+      const fade = mctx.createLinearGradient(0, floorY, 0, floorY + 150);
+      fade.addColorStop(0, 'rgba(0, 0, 0, 0.4)');
+      fade.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      mctx.fillStyle = fade;
+      mctx.fillRect(0, floorY, w, h - floorY);
+      mctx.globalCompositeOperation = 'source-over';
+      main.drawImage(mirror, 0, 0, w, h);
 
       // ---- vignette + scanlines + HUD brackets ----
       const vig = ctx.createRadialGradient(
@@ -755,7 +822,7 @@ export default function BrainView({
         Math.max(w, h) * 0.75
       );
       vig.addColorStop(0, 'rgba(0,0,0,0)');
-      vig.addColorStop(1, 'rgba(0,0,0,0.55)');
+      vig.addColorStop(1, `rgba(0,0,0,${plate ? 0.3 : 0.55})`);
       ctx.fillStyle = vig;
       ctx.fillRect(0, 0, w, h);
       ctx.fillStyle = 'rgba(255,255,255,0.025)';
@@ -786,7 +853,7 @@ export default function BrainView({
       cancelAnimationFrame(raf);
       observer.disconnect();
     };
-  }, [agentStatus, selected, tick]);
+  }, [ready]);
 
   // ---- interaction --------------------------------------------------------------
   const pick = (e: React.MouseEvent<HTMLCanvasElement>): SimNode | null => {
@@ -931,9 +998,9 @@ export default function BrainView({
         style={{ display: 'block', cursor: 'grab' }}
       />
 
-      {/* Top-left: state, search, focus, deep-brain feed — one aligned column */}
+      {/* Left: state, search, focus, deep-brain feed, usage, telemetry — one column */}
       <div
-        className="pointer-events-none absolute top-3 left-3 flex flex-col gap-2"
+        className="pointer-events-none absolute top-3 bottom-3 left-3 flex flex-col gap-2"
         style={{ width: HUD.colWidth, fontFamily: HUD.font, fontSize: 12, color: HUD.text }}
       >
         <div className="flex items-center gap-2">
@@ -1041,11 +1108,14 @@ export default function BrainView({
             })}
           </HudPanel>
         )}
-        <HudPanel title={`${agentName.toUpperCase()} // DEEP BRAIN`}>
+        <HudPanel
+          title={`${agentName.toUpperCase()} // DEEP BRAIN`}
+          className="min-h-0 flex-1 overflow-hidden"
+        >
           {feed.length === 0 ? (
             <HudRow colour={HUD.dim}>waiting for the first thought…</HudRow>
           ) : (
-            feed.slice(0, 7).map((ev, i) => (
+            feed.slice(0, 40).map((ev, i) => (
               <HudRow key={`${ev.ts}-${i}`} colour={activationColour(ev.kind)}>
                 {activationGlyph(ev.kind)} {ev.kind.toUpperCase().padEnd(9)}
                 <span style={{ color: HUD.text }}>{activationText(ev).slice(0, 30)}</span>
@@ -1054,14 +1124,7 @@ export default function BrainView({
             ))
           )}
         </HudPanel>
-      </div>
-
-      {/* Bottom-left: USAGE above TELEMETRY, as on the video */}
-      <div
-        className="pointer-events-none absolute bottom-3 left-3 flex flex-col gap-2"
-        style={{ width: HUD.colWidth }}
-      >
-        <div>
+        <div className="mt-auto">
           {boostChip && <HudBoostChip minutesLeft={boostChip.minutes} />}
           <HudPanel
             title={`OPENAI // USAGE — ${usageMode === 'api' ? 'API' : 'SUB'} MODE${boostChip ? ' · BOOST' : ''}`}
