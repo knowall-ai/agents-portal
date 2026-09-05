@@ -1,5 +1,6 @@
 // Azure Resource Manager helpers: Resource Graph, subscriptions, tenants and the Activity Log.
 import type {
+  MetricPoint,
   PermissionItem,
   ActivityEvent,
   AzureResource,
@@ -457,4 +458,46 @@ export async function runVmScript(
   }
   const message = result.properties?.output?.value?.map((v) => v.message ?? '').join('\n') ?? '';
   return parseRunCommandMessage(message);
+}
+
+/** Azure Monitor normally answers in well under a second; never wait on it for longer than this */
+const METRICS_TIMEOUT_MS = 15_000;
+
+interface MetricsResponse {
+  value: {
+    name: { value: string };
+    timeseries: { data: { timeStamp: string; average?: number }[] }[];
+  }[];
+}
+
+/**
+ * Average `Percentage CPU` for one VM over the last `hours`, one sample per
+ * `intervalMinutes`, from Azure Monitor. Needs Monitoring Reader (or Reader)
+ * on the VM, which anyone who can see the VM in the portal already has.
+ */
+export async function listVmCpu(
+  token: string,
+  resourceId: string,
+  hours: number,
+  intervalMinutes: number
+): Promise<MetricPoint[]> {
+  const end = new Date();
+  const start = new Date(end.getTime() - hours * 60 * 60 * 1000);
+  const query = new URLSearchParams({
+    'api-version': '2023-10-01',
+    metricnames: 'Percentage CPU',
+    timespan: `${start.toISOString()}/${end.toISOString()}`,
+    interval: `PT${intervalMinutes}M`,
+    aggregation: 'Average',
+  });
+  const result = await armFetch<MetricsResponse>(
+    token,
+    `${resourceId}/providers/Microsoft.Insights/metrics?${query}`,
+    { signal: AbortSignal.timeout(METRICS_TIMEOUT_MS) }
+  );
+  const data = result.value[0]?.timeseries[0]?.data ?? [];
+  return data.map((d) => ({
+    ts: Date.parse(d.timeStamp),
+    value: typeof d.average === 'number' ? Math.round(d.average * 10) / 10 : null,
+  }));
 }

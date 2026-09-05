@@ -6,6 +6,7 @@ import type { AgentRegistryEntry } from '@/types';
 import {
   findVm,
   listActivityLog,
+  listVmCpu,
   listAgentResources,
   listRoleAssignments,
   listSubscriptions,
@@ -35,6 +36,7 @@ import type {
   AgentBrain,
   AgentCosts,
   AgentDetail,
+  AgentMetrics,
   AgentLicensing,
   AgentPermissions,
   AgentSoul,
@@ -545,7 +547,7 @@ export async function getActivity(ctx: UserContext, agent: AgentDetail): Promise
     });
 
     const github = agent.repo
-      ? listRepoCommits(agent.repo, who).catch((error) => {
+      ? listRepoCommits(agent.repo, who, 1000, 365).catch((error) => {
           console.warn(`GitHub commits failed for ${agent.repo}:`, error);
           return [] as ActivityEvent[];
         })
@@ -563,10 +565,33 @@ export async function getActivity(ctx: UserContext, agent: AgentDetail): Promise
     })();
 
     const results = await Promise.all([...azure, github, foundry]);
-    return results
-      .flat()
-      .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
-      .slice(0, 50);
+    // Untruncated: the calendar aggregates a whole year; the route trims the feed
+    return results.flat().sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+  });
+}
+
+/** VM CPU series for the agent's virtual machines over the last `hours`. */
+export async function getMetrics(
+  ctx: UserContext,
+  agent: AgentDetail,
+  hours: number
+): Promise<AgentMetrics> {
+  const intervalMinutes = hours > 24 ? 60 : 30;
+  return cached(`metrics:${scope(ctx)}:${agent.id}:${hours}`, async () => {
+    const vms = agent.resources.filter(
+      (r) => r.type.toLowerCase() === 'microsoft.compute/virtualmachines'
+    );
+    const cpu = await Promise.all(
+      vms.map(async (vm) => ({
+        resourceId: vm.id,
+        name: vm.name,
+        points: await listVmCpu(ctx.armToken, vm.id, hours, intervalMinutes).catch((error) => {
+          console.warn(`CPU metrics failed for ${vm.name}:`, error);
+          return [];
+        }),
+      }))
+    );
+    return { hours, intervalMinutes, cpu };
   });
 }
 
