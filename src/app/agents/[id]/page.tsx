@@ -284,6 +284,7 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
                         <Countdown
                           until={new Date(boost.data.boost.until).getTime()}
                           className="text-xs opacity-90"
+                          onDone={() => boost.refetch()}
                         />
                       )}
                     </button>
