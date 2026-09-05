@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cached } from './cache';
+import { cached, getCacheTtlMs, invalidate } from './cache';
 
 afterEach(() => {
   vi.useRealTimers();
@@ -69,5 +69,54 @@ describe('cached', () => {
         1000
       )
     ).rejects.toThrow('still down');
+  });
+});
+
+describe('invalidate', () => {
+  it('drops stored keys under the prefix and leaves the rest alone', async () => {
+    const stamp = Math.random();
+    const kept = vi.fn(async () => 'other');
+    await cached(`keep:${stamp}`, kept, 60_000);
+    const dropped = vi.fn(async () => 'first');
+    await cached(`drop:${stamp}:a`, dropped, 60_000);
+    await cached(`drop:${stamp}:b`, dropped, 60_000);
+    expect(dropped).toHaveBeenCalledTimes(2);
+
+    invalidate(`drop:${stamp}`);
+
+    const reloaded = vi.fn(async () => 'second');
+    await expect(cached(`drop:${stamp}:a`, reloaded, 60_000)).resolves.toBe('second');
+    await expect(cached(`drop:${stamp}:b`, reloaded, 60_000)).resolves.toBe('second');
+    // The unrelated key is still served from the cache
+    await expect(cached(`keep:${stamp}`, kept, 60_000)).resolves.toBe('other');
+    expect(kept).toHaveBeenCalledTimes(1);
+  });
+
+  it('drops a load already in flight, so the next caller starts a fresh one', async () => {
+    const key = `test:inflight:${Math.random()}`;
+    let release: (value: string) => void = () => undefined;
+    const slow = vi.fn(() => new Promise<string>((resolve) => (release = resolve)));
+    const first = cached(key, slow, 60_000);
+
+    invalidate(key);
+
+    const second = vi.fn(async () => 'fresh');
+    await expect(cached(key, second, 60_000)).resolves.toBe('fresh');
+    expect(second).toHaveBeenCalledTimes(1);
+    release('stale');
+    await expect(first).resolves.toBe('stale');
+  });
+});
+
+describe('getCacheTtlMs', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('reads CACHE_TTL_SECONDS and falls back to 60 s for anything unusable', () => {
+    vi.stubEnv('CACHE_TTL_SECONDS', '5');
+    expect(getCacheTtlMs()).toBe(5000);
+    vi.stubEnv('CACHE_TTL_SECONDS', 'not-a-number');
+    expect(getCacheTtlMs()).toBe(60_000);
+    vi.stubEnv('CACHE_TTL_SECONDS', '0');
+    expect(getCacheTtlMs()).toBe(60_000);
   });
 });
