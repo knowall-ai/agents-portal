@@ -44,6 +44,8 @@ export default function AgentAvatar({
   className = '',
 }: AgentAvatarProps) {
   // Kept in one object keyed on `image`, so a new avatar URL starts over.
+  // Adjusting state during render is React's own answer to a prop change
+  // (react.dev/reference/react/useState); an effect would show the old image first.
   const [tries, setTries] = useState({ image, attempt: 0, failed: false });
   if (tries.image !== image) setTries({ image, attempt: 0, failed: false });
 
@@ -55,7 +57,7 @@ export default function AgentAvatar({
       RETRY_MS
     );
     return () => clearTimeout(timer);
-  }, [tries]);
+  }, [tries.failed, tries.attempt]);
 
   const initials = name
     .replace(/\(.*?\)/g, '')
