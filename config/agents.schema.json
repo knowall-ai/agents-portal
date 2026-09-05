@@ -64,7 +64,12 @@
             "description": "Subscriptions the resourceGroups live in. Required when the portal trusts more than one tenant, since resource-group names are only unique inside a subscription"
           },
           "planned": { "type": "boolean" },
-          "avatarUrl": { "type": "string" },
+          "avatarUrl": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^https://",
+            "description": "Override only: an https URL for the picture. Leave unset so it comes from the Bot Service icon or the Entra account photo."
+          },
           "teamsUpn": {
             "type": "string",
             "format": "email",

@@ -450,6 +450,28 @@ export interface Tenant {
 }
 
 // ---------------------------------------------------------------------------
+// Avatar
+// ---------------------------------------------------------------------------
+
+/** An Entra account's profile photo, as Microsoft Graph serves it. */
+export interface UserPhoto {
+  contentType: string;
+  base64: string;
+}
+
+/** The agent's picture: a URL to redirect to, or the bytes to serve. */
+export type AgentAvatar = { redirect: string } | UserPhoto;
+
+/**
+ * Why a lookup ended: `found` and `none` are settled answers worth caching,
+ * `failed` is an upstream error the route turns into 502 and never caches.
+ */
+export type AvatarResult =
+  | { status: 'found'; avatar: AgentAvatar }
+  | { status: 'none' }
+  | { status: 'failed'; message: string };
+
+// ---------------------------------------------------------------------------
 // Costs
 // ---------------------------------------------------------------------------
 

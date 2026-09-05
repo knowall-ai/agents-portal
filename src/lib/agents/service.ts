@@ -5,6 +5,7 @@ import { getRegistry, getRegistryEntry as lookupRegistryEntry } from '@/lib/regi
 import type { AgentRegistryEntry } from '@/types';
 import {
   findVm,
+  getBotIconUrl,
   listActivityLog,
   listVmCpu,
   listAgentResources,
@@ -20,7 +21,7 @@ import {
 } from '@/lib/providers/foundry';
 import { getRepoMarkdown, listRepoCommits, listRepoSkills } from '@/lib/providers/github';
 import { probeUrl } from '@/lib/providers/health';
-import { getAppAccess, getUserAccess, getUserLicensing } from '@/lib/providers/graph';
+import { getAppAccess, getUserAccess, getUserLicensing, getUserPhoto } from '@/lib/providers/graph';
 import { fetchBrainSnapshot, isValidBrainUrl } from '@/lib/providers/reverie';
 import { fixtureSnapshot } from '@/lib/brain-fixture';
 import {
@@ -40,12 +41,20 @@ import type {
   AgentLicensing,
   AgentPermissions,
   AgentSoul,
+  AvatarResult,
   CostSourceStatus,
   CostsSummary,
   FoundryAssistant,
   Skill,
 } from '@/types';
-import { buildAgent, claimsResource, groupResources, sortAgents } from './discover';
+import {
+  buildAgent,
+  claimsResource,
+  groupResources,
+  isDefaultBotIcon,
+  safeHttpsUrl,
+  sortAgents,
+} from './discover';
 import { addTotals, buildAgentCosts, type CostInputs } from './costs';
 import { mergeSkillSources, skillSourcesFor } from './skills';
 import {
@@ -160,6 +169,58 @@ export async function getSkills(ctx: UserContext, agent: AgentDetail): Promise<S
       return [...mergeSkillSources(repoLists), ...assistantsToSkills(assistants)];
     },
     10 * 60 * 1000
+  );
+}
+
+const AVATAR_TTL = 60 * 60 * 1000;
+
+/**
+ * The agent's picture from where it lives: the Bot Service icon (set under Bot
+ * profile in the Azure portal), else the profile photo of the Entra account
+ * behind `agent-teams-upn`. Read with the signed-in user's tokens, so a viewer
+ * who cannot read the bot or the directory gets initials instead.
+ *
+ * Each source still falls back to the next one, but a source that errored is
+ * remembered: if nothing was found the result is `failed` rather than `none`,
+ * so the route answers 502 instead of claiming there is no picture. Only
+ * settled answers are cached — a failure is retried on the next request.
+ */
+export async function getAvatar(ctx: UserContext, agent: AgentDetail): Promise<AvatarResult> {
+  return cached<AvatarResult>(
+    `avatar:${scope(ctx)}:${agent.id}`,
+    async (): Promise<AvatarResult> => {
+      let failure: string | undefined;
+      const note = (what: string, error: unknown): void => {
+        failure = error instanceof Error ? error.message : String(error);
+        console.warn(`${what} lookup failed for ${agent.id}:`, failure);
+      };
+
+      const bot = agent.resources.find((r) => r.type === 'microsoft.botservice/botservices');
+      if (bot) {
+        try {
+          const icon = await getBotIconUrl(ctx.armToken, bot.id);
+          const url = isDefaultBotIcon(icon) ? undefined : safeHttpsUrl(icon);
+          if (url) return { status: 'found', avatar: { redirect: url } };
+        } catch (error) {
+          note('Bot icon', error);
+        }
+      }
+      if (agent.teamsUpn) {
+        try {
+          // No token means the Graph permission is not consented: a settled
+          // "no picture available", not an upstream failure
+          const token = await getResourceToken(ctx, GRAPH_DIRECTORY_SCOPE);
+          if (token) {
+            const photo = await getUserPhoto(token, agent.teamsUpn);
+            if (photo) return { status: 'found', avatar: photo };
+          }
+        } catch (error) {
+          note('Account photo', error);
+        }
+      }
+      return failure ? { status: 'failed', message: failure } : { status: 'none' };
+    },
+    (value) => (value.status === 'failed' ? 0 : AVATAR_TTL)
   );
 }
 

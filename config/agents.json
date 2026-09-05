@@ -13,14 +13,25 @@
       "repo": "knowall-ai/sallie-openclaw",
       "skillsPath": ".claude/skills",
       "skillSources": [
-        { "repo": "knowall-ai/claude-plugins", "path": "skills" },
-        { "repo": "T-Minus-15/claude-plugins", "path": "skills" }
+        {
+          "repo": "knowall-ai/claude-plugins",
+          "path": "skills"
+        },
+        {
+          "repo": "T-Minus-15/claude-plugins",
+          "path": "skills"
+        }
       ],
       "resourceGroups": ["ka-agents"],
-      "avatarUrl": "/agents/sallie.png",
       "appRegistrations": [
-        { "appId": "27756f8e-e451-4c5d-91c3-e76035f376a6", "label": "Sallie MS365 MCP" },
-        { "appId": "2b052ffe-e0f5-4a0e-ba85-910d56751ebc", "label": "Sallie - ClawdBot Portal" }
+        {
+          "appId": "27756f8e-e451-4c5d-91c3-e76035f376a6",
+          "label": "Sallie MS365 MCP"
+        },
+        {
+          "appId": "2b052ffe-e0f5-4a0e-ba85-910d56751ebc",
+          "label": "Sallie - ClawdBot Portal"
+        }
       ],
       "boost": {
         "script": "/home/sallie/sallie-openclaw/workspace/scripts/boost.sh",
@@ -39,8 +50,7 @@
       "portalUrl": "https://zaplie-prod-webapp.azurewebsites.net",
       "repo": "knowall-ai/zaplie-bot",
       "resourceGroups": ["ka-zaplie-prod"],
-      "healthUrl": "https://zaplie-prod-webapp.azurewebsites.net",
-      "avatarUrl": "/agents/zaplie.png"
+      "healthUrl": "https://zaplie-prod-webapp.azurewebsites.net"
     },
     {
       "id": "zaplie-test",
@@ -51,8 +61,7 @@
       "description": "Test deployment of the Zaplie Teams bot with its Azure AI Foundry agents.",
       "repo": "knowall-ai/zaplie-bot",
       "resourceGroups": ["ka-zaplie-test"],
-      "portalUrl": "https://zaplie-test-webapp.azurewebsites.net",
-      "avatarUrl": "/agents/zaplie.png"
+      "portalUrl": "https://zaplie-test-webapp.azurewebsites.net"
     },
     {
       "id": "winnie",
@@ -72,8 +81,7 @@
       "environment": "prod",
       "description": "AI business analyst that joins Microsoft Teams meetings as a real-time participant (T-Minus-15).",
       "repo": "knowall-ai/preppie-bot",
-      "resourceGroups": ["tminus15agents"],
-      "avatarUrl": "/agents/pennie.png"
+      "resourceGroups": ["tminus15agents"]
     },
     {
       "id": "pennie-test",
@@ -83,8 +91,7 @@
       "environment": "test",
       "description": "Test deployment of Pennie on a spot VM.",
       "repo": "knowall-ai/preppie-bot",
-      "resourceGroups": ["tminus15agents-test"],
-      "avatarUrl": "/agents/pennie.png"
+      "resourceGroups": ["tminus15agents-test"]
     }
   ]
 }
