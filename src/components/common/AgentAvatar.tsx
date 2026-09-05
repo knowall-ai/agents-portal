@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { AgentStatus } from '@/types';
 
 interface AgentAvatarProps {
@@ -25,6 +25,16 @@ const dotClasses = {
   xl: 'w-4 h-4 border-2',
 };
 
+/** One first try plus two retries: a slow avatar fetch should not mean initials forever. */
+const MAX_ATTEMPTS = 3;
+const RETRY_MS = 8_000;
+
+/** Cache-bust each retry, so the browser really asks again. */
+function attemptUrl(image: string, attempt: number): string {
+  if (attempt === 0) return image;
+  return `${image}${image.includes('?') ? '&' : '?'}retry=${attempt}`;
+}
+
 /** Agent profile picture with initials fallback and an optional status dot. */
 export default function AgentAvatar({
   name,
@@ -33,7 +43,20 @@ export default function AgentAvatar({
   size = 'md',
   className = '',
 }: AgentAvatarProps) {
-  const [imageError, setImageError] = useState(false);
+  // Kept in one object keyed on `image`, so a new avatar URL starts over.
+  const [tries, setTries] = useState({ image, attempt: 0, failed: false });
+  if (tries.image !== image) setTries({ image, attempt: 0, failed: false });
+
+  // Initials are shown while we wait; then the image is asked for again.
+  useEffect(() => {
+    if (!tries.failed || tries.attempt + 1 >= MAX_ATTEMPTS) return;
+    const timer = setTimeout(
+      () => setTries((t) => ({ ...t, attempt: t.attempt + 1, failed: false })),
+      RETRY_MS
+    );
+    return () => clearTimeout(timer);
+  }, [tries]);
+
   const initials = name
     .replace(/\(.*?\)/g, '')
     .trim()
@@ -45,14 +68,15 @@ export default function AgentAvatar({
 
   return (
     <span className={`relative inline-block shrink-0 ${className}`}>
-      {image && !imageError ? (
+      {image && !tries.failed ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={image}
+          key={tries.attempt}
+          src={attemptUrl(image, tries.attempt)}
           alt={name}
           className={`${sizeClasses[size]} rounded-full object-cover`}
           style={{ border: '1px solid var(--border)' }}
-          onError={() => setImageError(true)}
+          onError={() => setTries((t) => ({ ...t, failed: true }))}
         />
       ) : (
         <span
