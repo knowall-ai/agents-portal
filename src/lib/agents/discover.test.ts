@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { AgentRegistryEntry, AzureResource } from '@/types';
 import {
   buildAgent,
+  OPENAI_PROJECT_ID,
+  providerId,
   claimsResource,
   deriveStatus,
   groupResources,
@@ -253,6 +255,63 @@ describe('helpers', () => {
   });
   it('slugifies tag values', () => {
     expect(slugify('Zaplie Test')).toBe('zaplie-test');
+  });
+});
+
+describe('provider ids from tags', () => {
+  it('reads well-formed OpenAI project and Anthropic workspace ids, and ignores junk', () => {
+    const good = groupResources(
+      [
+        resource({
+          tags: {
+            agent: 'poppie',
+            'agent-openai-project': 'proj_PeNiK7xb3bPeb6rMCijD6YTB',
+            'agent-anthropic-workspace': 'wrkspc_abc123def',
+          },
+        }),
+      ],
+      [],
+      ['agent']
+    );
+    const poppie = buildAgent(good[0], [], 't');
+    expect(poppie.openaiProjectId).toBe('proj_PeNiK7xb3bPeb6rMCijD6YTB');
+    expect(poppie.anthropicWorkspaceId).toBe('wrkspc_abc123def');
+    const junk = groupResources(
+      [resource({ tags: { agent: 'poppie', 'agent-openai-project': 'default project' } })],
+      [],
+      ['agent']
+    );
+    expect(buildAgent(junk[0], [], 't').openaiProjectId).toBeUndefined();
+  });
+
+  it('skips malformed values, and refuses to guess when resources disagree', () => {
+    const laterValid = groupResources(
+      [
+        resource({ name: 'a', tags: { agent: 'poppie', 'agent-openai-project': 'oops' } }),
+        resource({ name: 'b', tags: { agent: 'poppie', 'agent-openai-project': 'proj_good1' } }),
+      ],
+      [],
+      ['agent']
+    );
+    expect(buildAgent(laterValid[0], [], 't').openaiProjectId).toBe('proj_good1');
+    const disagree = groupResources(
+      [
+        resource({ name: 'a', tags: { agent: 'poppie', 'agent-openai-project': 'proj_one' } }),
+        resource({ name: 'b', tags: { agent: 'poppie', 'agent-openai-project': 'proj_two' } }),
+      ],
+      [],
+      ['agent']
+    );
+    expect(buildAgent(disagree[0], [], 't').openaiProjectId).toBeUndefined();
+    // a malformed registry override is ignored too
+    expect(
+      providerId(
+        'proj_',
+        [resource({ tags: { 'agent-openai-project': 'proj_tagged' } })],
+        'agent-openai-project',
+        OPENAI_PROJECT_ID
+      )
+    ).toBe('proj_tagged');
   });
 });
 
