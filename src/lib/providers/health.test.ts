@@ -238,4 +238,42 @@ describe('connectionPin', () => {
     connectionPin({ address: '93.184.216.34', family: 4 })('anything.example', {}, resolved);
     expect(resolved).toHaveBeenCalledWith(null, '93.184.216.34', 4);
   });
+
+  it('answers in array form when Node asks for every address (family autoselection)', () => {
+    const resolved = vi.fn();
+    connectionPin({ address: '93.184.216.34', family: 4 })(
+      'anything.example',
+      { all: true },
+      resolved
+    );
+    expect(resolved).toHaveBeenCalledWith(null, [{ address: '93.184.216.34', family: 4 }]);
+  });
+});
+
+describe('probe deadline', () => {
+  it('gives up after the deadline even when the socket never goes idle', async () => {
+    vi.useFakeTimers();
+    try {
+      const destroy = vi.fn();
+      const listeners: Record<string, (e: Error) => void> = {};
+      // A request that never answers and never reports a socket timeout
+      request.mockImplementation(() => ({
+        on: (event: string, listener: (e: Error) => void) => {
+          listeners[event] = listener;
+        },
+        end: () => undefined,
+        destroy: (error: Error) => {
+          destroy(error);
+          listeners.error?.(error);
+        },
+      }));
+      const pending = probeUrl('https://agents.example.com');
+      await vi.advanceTimersByTimeAsync(6_100);
+      const result = await pending;
+      expect(destroy).toHaveBeenCalled();
+      expect(result.reachable).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

@@ -118,9 +118,18 @@ export async function isProbeableUrl(url: string): Promise<boolean> {
 export function connectionPin(target: ProbeTarget) {
   return (
     _hostname: string,
-    _options: unknown,
-    callback: (error: null, address: string, family: number) => void
-  ) => callback(null, target.address, target.family);
+    options: { all?: boolean } | undefined,
+    callback: (
+      error: null,
+      address: string | { address: string; family: number }[],
+      family?: number
+    ) => void
+  ) => {
+    // Node's network-family autoselection asks with { all: true } and expects
+    // the array form; answering with a string there fails the request
+    if (options?.all) callback(null, [{ address: target.address, family: target.family }]);
+    else callback(null, target.address, target.family);
+  };
 }
 
 const PROBE_TIMEOUT_MS = 6_000;
@@ -133,6 +142,9 @@ const PROBE_TIMEOUT_MS = 6_000;
  */
 function probeStatus(url: string, target: ProbeTarget): Promise<number> {
   return new Promise((resolve, reject) => {
+    // An absolute deadline: the socket's own inactivity timeout resets on every
+    // byte, so a server trickling headers could hold getAgent open indefinitely
+    const deadline = setTimeout(() => req.destroy(new Error('Probe timed out')), PROBE_TIMEOUT_MS);
     const req = request(
       url,
       {
@@ -142,13 +154,17 @@ function probeStatus(url: string, target: ProbeTarget): Promise<number> {
         lookup: connectionPin(target),
       },
       (response) => {
+        clearTimeout(deadline);
         // The body is irrelevant and may be large: read none of it
         response.destroy();
         resolve(response.statusCode ?? 0);
       }
     );
     req.on('timeout', () => req.destroy(new Error('Probe timed out')));
-    req.on('error', reject);
+    req.on('error', (error) => {
+      clearTimeout(deadline);
+      reject(error);
+    });
     req.end();
   });
 }
