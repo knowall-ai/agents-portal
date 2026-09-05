@@ -140,7 +140,10 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
     ready ? `/api/agents/${id}/presence` : null,
     15_000
   );
-  const onCall = Boolean(presence.data?.presence.onCall);
+  // A failed poll leaves the last reading in `presence.data`; an agent that hung
+  // up while the request was failing would keep its chip. Show nothing instead.
+  const presenceNow = presence.error ? null : (presence.data?.presence ?? null);
+  const onCall = Boolean(presenceNow?.onCall);
 
   const agent = detail.data?.agent;
   const permissionCount = permissions.data
@@ -235,12 +238,12 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
                         <PhoneCall size={12} /> On a call
                       </span>
                     )}
-                    {presence.data?.presence && !presence.data.presence.error && !onCall && (
+                    {presenceNow && !presenceNow.error && !onCall && (
                       <span
                         className="kind-badge"
-                        title={`Teams presence: ${presence.data.presence.availability} / ${presence.data.presence.activity}`}
+                        title={`Teams presence: ${presenceNow.availability} / ${presenceNow.activity}`}
                       >
-                        Teams · {presenceLabel(presence.data.presence.availability)}
+                        Teams · {presenceLabel(presenceNow.availability)}
                       </span>
                     )}
                     <KindBadge kind={agent.kind} />

@@ -38,7 +38,7 @@ function BrainTile({ agent, height }: { agent: AgentSummary; height: number }) {
         error={brain.error}
         compact
         height={height}
-        onCall={Boolean(presence.data?.presence.onCall)}
+        onCall={!presence.error && Boolean(presence.data?.presence.onCall)}
       />
       <Link
         href={`/agents/${agent.id}?tab=brain`}

@@ -10,11 +10,19 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
   if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { id } = await params;
-  const agent = await getAgent(ctx, id);
-  if (!agent) return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
-
-  return NextResponse.json(
-    { presence: await getPresence(ctx, agent) },
-    { headers: { 'Cache-Control': 'no-store, private' } }
-  );
+  try {
+    const agent = await getAgent(ctx, id);
+    if (!agent) return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
+    return NextResponse.json(
+      { presence: await getPresence(ctx, agent) },
+      { headers: { 'Cache-Control': 'no-store, private' } }
+    );
+  } catch (error) {
+    console.error(`Failed to load presence for ${id}:`, error);
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json(
+      { error: 'Failed to load presence', details: message },
+      { status: 502 }
+    );
+  }
 }
