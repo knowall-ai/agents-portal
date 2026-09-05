@@ -256,6 +256,33 @@ describe('helpers', () => {
   });
 });
 
+describe('provider ids from tags', () => {
+  it('reads well-formed OpenAI project and Anthropic workspace ids, and ignores junk', () => {
+    const good = groupResources(
+      [
+        resource({
+          tags: {
+            agent: 'poppie',
+            'agent-openai-project': 'proj_PeNiK7xb3bPeb6rMCijD6YTB',
+            'agent-anthropic-workspace': 'wrkspc_abc123def',
+          },
+        }),
+      ],
+      [],
+      ['agent']
+    );
+    const poppie = buildAgent(good[0], [], 't');
+    expect(poppie.openaiProjectId).toBe('proj_PeNiK7xb3bPeb6rMCijD6YTB');
+    expect(poppie.anthropicWorkspaceId).toBe('wrkspc_abc123def');
+    const junk = groupResources(
+      [resource({ tags: { agent: 'poppie', 'agent-openai-project': 'default project' } })],
+      [],
+      ['agent']
+    );
+    expect(buildAgent(junk[0], [], 't').openaiProjectId).toBeUndefined();
+  });
+});
+
 describe('teamsCallUrl', () => {
   it('calls the agent account by UPN and nothing else', () => {
     expect(teamsCallUrl({ id: 'sallie', name: 'Sallie', teamsUpn: 'sallie@example.com' }, [])).toBe(

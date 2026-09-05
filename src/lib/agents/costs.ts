@@ -57,9 +57,10 @@ function linesFor(
     lines.push({ source: 'azure', label: row.service, amount: row.amount, currency: row.currency });
   }
 
-  if (entry?.openaiProjectId) {
+  const openaiProject = agent.openaiProjectId ?? entry?.openaiProjectId;
+  if (openaiProject) {
     for (const row of inputs.openai[timeframe]) {
-      if (row.groupId !== entry.openaiProjectId) continue;
+      if (row.groupId !== openaiProject) continue;
       lines.push({
         source: 'openai',
         label: 'OpenAI API usage',
@@ -69,9 +70,10 @@ function linesFor(
     }
   }
 
-  if (entry?.anthropicWorkspaceId) {
+  const anthropicWorkspace = agent.anthropicWorkspaceId ?? entry?.anthropicWorkspaceId;
+  if (anthropicWorkspace) {
     for (const row of inputs.anthropic[timeframe]) {
-      if (row.groupId !== entry.anthropicWorkspaceId) continue;
+      if (row.groupId !== anthropicWorkspace) continue;
       lines.push({
         source: 'anthropic',
         label: 'Anthropic API usage',
@@ -102,14 +104,28 @@ export function buildAgentCosts(
   now = new Date()
 ): AgentCosts {
   const sources: CostSourceStatus[] = inputs.sources.map((s) => {
-    if (s.source === 'openai' && s.status === 'ok' && !entry?.openaiProjectId) {
-      return { ...s, status: 'no-mapping', detail: 'Set openaiProjectId in config/agents.json' };
-    }
-    if (s.source === 'anthropic' && s.status === 'ok' && !entry?.anthropicWorkspaceId) {
+    if (
+      s.source === 'openai' &&
+      s.status === 'ok' &&
+      !(agent.openaiProjectId ?? entry?.openaiProjectId)
+    ) {
       return {
         ...s,
         status: 'no-mapping',
-        detail: 'Set anthropicWorkspaceId in config/agents.json',
+        detail:
+          'Tag a resource agent-openai-project=proj_… (or set openaiProjectId in the registry)',
+      };
+    }
+    if (
+      s.source === 'anthropic' &&
+      s.status === 'ok' &&
+      !(agent.anthropicWorkspaceId ?? entry?.anthropicWorkspaceId)
+    ) {
+      return {
+        ...s,
+        status: 'no-mapping',
+        detail:
+          'Tag a resource agent-anthropic-workspace=wrkspc_… (or set anthropicWorkspaceId in the registry)',
       };
     }
     return s;

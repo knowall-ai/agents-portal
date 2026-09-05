@@ -244,6 +244,15 @@ export function azureAvatarPath(
   return hasBot || upn ? `/api/agents/${encodeURIComponent(id)}/avatar` : undefined;
 }
 
+/** A provider account id from a tag, accepted only when it has the provider's shape. */
+function providerIdTag(resources: AzureResource[], key: string, shape: RegExp): string | undefined {
+  const value = firstTag(resources, key);
+  return value && shape.test(value) ? value : undefined;
+}
+
+export const OPENAI_PROJECT_ID = /^proj_[A-Za-z0-9_-]{6,64}$/;
+export const ANTHROPIC_WORKSPACE_ID = /^wrkspc_[A-Za-z0-9_-]{6,64}$/;
+
 /** Avatar may be a same-origin path (the avatar route) or an https URL. */
 export function safeAvatarUrl(value?: string): string | undefined {
   if (!value) return undefined;
@@ -360,6 +369,11 @@ export function buildAgent(
     teamsChatUrl: teamsChatUrl(entry, resources),
     teamsCallUrl: teamsCallUrl(entry, resources),
     teamsUpn: agentUpn(entry, resources),
+    openaiProjectId:
+      entry?.openaiProjectId ?? providerIdTag(resources, 'agent-openai-project', OPENAI_PROJECT_ID),
+    anthropicWorkspaceId:
+      entry?.anthropicWorkspaceId ??
+      providerIdTag(resources, 'agent-anthropic-workspace', ANTHROPIC_WORKSPACE_ID),
     resources: [...resources].sort(
       (a, b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name)
     ),

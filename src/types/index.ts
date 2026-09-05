@@ -360,6 +360,10 @@ export interface AgentSummary {
   teamsCallUrl?: string;
   /** The agent's own Entra account, from the agent-teams-upn tag or the registry */
   teamsUpn?: string;
+  /** OpenAI project (proj_…) whose API spend belongs to this agent: registry or the agent-openai-project tag */
+  openaiProjectId?: string;
+  /** Anthropic workspace (wrkspc_…) whose API spend belongs to this agent: registry or the agent-anthropic-workspace tag */
+  anthropicWorkspaceId?: string;
 }
 
 export interface FoundryProject {
