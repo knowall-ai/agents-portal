@@ -161,6 +161,10 @@ Azure costs need no setup beyond the user having *Cost Management Reader* on the
 * Set `OPENAI_ADMIN_KEY` / `ANTHROPIC_ADMIN_KEY` on the server (organisation admin keys, read-only use). Without them the breakdown says "not configured" rather than showing zero.
 * Give each agent its own OpenAI project / Anthropic workspace, otherwise spend cannot be separated.
 
+== Giving a customer access
+
+See link:CUSTOMER-ACCESS.adoc[Customer access]: invite them as a guest, grant `Reader` on their agent's resource group, assign the `Portal.Viewer` app role. Nothing in the registry changes.
+
 == Checklist
 
 * [ ] Resources tagged `agent=<slug>` *or* resource group listed in `config/agents.json`

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { getUserContext } from '@/lib/tokens';
-import { getAgent, getBoost, parseBoostRequest, setBoost } from '@/lib/agents/service';
+import { adminAgentGate } from '@/lib/admin-route';
+import { getBoost, parseBoostRequest, setBoost } from '@/lib/agents/service';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -15,17 +15,17 @@ function statusFor(error: unknown): number {
 }
 
 export async function GET(req: NextRequest, { params }: RouteContext) {
-  const ctx = await getUserContext(req);
-  if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE });
-
   const { id } = await params;
   // GET is read-only: cached state only. Asking the VM is a write (a run-command
   // that lands in the Activity Log), so it goes through POST {action: "refresh"}.
   try {
-    const agent = await getAgent(ctx, id);
-    if (!agent)
-      return NextResponse.json({ error: 'Agent not found' }, { status: 404, headers: NO_STORE });
-    return NextResponse.json({ boost: await getBoost(ctx, agent, false) }, { headers: NO_STORE });
+    const gate = await adminAgentGate(req, id);
+    if (!gate.ok) return gate.response;
+
+    return NextResponse.json(
+      { boost: await getBoost(gate.ctx, gate.agent, false) },
+      { headers: NO_STORE }
+    );
   } catch (error) {
     console.error(`Failed to read boost for ${id}:`, error);
     const message = error instanceof Error ? error.message : 'Unknown error';
@@ -50,34 +50,32 @@ function sameOrigin(req: NextRequest): boolean {
  * for its current state. All three are run-commands, hence POST.
  */
 export async function POST(req: NextRequest, { params }: RouteContext) {
-  const ctx = await getUserContext(req);
-  if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (!sameOrigin(req)) {
-    return NextResponse.json({ error: 'Cross-site request refused' }, { status: 403 });
-  }
-
   const { id } = await params;
-  let raw: unknown;
   try {
-    raw = await req.json();
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
-  }
-  const body = parseBoostRequest(raw);
-  if (!body) {
-    return NextResponse.json(
-      { error: 'Body must be { action: "on" | "off" | "refresh", hours?: number }' },
-      { status: 400 }
-    );
-  }
-  try {
-    const agent = await getAgent(ctx, id);
-    if (!agent) return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
-    if (body.action === 'refresh') {
-      return NextResponse.json({ boost: await getBoost(ctx, agent, true) });
+    const gate = await adminAgentGate(req, id);
+    if (!gate.ok) return gate.response;
+    if (!sameOrigin(req)) {
+      return NextResponse.json({ error: 'Cross-site request refused' }, { status: 403 });
     }
-    const boost = await setBoost(ctx, agent, body.action === 'on', body.hours);
-    console.info(`Boost ${body.action} for ${id} by ${ctx.userId}`);
+
+    let raw: unknown;
+    try {
+      raw = await req.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+    const body = parseBoostRequest(raw);
+    if (!body) {
+      return NextResponse.json(
+        { error: 'Body must be { action: "on" | "off" | "refresh", hours?: number }' },
+        { status: 400 }
+      );
+    }
+    if (body.action === 'refresh') {
+      return NextResponse.json({ boost: await getBoost(gate.ctx, gate.agent, true) });
+    }
+    const boost = await setBoost(gate.ctx, gate.agent, body.action === 'on', body.hours);
+    console.info(`Boost ${body.action} for ${id} by ${gate.ctx.userId}`);
     return NextResponse.json({ boost });
   } catch (error) {
     console.error(`Failed to set boost for ${id}:`, error);

@@ -31,6 +31,7 @@ Agents Portal monitors the AI agents KnowAll AI builds and runs for itself and i
 - **Soul** = the agent's `SOUL.md` (`soulPath`, default `workspace/SOUL.md` then `SOUL.md`) rendered on its page
 - **Activity** = Azure Activity Log + GitHub commits (last year, up to 100) + Foundry runs, merged and sorted; the Overview shows a year-long contributions calendar of it, the Activity tab a 3-day bar chart (`src/lib/activity-buckets.ts`) with VM CPU from Azure Monitor (`GET /api/agents/[id]/metrics?hours=`) as a line
 - **Costs** = Azure Cost Management by resource group (user token) + OpenAI/Anthropic admin cost APIs by project/workspace mapping + `fixedCosts` from the registry; aggregation is pure in `src/lib/agents/costs.ts`
+- **Roles** = Entra app roles on the portal's app registration (`Portal.Admin` for KnowAll staff, `Portal.Viewer` for customers) read from the ID token (`src/lib/roles.ts`). Viewers get Overview, Skills, Activity and Brain; Costs, Licences, Permissions and Boost are admin-only in both the UI and the API (403). Which agents a user sees is Azure RBAC, not the portal: see `docs/CUSTOMER-ACCESS.adoc`
 - **Tenant** = the Entra tenant the user signed in to. Azure Resource Graph returns every subscription the user's ARM token can read, which includes subscriptions delegated via Azure Lighthouse
 
 ### Token Flow
@@ -134,6 +135,7 @@ bun run lint:fix       # Auto-fix lint
 | `AZURE_AD_ALLOWED_TENANTS` | Comma-separated tenant ids allowed to sign in (default: `AZURE_AD_TENANT_ID` alone; with `common` or `organizations` an empty list admits no one) | When the authority is `common` or `organizations` |
 | `AZURE_AD_TENANT_ID`       | Default sign-in tenant (`common` for multi-tenant)                                                                                                | No (default: `common`)                            |
 | `GITHUB_TOKEN`             | Token with Contents: read on agent + skill-pack repos                                                                                             | For private repos                                 |
+| `PORTAL_REQUIRE_ROLES`     | `1`: a token with no `roles` claim is a viewer; `0`: it is an admin                                                                               | No (default: `1` in production, `0` in dev)       |
 | `REVERIE_TOKEN`            | Bearer token for each agent's `reverie serve` (Brain tab)                                                                                         | For the Brain tab                                 |
 | `BRAIN_FIXTURE`            | `1` serves a built-in graph instead of Reverie (dev only)                                                                                         | No                                                |
 | `OPENAI_ADMIN_KEY`         | OpenAI organisation admin key (cost report)                                                                                                       | For OpenAI API spend                              |

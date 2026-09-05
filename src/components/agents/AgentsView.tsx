@@ -27,6 +27,8 @@ const VIEW_KEY = 'agents-portal-agents-view';
 /** KPIs + filterable agent list. Used as the home page. */
 export default function AgentsView() {
   const { data: session, status } = useSession();
+  // Customers (Portal.Viewer) never see costs
+  const isAdmin = session?.user.isAdmin ?? false;
   const router = useRouter();
   const params = useSearchParams();
   const [view, setView] = useState<ViewMode>('list');
@@ -35,7 +37,7 @@ export default function AgentsView() {
     60_000
   );
   const costsApi = useApi<CostsSummary>(
-    status === 'authenticated' ? '/api/costs' : null,
+    status === 'authenticated' && isAdmin ? '/api/costs' : null,
     15 * 60_000
   );
   const costByAgent = useMemo(() => {
@@ -152,24 +154,30 @@ export default function AgentsView() {
       color: 'var(--primary)',
       status: '',
     },
-    (() => {
-      const summary = costsApi.data;
-      const azure = summary?.sources.find((s) => s.source === 'azure');
-      const failed = !summary ? Boolean(costsApi.error) : azure?.status === 'error';
-      return {
-        title: 'Cost this month',
-        value: failed ? 'n/a' : summary ? formatTotals(summary.totals.monthToDate, '—') : '',
-        icon: <Receipt size={22} />,
-        color: failed ? 'var(--text-muted)' : 'var(--status-degraded)',
-        status: '',
-        loading: costsApi.isLoading && !summary,
-        hint: failed
-          ? (azure?.detail ?? costsApi.error ?? 'Cost lookup failed').replace(/\{.*$/, '').trim()
-          : summary
-            ? `Last month ${formatTotals(summary.totals.lastMonth, '—')}`
-            : undefined,
-      };
-    })(),
+    ...(isAdmin
+      ? [
+          (() => {
+            const summary = costsApi.data;
+            const azure = summary?.sources.find((s) => s.source === 'azure');
+            const failed = !summary ? Boolean(costsApi.error) : azure?.status === 'error';
+            return {
+              title: 'Cost this month',
+              value: failed ? 'n/a' : summary ? formatTotals(summary.totals.monthToDate, '—') : '',
+              icon: <Receipt size={22} />,
+              color: failed ? 'var(--text-muted)' : 'var(--status-degraded)',
+              status: '',
+              loading: costsApi.isLoading && !summary,
+              hint: failed
+                ? (azure?.detail ?? costsApi.error ?? 'Cost lookup failed')
+                    .replace(/\{.*$/, '')
+                    .trim()
+                : summary
+                  ? `Last month ${formatTotals(summary.totals.lastMonth, '—')}`
+                  : undefined,
+            };
+          })(),
+        ]
+      : []),
   ];
 
   return (
@@ -357,7 +365,7 @@ export default function AgentsView() {
           />
         </div>
       ) : view === 'list' ? (
-        <AgentTable agents={filtered} costs={costByAgent} />
+        <AgentTable agents={filtered} costs={isAdmin ? costByAgent : undefined} />
       ) : (
         Object.entries(byCustomer).map(([customer, list]) => (
           <section key={customer} className="mb-8">
