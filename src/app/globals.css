@@ -166,6 +166,7 @@ body {
   /* On a call: a live-broadcast chip that breathes */
   .on-call {
     @apply inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-semibold tracking-wide uppercase;
+
     background: color-mix(in srgb, var(--danger, #ef4444) 18%, transparent);
     color: var(--danger, #ef4444);
     animation: on-call-pulse 1.6s ease-in-out infinite;
