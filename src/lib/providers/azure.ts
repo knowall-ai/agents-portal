@@ -145,7 +145,10 @@ export async function getBotIconUrl(
 ): Promise<string | undefined> {
   const bot = await armFetch<{ properties?: { iconUrl?: string } }>(
     token,
-    `${botResourceId}?api-version=2022-09-15`
+    `${botResourceId}?api-version=2022-09-15`,
+    // The avatar route falls back to the account photo, so bound the wait: ARM
+    // has no total request deadline of its own
+    { signal: AbortSignal.timeout(15_000) }
   );
   return bot.properties?.iconUrl || undefined;
 }
