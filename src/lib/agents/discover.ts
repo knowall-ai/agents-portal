@@ -244,14 +244,29 @@ export function azureAvatarPath(
   return hasBot || upn ? `/api/agents/${encodeURIComponent(id)}/avatar` : undefined;
 }
 
-/** A provider account id from a tag, accepted only when it has the provider's shape. */
-function providerIdTag(resources: AzureResource[], key: string, shape: RegExp): string | undefined {
-  const value = firstTag(resources, key);
-  return value && shape.test(value) ? value : undefined;
+/**
+ * A provider account id for the agent: the registry value when it has the
+ * provider's shape, else the one well-formed tag value shared by the agent's
+ * resources. Malformed values are skipped, and two resources disagreeing
+ * yields nothing rather than whichever Azure listed first.
+ */
+export function providerId(
+  registryValue: string | undefined,
+  resources: AzureResource[],
+  key: string,
+  shape: RegExp
+): string | undefined {
+  if (registryValue && shape.test(registryValue)) return registryValue;
+  const valid = new Set<string>();
+  for (const r of resources) {
+    const value = tag(r.tags, key);
+    if (value && shape.test(value)) valid.add(value);
+  }
+  return valid.size === 1 ? [...valid][0] : undefined;
 }
 
-export const OPENAI_PROJECT_ID = /^proj_[A-Za-z0-9_-]{6,64}$/;
-export const ANTHROPIC_WORKSPACE_ID = /^wrkspc_[A-Za-z0-9_-]{6,64}$/;
+export const OPENAI_PROJECT_ID = /^proj_[A-Za-z0-9_-]+$/;
+export const ANTHROPIC_WORKSPACE_ID = /^wrkspc_[A-Za-z0-9_-]+$/;
 
 /** Avatar may be a same-origin path (the avatar route) or an https URL. */
 export function safeAvatarUrl(value?: string): string | undefined {
@@ -369,11 +384,18 @@ export function buildAgent(
     teamsChatUrl: teamsChatUrl(entry, resources),
     teamsCallUrl: teamsCallUrl(entry, resources),
     teamsUpn: agentUpn(entry, resources),
-    openaiProjectId:
-      entry?.openaiProjectId ?? providerIdTag(resources, 'agent-openai-project', OPENAI_PROJECT_ID),
-    anthropicWorkspaceId:
-      entry?.anthropicWorkspaceId ??
-      providerIdTag(resources, 'agent-anthropic-workspace', ANTHROPIC_WORKSPACE_ID),
+    openaiProjectId: providerId(
+      entry?.openaiProjectId,
+      resources,
+      'agent-openai-project',
+      OPENAI_PROJECT_ID
+    ),
+    anthropicWorkspaceId: providerId(
+      entry?.anthropicWorkspaceId,
+      resources,
+      'agent-anthropic-workspace',
+      ANTHROPIC_WORKSPACE_ID
+    ),
     resources: [...resources].sort(
       (a, b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name)
     ),

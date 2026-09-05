@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { AgentRegistryEntry, AzureResource } from '@/types';
 import {
   buildAgent,
+  OPENAI_PROJECT_ID,
+  providerId,
   claimsResource,
   deriveStatus,
   groupResources,
@@ -280,6 +282,36 @@ describe('provider ids from tags', () => {
       ['agent']
     );
     expect(buildAgent(junk[0], [], 't').openaiProjectId).toBeUndefined();
+  });
+
+  it('skips malformed values, and refuses to guess when resources disagree', () => {
+    const laterValid = groupResources(
+      [
+        resource({ name: 'a', tags: { agent: 'poppie', 'agent-openai-project': 'oops' } }),
+        resource({ name: 'b', tags: { agent: 'poppie', 'agent-openai-project': 'proj_good1' } }),
+      ],
+      [],
+      ['agent']
+    );
+    expect(buildAgent(laterValid[0], [], 't').openaiProjectId).toBe('proj_good1');
+    const disagree = groupResources(
+      [
+        resource({ name: 'a', tags: { agent: 'poppie', 'agent-openai-project': 'proj_one' } }),
+        resource({ name: 'b', tags: { agent: 'poppie', 'agent-openai-project': 'proj_two' } }),
+      ],
+      [],
+      ['agent']
+    );
+    expect(buildAgent(disagree[0], [], 't').openaiProjectId).toBeUndefined();
+    // a malformed registry override is ignored too
+    expect(
+      providerId(
+        'proj_',
+        [resource({ tags: { 'agent-openai-project': 'proj_tagged' } })],
+        'agent-openai-project',
+        OPENAI_PROJECT_ID
+      )
+    ).toBe('proj_tagged');
   });
 });
 

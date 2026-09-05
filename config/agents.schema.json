@@ -77,10 +77,14 @@
           },
           "openaiProjectId": {
             "type": "string",
-            "pattern": "^proj_",
+            "pattern": "^proj_[A-Za-z0-9_-]+$",
             "description": "Override only: the agent-openai-project tag on a resource is the usual source"
           },
-          "anthropicWorkspaceId": { "type": "string", "pattern": "^wrkspc_" },
+          "anthropicWorkspaceId": {
+            "type": "string",
+            "pattern": "^wrkspc_[A-Za-z0-9_-]+$",
+            "description": "Override only: the agent-anthropic-workspace tag on a resource is the usual source"
+          },
           "fixedCosts": {
             "type": "array",
             "items": {
