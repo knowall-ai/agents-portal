@@ -13,7 +13,7 @@ How a customer signs in to the Agents Portal with their own Microsoft account an
 | The customer is invited as a guest in the KnowAll tenant and signs in with their own work account (their enterprise credentials, their MFA). The portal's app registration is multi-tenant, so the login page just needs the KnowAll tenant selected.
 
 | *Azure RBAC*
-| _Which_ agents they see. The portal queries Azure Resource Graph with the signed-in user's own token, and Resource Graph only returns resources that token can read. `Reader` on the agent's resource group is all it takes: every other agent is invisible without a line of portal code.
+| _Which_ agents they see. The portal queries Azure Resource Graph with the signed-in user's own token, and Resource Graph only returns resources that token can read. `Reader` on the agent's resource group is the minimum grant that works, not an isolation boundary: Resource Graph returns everything the token can read anywhere, so a guest who also holds Reader at a wider scope (a subscription or management group) or through an Azure Lighthouse delegation sees those agents too. Keep the grant at the one resource group and the portal needs no code to hide the rest.
 
 | *App roles*
 | _What_ the portal shows. The app registration defines `Portal.Admin` (KnowAll staff) and `Portal.Viewer` (customers). Viewers get Overview, Skills, Activity and Brain for their agent. Costs, Licences, Permissions and Boost are hidden and their API routes answer 403.
@@ -76,7 +76,7 @@ az rest --method POST \
 === 5. What the customer sees
 
 * Sign in at `https://agents.knowall.ai`, choosing the KnowAll AI tenant.
-* The Agents screen lists only agents in resource groups they can read (Winnie dev). No cost KPI or cost column.
+* The Agents screen lists the agents in every scope their token can read — Winnie dev only, as long as step 3 is their sole grant and no other tenant has delegated resources to them. No cost KPI or cost column.
 * The agent page shows Overview, Skills, Activity and Brain. No Costs, Licences, Permissions or Boost, and the header has Chat in Teams but nothing operational.
 
 == Why not a `customer` field in the registry?
