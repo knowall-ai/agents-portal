@@ -22,9 +22,30 @@ export const AGENT_RESOURCE_TYPES = [
   'microsoft.containerinstance/containergroups',
 ];
 
+/**
+ * Every page of an ARM list, following `nextLink` until it runs out. The page
+ * cap stops a runaway loop; hitting it with pages still to come throws rather
+ * than returning a truncated list, which callers would read as complete.
+ */
+async function armList<T>(token: string, path: string, maxPages = 20): Promise<T[]> {
+  const items: T[] = [];
+  let next: string | undefined = path;
+  for (let page = 0; next && page < maxPages; page++) {
+    const result: { value: T[]; nextLink?: string } = await armFetch(token, next);
+    items.push(...result.value);
+    next = result.nextLink;
+  }
+  if (next) throw new Error(`ARM list incomplete: more than ${maxPages} pages for ${path}`);
+  return items;
+}
+
+/** ARM answers in seconds; a hung socket must not stall a whole page */
+const ARM_TIMEOUT_MS = 30_000;
+
 async function armFetch<T>(token: string, path: string, init?: RequestInit): Promise<T> {
   const url = path.startsWith('http') ? path : `${ARM}${path}`;
   const response = await fetch(url, {
+    signal: AbortSignal.timeout(ARM_TIMEOUT_MS),
     ...init,
     headers: {
       Authorization: `Bearer ${token}`,
@@ -307,15 +328,15 @@ export async function listRoleAssignments(
   const rows = (
     await Promise.all(
       subscriptionIds.map((sub) =>
-        armFetch<{ value: RoleAssignmentRow[] }>(
+        armList<RoleAssignmentRow>(
           token,
           `/subscriptions/${sub}/providers/Microsoft.Authorization/roleAssignments?api-version=2022-04-01&$filter=${encodeURIComponent(`principalId eq '${principalId}'`)}`
-        )
-          .then((r) => r.value)
-          .catch((error) => {
-            console.warn(`Role assignments failed for ${sub}:`, error);
-            return [] as RoleAssignmentRow[];
-          })
+        ).catch((error) => {
+          // Includes an incomplete (page-capped) list: a subscription whose
+          // assignments could not be read in full contributes none of them
+          console.warn(`Role assignments failed for ${sub}:`, error);
+          return [] as RoleAssignmentRow[];
+        })
       )
     )
   ).flat();

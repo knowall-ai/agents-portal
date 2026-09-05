@@ -101,6 +101,8 @@ src/
 - **Do not put email addresses in the public repo** — use generic references
 - Do not commit `.env`; the app registration secret lives in App Service settings / GitHub secrets
 - All upstream calls use the signed-in user's own tokens — the dashboard never has more access than the user
+- Sign-in needs the user's tenant on `AZURE_AD_ALLOWED_TENANTS`; with the `common` authority and no list nobody is admitted, so production must set it
+- Registry entries (brain URL, repo, boost script) only apply inside the scope they claim: their `subscriptionIds`, or the registry's own tenant — see `claimsResource` in `src/lib/agents/discover.ts`
 
 ## Testing
 
@@ -123,20 +125,21 @@ bun run lint:fix       # Auto-fix lint
 
 ## Environment Variables
 
-| Variable                 | Description                                               | Required                      |
-| ------------------------ | --------------------------------------------------------- | ----------------------------- |
-| `NEXTAUTH_URL`           | Base URL of the application                               | Yes                           |
-| `NEXTAUTH_SECRET`        | Secret for NextAuth encryption                            | Yes                           |
-| `AZURE_AD_CLIENT_ID`     | Entra app registration client ID                          | Yes                           |
-| `AZURE_AD_CLIENT_SECRET` | Entra app registration client secret                      | Yes                           |
-| `AZURE_AD_TENANT_ID`     | Default sign-in tenant (`common` for multi-tenant)        | No (default: `common`)        |
-| `GITHUB_TOKEN`           | Token with Contents: read on agent + skill-pack repos     | For private repos             |
-| `REVERIE_TOKEN`          | Bearer token for each agent's `reverie serve` (Brain tab) | For the Brain tab             |
-| `BRAIN_FIXTURE`          | `1` serves a built-in graph instead of Reverie (dev only) | No                            |
-| `OPENAI_ADMIN_KEY`       | OpenAI organisation admin key (cost report)               | For OpenAI API spend          |
-| `ANTHROPIC_ADMIN_KEY`    | Anthropic organisation admin key (cost report)            | For Anthropic API spend       |
-| `AGENT_TAG_KEYS`         | Comma-separated tag keys that name an agent               | No (default: `agent,project`) |
-| `CACHE_TTL_SECONDS`      | Cache TTL for Azure / GitHub / Foundry lookups            | No (default: 60)              |
+| Variable                   | Description                                                                                                                                       | Required                                          |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `NEXTAUTH_URL`             | Base URL of the application                                                                                                                       | Yes                                               |
+| `NEXTAUTH_SECRET`          | Secret for NextAuth encryption                                                                                                                    | Yes                                               |
+| `AZURE_AD_CLIENT_ID`       | Entra app registration client ID                                                                                                                  | Yes                                               |
+| `AZURE_AD_CLIENT_SECRET`   | Entra app registration client secret                                                                                                              | Yes                                               |
+| `AZURE_AD_ALLOWED_TENANTS` | Comma-separated tenant ids allowed to sign in (default: `AZURE_AD_TENANT_ID` alone; with `common` or `organizations` an empty list admits no one) | When the authority is `common` or `organizations` |
+| `AZURE_AD_TENANT_ID`       | Default sign-in tenant (`common` for multi-tenant)                                                                                                | No (default: `common`)                            |
+| `GITHUB_TOKEN`             | Token with Contents: read on agent + skill-pack repos                                                                                             | For private repos                                 |
+| `REVERIE_TOKEN`            | Bearer token for each agent's `reverie serve` (Brain tab)                                                                                         | For the Brain tab                                 |
+| `BRAIN_FIXTURE`            | `1` serves a built-in graph instead of Reverie (dev only)                                                                                         | No                                                |
+| `OPENAI_ADMIN_KEY`         | OpenAI organisation admin key (cost report)                                                                                                       | For OpenAI API spend                              |
+| `ANTHROPIC_ADMIN_KEY`      | Anthropic organisation admin key (cost report)                                                                                                    | For Anthropic API spend                           |
+| `AGENT_TAG_KEYS`           | Comma-separated tag keys that name an agent                                                                                                       | No (default: `agent,project`)                     |
+| `CACHE_TTL_SECONDS`        | Cache TTL for Azure / GitHub / Foundry lookups                                                                                                    | No (default: 60)                                  |
 
 ## Deployment
 
