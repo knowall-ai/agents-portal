@@ -30,7 +30,7 @@ export default function LicenseList({ licensing, isLoading, error }: LicenseList
   const { licenses, subscriptions, licenseError } = licensing;
 
   return (
-    <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
+    <div className="divide-y">
       {licensing.upn && (
         <div className="p-4">
           <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
