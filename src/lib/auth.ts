@@ -7,6 +7,8 @@
 import type { NextAuthOptions } from 'next-auth';
 import type { JWT } from 'next-auth/jwt';
 import AzureADProvider from 'next-auth/providers/azure-ad';
+import { isPortalAdmin, rolesFromIdToken } from '@/lib/roles';
+import { isAllowedTenant } from '@/lib/tenants';
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -27,6 +29,10 @@ declare module 'next-auth' {
       name?: string | null;
       email?: string | null;
       image?: string | null;
+      /** Entra app roles from the ID token (Portal.Admin, Portal.Viewer) */
+      roles: string[];
+      /** true for KnowAll staff; customers see a read-only subset */
+      isAdmin: boolean;
     };
   }
 }
@@ -39,6 +45,7 @@ declare module 'next-auth/jwt' {
     tenantId?: string;
     error?: string;
     id?: string;
+    roles?: string[];
   }
 }
 
@@ -96,6 +103,16 @@ export function getAuthOptions(tenantId?: string): NextAuthOptions {
       }),
     ],
     callbacks: {
+      // The app registration is multi-tenant so customers can be invited as guests,
+      // but only tenants on the allowlist may sign in at all
+      async signIn({ account }) {
+        const tid = tenantFromIdToken(account?.id_token);
+        if (isAllowedTenant(tid)) return true;
+        console.warn(
+          `Sign-in refused for tenant ${tid ?? 'unknown'}: not in AZURE_AD_ALLOWED_TENANTS`
+        );
+        return false;
+      },
       async jwt({ token, account, user }) {
         if (account && user) {
           return {
@@ -105,6 +122,7 @@ export function getAuthOptions(tenantId?: string): NextAuthOptions {
             accessTokenExpires: account.expires_at ? account.expires_at * 1000 : undefined,
             tenantId: tenantFromIdToken(account.id_token) ?? authority,
             id: user.id,
+            roles: rolesFromIdToken(account.id_token),
           } as JWT;
         }
 
@@ -120,6 +138,8 @@ export function getAuthOptions(tenantId?: string): NextAuthOptions {
         session.tenantId = token.tenantId;
         session.error = token.error;
         if (token.id) session.user.id = token.id;
+        session.user.roles = token.roles ?? [];
+        session.user.isAdmin = isPortalAdmin(token.roles);
         return session;
       },
     },

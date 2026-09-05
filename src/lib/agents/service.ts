@@ -1,10 +1,12 @@
 // Agent service: composes Azure discovery, the registry, Foundry, GitHub and
 // health probes into the shapes the API routes return.
 import { cached, invalidate } from '@/lib/cache';
-import { getRegistry, getRegistryEntry } from '@/lib/registry';
+import { getRegistry, getRegistryEntry as lookupRegistryEntry } from '@/lib/registry';
+import type { AgentRegistryEntry } from '@/types';
 import {
   findVm,
   listActivityLog,
+  listVmCpu,
   listAgentResources,
   listRoleAssignments,
   listSubscriptions,
@@ -34,6 +36,7 @@ import type {
   AgentBrain,
   AgentCosts,
   AgentDetail,
+  AgentMetrics,
   AgentLicensing,
   AgentPermissions,
   AgentSoul,
@@ -42,7 +45,7 @@ import type {
   FoundryAssistant,
   Skill,
 } from '@/types';
-import { buildAgent, groupResources, sortAgents } from './discover';
+import { buildAgent, claimsResource, groupResources, sortAgents } from './discover';
 import { addTotals, buildAgentCosts, type CostInputs } from './costs';
 import { mergeSkillSources, skillSourcesFor } from './skills';
 import {
@@ -59,6 +62,20 @@ function scope(ctx: UserContext): string {
   return `${ctx.tenantId}:${ctx.userId}`;
 }
 
+/**
+ * The registry entry behind an agent, but only when the caller can see at least
+ * one Azure resource inside the scope the entry claims (`claimsResource`:
+ * the entry's subscriptions, or the registry's own tenant, and its resource
+ * groups when it names any). Registry-only agents (nothing visible, or a
+ * tag-derived slug that merely matches an entry id) get nothing, because
+ * server-held tokens (REVERIE_TOKEN, GITHUB_TOKEN) are spent on the entry's URLs.
+ */
+function getRegistryEntry(agent: AgentDetail): AgentRegistryEntry | undefined {
+  const entry = lookupRegistryEntry(agent.id);
+  if (!entry) return undefined;
+  return agent.resources.some((r) => claimsResource(entry, r)) ? entry : undefined;
+}
+
 /** All agents visible to the user (cached per user for CACHE_TTL_SECONDS). */
 export async function listAgents(ctx: UserContext): Promise<AgentDetail[]> {
   return cached(`agents:${scope(ctx)}`, async () => {
@@ -71,13 +88,23 @@ export async function listAgents(ctx: UserContext): Promise<AgentDetail[]> {
   });
 }
 
+/**
+ * Whether the caller can see an agent with this id, from the cached agents list
+ * alone. Cheap enough to run before an authorisation check: it reads nothing the
+ * caller is not already entitled to and does not compose the agent's detail.
+ */
+export async function agentExists(ctx: UserContext, id: string): Promise<boolean> {
+  const agents = await listAgents(ctx);
+  return agents.some((a) => a.id === id.toLowerCase());
+}
+
 export async function getAgent(ctx: UserContext, id: string): Promise<AgentDetail | null> {
   const agents = await listAgents(ctx);
   const agent = agents.find((a) => a.id === id.toLowerCase());
   if (!agent) return null;
 
   return cached(`agent:${scope(ctx)}:${agent.id}`, async () => {
-    const entry = getRegistryEntry(agent.id);
+    const entry = getRegistryEntry(agent);
     const [foundryProjects, reachability] = await Promise.all([
       listFoundryProjects(ctx.armToken, agent.resources),
       entry?.healthUrl || agent.portalUrl
@@ -112,7 +139,7 @@ export async function getSkills(ctx: UserContext, agent: AgentDetail): Promise<S
   return cached(
     `skills:${scope(ctx)}:${agent.id}`,
     async () => {
-      const sources = skillSourcesFor(getRegistryEntry(agent.id));
+      const sources = skillSourcesFor(getRegistryEntry(agent));
       const [repoLists, assistants] = await Promise.all([
         Promise.all(
           sources.map((source) =>
@@ -145,7 +172,7 @@ const SOUL_CANDIDATES = ['workspace/SOUL.md', 'SOUL.md'];
  * arbitrary repositories.
  */
 export async function getSoul(ctx: UserContext, agent: AgentDetail): Promise<AgentSoul | null> {
-  const entry = getRegistryEntry(agent.id);
+  const entry = getRegistryEntry(agent);
   const repo = entry?.repo;
   if (!repo) return null;
   return cached(
@@ -172,7 +199,7 @@ const DIRECTORY_TTL = 30 * 60 * 1000;
 const DIRECTORY_ERROR_TTL = 60 * 1000;
 
 export async function getLicensing(ctx: UserContext, agent: AgentDetail): Promise<AgentLicensing> {
-  const entry = getRegistryEntry(agent.id);
+  const entry = getRegistryEntry(agent);
   const base: AgentLicensing = {
     upn: agent.teamsUpn,
     licenses: [],
@@ -218,7 +245,7 @@ export async function getPermissions(
   ctx: UserContext,
   agent: AgentDetail
 ): Promise<AgentPermissions> {
-  const entry = getRegistryEntry(agent.id);
+  const entry = getRegistryEntry(agent);
   const apps = new Map<string, { appId: string; label?: string }>();
   for (const app of entry?.appRegistrations ?? []) apps.set(app.appId.toLowerCase(), app);
   for (const r of agent.resources) {
@@ -323,6 +350,29 @@ const BOOST_WARNING =
 
 const BOOST_CACHE_TTL = 12 * 60 * 60 * 1000;
 
+export interface BoostRequest {
+  action: 'on' | 'off' | 'refresh';
+  hours?: number;
+}
+
+/**
+ * The request body `POST /api/agents/:id/boost` accepts: `{ action: "refresh" }`
+ * or `{ action: "on" | "off", hours?: number }`. Anything else — null, an array,
+ * a primitive, an unknown key or a non-numeric `hours` — is rejected here so a
+ * malformed payload is a 400 rather than a 500.
+ */
+export function parseBoostRequest(body: unknown): BoostRequest | null {
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) return null;
+  const { action, hours, ...rest } = body as Record<string, unknown>;
+  if (Object.keys(rest).length > 0) return null;
+  if (action !== 'on' && action !== 'off' && action !== 'refresh') return null;
+  if (hours === undefined) return { action };
+  // Only `on` takes a duration, in quarter hours; the bounds are checked in setBoost
+  if (action !== 'on' || typeof hours !== 'number' || !Number.isFinite(hours)) return null;
+  if (hours <= 0 || !Number.isInteger(hours * 4)) return null;
+  return { action, hours };
+}
+
 interface BoostScriptState {
   active?: boolean;
   model?: string;
@@ -348,7 +398,7 @@ function boostShape(agent: AgentDetail): {
   script?: string;
   vm?: ReturnType<typeof findVm>;
 } {
-  const entry = getRegistryEntry(agent.id);
+  const entry = getRegistryEntry(agent);
   const vm = findVm(agent.resources);
   return {
     base: {
@@ -452,7 +502,7 @@ export type BrainSource = { kind: 'fixture' } | { kind: 'reverie'; url: string; 
  */
 export function brainSource(agent: AgentDetail, demo = false): BrainSource | null {
   if (demo || process.env.BRAIN_FIXTURE === '1') return { kind: 'fixture' };
-  const url = getRegistryEntry(agent.id)?.brainUrl;
+  const url = getRegistryEntry(agent)?.brainUrl;
   const token = process.env.REVERIE_TOKEN;
   if (!url || !token || !isValidBrainUrl(url)) return null;
   return { kind: 'reverie', url, token };
@@ -466,7 +516,7 @@ export async function getBrain(agent: AgentDetail, demo = false): Promise<AgentB
   const source = brainSource(agent, demo);
   const liveAvailable = brainSource(agent)?.kind === 'reverie';
   if (!source) {
-    const entry = getRegistryEntry(agent.id);
+    const entry = getRegistryEntry(agent);
     return {
       available: false,
       error: !entry?.brainUrl
@@ -508,7 +558,7 @@ export async function getActivity(ctx: UserContext, agent: AgentDetail): Promise
     });
 
     const github = agent.repo
-      ? listRepoCommits(agent.repo, who).catch((error) => {
+      ? listRepoCommits(agent.repo, who, 1000, 365).catch((error) => {
           console.warn(`GitHub commits failed for ${agent.repo}:`, error);
           return [] as ActivityEvent[];
         })
@@ -526,10 +576,33 @@ export async function getActivity(ctx: UserContext, agent: AgentDetail): Promise
     })();
 
     const results = await Promise.all([...azure, github, foundry]);
-    return results
-      .flat()
-      .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
-      .slice(0, 50);
+    // Untruncated: the calendar aggregates a whole year; the route trims the feed
+    return results.flat().sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+  });
+}
+
+/** VM CPU series for the agent's virtual machines over the last `hours`. */
+export async function getMetrics(
+  ctx: UserContext,
+  agent: AgentDetail,
+  hours: number
+): Promise<AgentMetrics> {
+  const intervalMinutes = hours > 24 ? 60 : 30;
+  return cached(`metrics:${scope(ctx)}:${agent.id}:${hours}`, async () => {
+    const vms = agent.resources.filter(
+      (r) => r.type.toLowerCase() === 'microsoft.compute/virtualmachines'
+    );
+    const cpu = await Promise.all(
+      vms.map(async (vm) => ({
+        resourceId: vm.id,
+        name: vm.name,
+        points: await listVmCpu(ctx.armToken, vm.id, hours, intervalMinutes).catch((error) => {
+          console.warn(`CPU metrics failed for ${vm.name}:`, error);
+          return [];
+        }),
+      }))
+    );
+    return { hours, intervalMinutes, cpu };
   });
 }
 
@@ -653,16 +726,14 @@ async function loadCostInputs(ctx: UserContext, agents: AgentDetail[]): Promise<
 
 export async function getAgentCosts(ctx: UserContext, agent: AgentDetail): Promise<AgentCosts> {
   const inputs = await loadCostInputs(ctx, [agent]);
-  return buildAgentCosts(agent, getRegistryEntry(agent.id), inputs);
+  return buildAgentCosts(agent, getRegistryEntry(agent), inputs);
 }
 
 /** Month-to-date and last-month totals for every visible agent. */
 export async function getCostsSummary(ctx: UserContext): Promise<CostsSummary> {
   const agents = await listAgents(ctx);
   const inputs = await loadCostInputs(ctx, agents);
-  const perAgent = agents.map((agent) =>
-    buildAgentCosts(agent, getRegistryEntry(agent.id), inputs)
-  );
+  const perAgent = agents.map((agent) => buildAgentCosts(agent, getRegistryEntry(agent), inputs));
   const totals = { monthToDate: {}, lastMonth: {} };
   for (const costs of perAgent) {
     addTotals(totals.monthToDate, costs.monthToDate.totals);

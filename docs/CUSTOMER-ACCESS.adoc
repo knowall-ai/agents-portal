@@ -1,0 +1,84 @@
+= Customer access
+:toc:
+
+How a customer signs in to the Agents Portal with their own Microsoft account and sees only their agent. Nothing about the customer is hard-coded in the portal: Azure decides what they can see, Entra app roles decide what the portal shows.
+
+== How it works
+
+[cols="1,3"]
+|===
+| Layer | Decides
+
+| *Entra B2B guest*
+| The customer is invited as a guest in the KnowAll tenant and signs in with their own work account (their enterprise credentials, their MFA). The portal's app registration is multi-tenant, so the login page just needs the KnowAll tenant selected.
+
+| *Azure RBAC*
+| _Which_ agents they see. The portal queries Azure Resource Graph with the signed-in user's own token, and Resource Graph only returns resources that token can read. `Reader` on the agent's resource group is the minimum grant that works, not an isolation boundary: Resource Graph returns everything the token can read anywhere, so a guest who also holds Reader at a wider scope (a subscription or management group) or through an Azure Lighthouse delegation sees those agents too. Keep the grant at the one resource group and the portal needs no code to hide the rest.
+
+| *App roles*
+| _What_ the portal shows. The app registration defines `Portal.Admin` (KnowAll staff) and `Portal.Viewer` (customers). Viewers get Overview, Skills, Activity and Brain for their agent. Costs, Licences, Permissions and Boost are hidden and their API routes answer 403.
+|===
+
+== Runbook: give a customer access to their agent
+
+The example is the Irish FA's sponsor for *Winnie (dev)* in `rg-winnie-dev`. Replace the placeholders; never commit real addresses to this repo.
+
+=== 1. Define the app roles (once)
+
+In *Entra admin centre → App registrations → Agents Portal → App roles*, add two roles for *Users/Groups*:
+
+[cols="1,1,1"]
+|===
+| Display name | Value | Description
+
+| Portal Admin | `Portal.Admin` | KnowAll staff: every tab, costs, permissions, Boost
+| Portal Viewer | `Portal.Viewer` | Customers: read-only view of their own agents
+|===
+
+Then in *Enterprise applications → Agents Portal → Users and groups*, assign `Portal.Admin` to the KnowAll staff group. Do this before the first deployment that carries roles: in production a token without a role is a viewer (`PORTAL_REQUIRE_ROLES` defaults to `1` there), so staff who have not been assigned `Portal.Admin` lose Costs, Licences, Permissions and Boost until they are.
+
+=== 2. Invite the customer as a guest
+
+[source,bash]
+----
+# Invite with their work address; they accept once and sign in with their own account thereafter.
+# The response carries the guest object's id in the KnowAll tenant (invitedUser.id): keep it,
+# a guest's UPN is rewritten (name_domain#EXT#@...) and its mail attribute is not always set.
+az rest --method POST --url https://graph.microsoft.com/v1.0/invitations \
+  --body '{"invitedUserEmailAddress":"<customer-upn>","inviteRedirectUrl":"https://agents.knowall.ai","sendInvitationMessage":true}' \
+  --query invitedUser.id -o tsv
+
+# For a guest invited earlier, look the id up by the invited address instead
+az ad user list --filter "userType eq 'Guest'" --query "[?contains(userPrincipalName, '<customer-upn-with-@-as-_>')].id" -o tsv
+----
+
+=== 3. Grant Reader on their agent's resource group
+
+[source,bash]
+----
+az role assignment create --assignee-object-id <guest-object-id> --assignee-principal-type User \
+  --role Reader --scope /subscriptions/<sub-id>/resourceGroups/rg-winnie-dev
+----
+
+For a Foundry agent the agents list also needs `Azure AI User` on the Foundry project: the `https://ai.azure.com` token exchange succeeds regardless, and that role is what authorises the project calls the token is then used for. VM-hosted agents need nothing more.
+
+=== 4. Assign the Viewer role
+
+*Enterprise applications → Agents Portal → Users and groups → Add user/group*: pick the guest, role `Portal Viewer`. Or with Graph:
+
+[source,bash]
+----
+az rest --method POST \
+  --url https://graph.microsoft.com/v1.0/users/<guest-object-id>/appRoleAssignments \
+  --body '{"principalId":"<guest-object-id>","resourceId":"<portal-service-principal-id>","appRoleId":"<Portal.Viewer-role-id>"}'
+----
+
+=== 5. What the customer sees
+
+* Sign in at `https://agents.knowall.ai`, choosing the KnowAll AI tenant.
+* The Agents screen lists the agents in every scope their token can read — Winnie dev only, as long as step 3 is their sole grant and no other tenant has delegated resources to them. No cost KPI or cost column.
+* The agent page shows Overview, Skills, Activity and Brain. No Costs, Licences, Permissions or Boost, and the header has Chat in Teams but nothing operational.
+
+== Why not a `customer` field in the registry?
+
+Registry and tag values describe agents, not people. Tying visibility to them would mean maintaining a second permission system in a JSON file. Azure RBAC is already the source of truth for who can read what, it is audited, and it is what the customer's own IT team can review. The portal only adds the coarse Admin/Viewer split on top.

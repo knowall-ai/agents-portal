@@ -1,10 +1,11 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { getUserContext } from '@/lib/tokens';
+import { forbiddenForViewers, getUserContext } from '@/lib/tokens';
 import { getCostsSummary } from '@/lib/agents/service';
 
 export async function GET(req: NextRequest) {
   const ctx = await getUserContext(req);
   if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!ctx.isAdmin) return forbiddenForViewers();
 
   try {
     return NextResponse.json(await getCostsSummary(ctx));
