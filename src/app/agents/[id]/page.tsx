@@ -24,6 +24,7 @@ import {
   Activity,
   Brain,
   Zap,
+  PhoneCall,
 } from 'lucide-react';
 import { MainLayout } from '@/components/layout';
 import {
@@ -49,11 +50,13 @@ import {
   SoulPanel,
 } from '@/components/agents';
 import { useApi } from '@/hooks';
+import { presenceLabel } from '@/lib/presence';
 import { BACKDROPS, type Backdrop } from '@/components/agents/BrainView';
 import type {
   ActivityEvent,
   AgentBoost,
   AgentBrain,
+  AgentPresence,
   AgentCosts,
   AgentDetail,
   AgentLicensing,
@@ -133,6 +136,11 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
   );
   const boost = useApi<{ boost: AgentBoost }>(ready ? `/api/agents/${id}/boost` : null, 60_000);
   const brain = useApi<{ brain: AgentBrain }>(ready ? `/api/agents/${id}/brain` : null);
+  const presence = useApi<{ presence: AgentPresence }>(
+    ready ? `/api/agents/${id}/presence` : null,
+    15_000
+  );
+  const onCall = Boolean(presence.data?.presence.onCall);
 
   const agent = detail.data?.agent;
   const permissionCount = permissions.data
@@ -222,6 +230,19 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
                       {agent.name}
                     </h1>
                     <StatusBadge status={agent.status} title={agent.statusReason} />
+                    {onCall && (
+                      <span className="on-call" title="The agent's Teams account is in a call">
+                        <PhoneCall size={12} /> On a call
+                      </span>
+                    )}
+                    {presence.data?.presence && !presence.data.presence.error && !onCall && (
+                      <span
+                        className="kind-badge"
+                        title={`Teams presence: ${presence.data.presence.availability} / ${presence.data.presence.activity}`}
+                      >
+                        Teams · {presenceLabel(presence.data.presence.availability)}
+                      </span>
+                    )}
                     <KindBadge kind={agent.kind} />
                     <EnvironmentBadge environment={agent.environment} />
                     {agent.delegated && (
@@ -483,6 +504,7 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
                     agentId={agent.id}
                     agentName={agent.name}
                     agentStatus={agent.status}
+                    onCall={onCall}
                     brain={brain.data?.brain ?? null}
                     costs={costs.data}
                     boost={boost.data?.boost ?? null}

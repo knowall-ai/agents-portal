@@ -28,6 +28,7 @@ Agents Portal monitors the AI agents KnowAll AI builds and runs for itself and i
 - **Permissions** = the agent account's directory roles, groups and Azure RBAC roles, plus API permissions and consent state of its app registrations (`appRegistrations` + Bot Service app IDs), via Graph `Directory.Read.All` and ARM role assignments. Read-only
 - **Boost** = the one write action: `POST /api/agents/[id]/boost` runs the agent's `boost.sh` on its VM via ARM `runCommand` with the user's token (OpenAI Fast mode for N hours, VM reverts itself). Gated by Azure RBAC, audited in the Activity Log
 - **Brain** = the agent's Reverie graph memory drawn live: `GET /api/agents/[id]/brain` (snapshot) and `/brain/events` (SSE proxy) read `reverie serve` on the agent VM at the registry's `brainUrl` with `REVERIE_TOKEN`; `BRAIN_FIXTURE=1` serves a built-in graph for development
+- **Presence** = Teams presence of the agent's own account (`GET /api/agents/[id]/presence`, Graph `Presence.Read.All`, cached 20 s): the page header and the Brains wall show an *On a call* chip while the activity is InACall, InAConferenceCall or Presenting
 - **Soul** = the agent's `SOUL.md` (`soulPath`, default `workspace/SOUL.md` then `SOUL.md`) rendered on its page
 - **Activity** = Azure Activity Log + GitHub commits + Foundry runs, merged and sorted
 - **Costs** = Azure Cost Management by resource group (user token) + OpenAI/Anthropic admin cost APIs by project/workspace mapping + `fixedCosts` from the registry; aggregation is pure in `src/lib/agents/costs.ts`

@@ -15,6 +15,8 @@ export const GRAPH_SCOPE = 'https://graph.microsoft.com/User.Read';
 export const GRAPH_DIRECTORY_SCOPE = 'https://graph.microsoft.com/User.Read.All';
 /** Reading groups, directory roles, applications and consent grants. Needs admin consent. */
 export const GRAPH_DIRECTORY_READ_ALL_SCOPE = 'https://graph.microsoft.com/Directory.Read.All';
+/** Reading another user's Teams presence (is the agent on a call). Needs admin consent. */
+export const GRAPH_PRESENCE_SCOPE = 'https://graph.microsoft.com/Presence.Read.All';
 
 export interface UserContext {
   /** ARM access token from the session */

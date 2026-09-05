@@ -18,13 +18,20 @@ import {
 } from '@/lib/providers/foundry';
 import { getRepoMarkdown, listRepoCommits, listRepoSkills } from '@/lib/providers/github';
 import { probeUrl } from '@/lib/providers/health';
-import { getAppAccess, getUserAccess, getUserLicensing } from '@/lib/providers/graph';
+import {
+  getAppAccess,
+  getUserAccess,
+  getUserLicensing,
+  getUserPresence,
+} from '@/lib/providers/graph';
 import { fetchBrainSnapshot, isValidBrainUrl } from '@/lib/providers/reverie';
 import { fixtureSnapshot } from '@/lib/brain-fixture';
+import { isOnCall } from '@/lib/presence';
 import {
   FOUNDRY_SCOPE,
   GRAPH_DIRECTORY_READ_ALL_SCOPE,
   GRAPH_DIRECTORY_SCOPE,
+  GRAPH_PRESENCE_SCOPE,
   getResourceToken,
   type UserContext,
 } from '@/lib/tokens';
@@ -36,6 +43,7 @@ import type {
   AgentDetail,
   AgentLicensing,
   AgentPermissions,
+  AgentPresence,
   AgentSoul,
   CostSourceStatus,
   CostsSummary,
@@ -201,6 +209,48 @@ export async function getLicensing(ctx: UserContext, agent: AgentDetail): Promis
     },
     // Keep successes for a while; retry failures (missing consent, Graph errors) quickly
     (value) => (value.licenseError ? DIRECTORY_ERROR_TTL : DIRECTORY_TTL)
+  );
+}
+
+const PRESENCE_TTL = 20 * 1000;
+
+/**
+ * Teams presence of the agent's own account, so the portal can show when the
+ * agent is on a call. Short-lived cache; never throws.
+ */
+export async function getPresence(ctx: UserContext, agent: AgentDetail): Promise<AgentPresence> {
+  const unknown = (error?: string): AgentPresence => ({
+    availability: 'PresenceUnknown',
+    activity: 'PresenceUnknown',
+    onCall: false,
+    checkedAt: new Date().toISOString(),
+    error,
+  });
+  if (!agent.teamsUpn) return unknown('No agent-teams-upn tag on this agent');
+  const upn = agent.teamsUpn;
+  return cached(
+    `presence:${scope(ctx)}:${agent.id}`,
+    async () => {
+      try {
+        const token = await getResourceToken(ctx, GRAPH_PRESENCE_SCOPE);
+        if (!token) {
+          return unknown(
+            'Microsoft Graph Presence.Read.All is not consented for this app — see docs/DEPLOYMENT.adoc'
+          );
+        }
+        const presence = await getUserPresence(token, upn);
+        return {
+          ...presence,
+          onCall: isOnCall(presence.activity),
+          checkedAt: new Date().toISOString(),
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(`Presence lookup failed for ${agent.id}:`, message);
+        return unknown(message);
+      }
+    },
+    PRESENCE_TTL
   );
 }
 

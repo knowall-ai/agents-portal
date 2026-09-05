@@ -129,6 +129,23 @@ interface RawLicense {
   servicePlans: RawPlan[];
 }
 
+/** Teams presence of a user (object id or UPN): availability and activity. */
+export async function getUserPresence(
+  token: string,
+  upn: string
+): Promise<{ availability: string; activity: string }> {
+  const user = encodeURIComponent(upn);
+  const account = await graphJson<{ id: string }>(token, `/users/${user}?$select=id`);
+  const presence = await graphJson<{ availability?: string; activity?: string }>(
+    token,
+    `/users/${account.id}/presence`
+  );
+  return {
+    availability: presence.availability ?? 'PresenceUnknown',
+    activity: presence.activity ?? 'PresenceUnknown',
+  };
+}
+
 /** Account state and assigned licences for a user principal name. */
 export async function getUserLicensing(
   token: string,
