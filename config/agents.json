@@ -61,7 +61,8 @@
       "customer": "Irish FA",
       "environment": "dev",
       "description": "Irish FA ticketing assistant — drafts replies to ticket enquiries for human review. In development on the KnowAll tenant.",
-      "resourceGroups": ["rg-winnie-dev"]
+      "resourceGroups": ["rg-winnie-dev"],
+      "avatarUrl": "/agents/winnie.png"
     },
     {
       "id": "pennie",
