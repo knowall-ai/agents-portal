@@ -51,7 +51,7 @@ export default function ActivityFeed({
   }
 
   return (
-    <ul className="divide-y" style={{ borderColor: 'var(--border)' }}>
+    <ul className="divide-y">
       {list.map((event) => (
         <li key={event.id} className="flex gap-3 px-4 py-3">
           <span

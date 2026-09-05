@@ -80,7 +80,7 @@ For richer metadata (skills repo, portal URL, health URL) or for resources you c
 }
 ----
 
-* `resourceGroups` claims every agent-shaped resource in those groups, tagged or not.
+* `resourceGroups` claims every agent-shaped resource in those groups, tagged or not — but only inside the scope the entry is trusted for: the subscriptions listed in `subscriptionIds`, or, when it lists none, the registry's own tenant (`AZURE_AD_TENANT_ID`, or the single tenant in `AZURE_AD_ALLOWED_TENANTS`). Resource-group names are only unique within a subscription, so an entry that claims groups in another tenant — a Lighthouse-delegated subscription, say — must set `subscriptionIds`, otherwise it claims nothing.
 * `skillsPath` is the folder containing `<skill>/SKILL.md`; symlinks (e.g. `workspace/skills → ../.claude/skills`) are followed.
 * `skillSources` lists shared skill packs the agent also loads at runtime (for OpenClaw, the repos in `skills.load.extraDirs`). A skill in the agent's own repo shadows a same-named plugin skill, exactly as it does at runtime. `GITHUB_TOKEN` must be able to read these repos too.
 * `appRegistrations` lists the Entra app registrations the agent runs as (`appId` + `label`). The *Permissions* card shows each one's API permissions with Microsoft's description and whether the tenant has consented, plus the account's directory roles, groups and Azure RBAC roles. Bot Service app IDs are added automatically.
@@ -161,6 +161,10 @@ Azure costs need no setup beyond the user having *Cost Management Reader* on the
 * Find the OpenAI project id under *Settings → Organization → Projects*; the Anthropic workspace id under *Settings → Workspaces*.
 * Set `OPENAI_ADMIN_KEY` / `ANTHROPIC_ADMIN_KEY` on the server (organisation admin keys, read-only use). Without them the breakdown says "not configured" rather than showing zero.
 * Give each agent its own OpenAI project / Anthropic workspace, otherwise spend cannot be separated.
+
+== Giving a customer access
+
+See link:CUSTOMER-ACCESS.adoc[Customer access]: invite them as a guest, grant `Reader` on their agent's resource group, assign the `Portal.Viewer` app role. Nothing in the registry changes.
 
 == Checklist
 

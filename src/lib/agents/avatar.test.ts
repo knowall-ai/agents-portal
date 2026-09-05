@@ -77,7 +77,14 @@ describe('azureAvatarPath', () => {
 });
 
 describe('getAvatar', () => {
-  const ctx = { armToken: 'arm', refreshToken: 'refresh', tenantId: 't', userId: 'u' };
+  const ctx = {
+    armToken: 'arm',
+    refreshToken: 'refresh',
+    tenantId: 't',
+    userId: 'u',
+    roles: [] as string[],
+    isAdmin: true,
+  };
   const agent = (id: string, over: Partial<AgentDetail> = {}): AgentDetail =>
     ({
       id,

@@ -58,6 +58,11 @@
             }
           },
           "resourceGroups": { "type": "array", "items": { "type": "string" } },
+          "subscriptionIds": {
+            "type": "array",
+            "items": { "type": "string", "format": "uuid" },
+            "description": "Subscriptions the resourceGroups live in. Required when the portal trusts more than one tenant, since resource-group names are only unique inside a subscription"
+          },
           "planned": { "type": "boolean" },
           "avatarUrl": {
             "type": "string",

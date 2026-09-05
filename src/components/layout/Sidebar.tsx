@@ -2,12 +2,13 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Activity, BookOpen, X, Github } from 'lucide-react';
+import { Home, Activity, BookOpen, Brain, X, Github } from 'lucide-react';
 import { AgentsPortalIcon } from '@/components/common';
 
 const mainNavItems = [
   { id: 'home', name: 'Agents', icon: <Home size={20} />, href: '/' },
   { id: 'activity', name: 'Activity', icon: <Activity size={20} />, href: '/activity' },
+  { id: 'brains', name: 'Brains', icon: <Brain size={20} />, href: '/brains' },
 ];
 
 interface SidebarProps {
@@ -67,7 +68,7 @@ export default function Sidebar({ isOpen = false, onClose, counts }: SidebarProp
         })}
       </nav>
 
-      <div className="flex-1 overflow-y-auto border-t" style={{ borderColor: 'var(--border)' }}>
+      <div className="flex-1 overflow-y-auto">
         <div className="p-3">
           <div
             className="mb-2 text-xs font-semibold uppercase"
@@ -103,7 +104,7 @@ export default function Sidebar({ isOpen = false, onClose, counts }: SidebarProp
           </div>
         </div>
 
-        <div className="border-t p-3" style={{ borderColor: 'var(--border)' }}>
+        <div className="p-3 pt-1">
           <a
             href="https://github.com/knowall-ai/agents-portal/blob/main/docs/ONBOARDING.adoc"
             target="_blank"

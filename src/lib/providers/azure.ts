@@ -1,5 +1,6 @@
 // Azure Resource Manager helpers: Resource Graph, subscriptions, tenants and the Activity Log.
 import type {
+  MetricPoint,
   PermissionItem,
   ActivityEvent,
   AzureResource,
@@ -21,9 +22,30 @@ export const AGENT_RESOURCE_TYPES = [
   'microsoft.containerinstance/containergroups',
 ];
 
+/**
+ * Every page of an ARM list, following `nextLink` until it runs out. The page
+ * cap stops a runaway loop; hitting it with pages still to come throws rather
+ * than returning a truncated list, which callers would read as complete.
+ */
+async function armList<T>(token: string, path: string, maxPages = 20): Promise<T[]> {
+  const items: T[] = [];
+  let next: string | undefined = path;
+  for (let page = 0; next && page < maxPages; page++) {
+    const result: { value: T[]; nextLink?: string } = await armFetch(token, next);
+    items.push(...result.value);
+    next = result.nextLink;
+  }
+  if (next) throw new Error(`ARM list incomplete: more than ${maxPages} pages for ${path}`);
+  return items;
+}
+
+/** ARM answers in seconds; a hung socket must not stall a whole page */
+const ARM_TIMEOUT_MS = 30_000;
+
 async function armFetch<T>(token: string, path: string, init?: RequestInit): Promise<T> {
   const url = path.startsWith('http') ? path : `${ARM}${path}`;
   const response = await fetch(url, {
+    signal: AbortSignal.timeout(ARM_TIMEOUT_MS),
     ...init,
     headers: {
       Authorization: `Bearer ${token}`,
@@ -321,15 +343,15 @@ export async function listRoleAssignments(
   const rows = (
     await Promise.all(
       subscriptionIds.map((sub) =>
-        armFetch<{ value: RoleAssignmentRow[] }>(
+        armList<RoleAssignmentRow>(
           token,
           `/subscriptions/${sub}/providers/Microsoft.Authorization/roleAssignments?api-version=2022-04-01&$filter=${encodeURIComponent(`principalId eq '${principalId}'`)}`
-        )
-          .then((r) => r.value)
-          .catch((error) => {
-            console.warn(`Role assignments failed for ${sub}:`, error);
-            return [] as RoleAssignmentRow[];
-          })
+        ).catch((error) => {
+          // Includes an incomplete (page-capped) list: a subscription whose
+          // assignments could not be read in full contributes none of them
+          console.warn(`Role assignments failed for ${sub}:`, error);
+          return [] as RoleAssignmentRow[];
+        })
       )
     )
   ).flat();
@@ -451,4 +473,46 @@ export async function runVmScript(
   }
   const message = result.properties?.output?.value?.map((v) => v.message ?? '').join('\n') ?? '';
   return parseRunCommandMessage(message);
+}
+
+/** Azure Monitor normally answers in well under a second; never wait on it for longer than this */
+const METRICS_TIMEOUT_MS = 15_000;
+
+interface MetricsResponse {
+  value: {
+    name: { value: string };
+    timeseries: { data: { timeStamp: string; average?: number }[] }[];
+  }[];
+}
+
+/**
+ * Average `Percentage CPU` for one VM over the last `hours`, one sample per
+ * `intervalMinutes`, from Azure Monitor. Needs Monitoring Reader (or Reader)
+ * on the VM, which anyone who can see the VM in the portal already has.
+ */
+export async function listVmCpu(
+  token: string,
+  resourceId: string,
+  hours: number,
+  intervalMinutes: number
+): Promise<MetricPoint[]> {
+  const end = new Date();
+  const start = new Date(end.getTime() - hours * 60 * 60 * 1000);
+  const query = new URLSearchParams({
+    'api-version': '2023-10-01',
+    metricnames: 'Percentage CPU',
+    timespan: `${start.toISOString()}/${end.toISOString()}`,
+    interval: `PT${intervalMinutes}M`,
+    aggregation: 'Average',
+  });
+  const result = await armFetch<MetricsResponse>(
+    token,
+    `${resourceId}/providers/Microsoft.Insights/metrics?${query}`,
+    { signal: AbortSignal.timeout(METRICS_TIMEOUT_MS) }
+  );
+  const data = result.value[0]?.timeseries[0]?.data ?? [];
+  return data.map((d) => ({
+    ts: Date.parse(d.timeStamp),
+    value: typeof d.average === 'number' ? Math.round(d.average * 10) / 10 : null,
+  }));
 }

@@ -76,6 +76,12 @@ export interface AgentRegistryEntry {
   brainUrl?: string;
   /** Resource groups whose resources belong to this agent (case-insensitive) */
   resourceGroups?: string[];
+  /**
+   * Subscriptions the entry's resource groups live in. Required when the portal
+   * trusts more than one tenant, because a resource-group name is only unique
+   * inside a subscription; otherwise the registry's own tenant is the scope.
+   */
+  subscriptionIds?: string[];
   /** Agent not yet built or deployed — shown as "planned" */
   planned?: boolean;
   /** Profile image (absolute URL or path under /public) */
@@ -194,8 +200,10 @@ export interface BrainDiff {
 /** What the brain route returns: the snapshot when available, else why not. */
 export interface AgentBrain {
   available: boolean;
-  /** true when served from the built-in fixture (BRAIN_FIXTURE=1) */
+  /** true when served from the built-in demo graph (BRAIN_FIXTURE=1 or ?demo=1) */
   fixture?: boolean;
+  /** true when a live Reverie source is configured for this agent (so demo can be switched off) */
+  liveAvailable?: boolean;
   snapshot?: BrainSnapshot;
   error?: string;
 }
@@ -400,6 +408,38 @@ export interface ActivityEvent {
   actor?: string;
   level: ActivityLevel;
   url?: string;
+}
+
+/** One metric sample from Azure Monitor */
+export interface MetricPoint {
+  /** epoch ms */
+  ts: number;
+  /** average over the interval; null when Azure has no sample */
+  value: number | null;
+}
+
+export interface VmCpuSeries {
+  resourceId: string;
+  name: string;
+  points: MetricPoint[];
+}
+
+export interface AgentMetrics {
+  /** Window the series cover, in hours */
+  hours: number;
+  /** Sample interval, in minutes */
+  intervalMinutes: number;
+  cpu: VmCpuSeries[];
+}
+
+/** Events on one calendar day, for the year-long activity calendar */
+export interface ActivityDay {
+  /** yyyy-MM-dd */
+  date: string;
+  total: number;
+  github: number;
+  azure: number;
+  foundry: number;
 }
 
 export interface Tenant {

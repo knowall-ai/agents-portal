@@ -1,10 +1,9 @@
 'use client';
 
-import { Suspense, use } from 'react';
+import { Suspense, use, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { formatDistanceToNow } from 'date-fns';
 import {
   ArrowLeft,
   BadgeCheck,
@@ -23,6 +22,8 @@ import {
   ShieldCheck,
   Sparkles,
   Activity,
+  BarChart3,
+  CalendarDays,
   Brain,
   Zap,
 } from 'lucide-react';
@@ -38,6 +39,8 @@ import {
   type TabDef,
 } from '@/components/common';
 import {
+  ActivityCalendar,
+  ActivityChart,
   ActivityFeed,
   BoostControl,
   BrainView,
@@ -49,10 +52,14 @@ import {
   SkillList,
   SoulPanel,
 } from '@/components/agents';
+import { Countdown } from '@/components/common';
+import { formatDistanceToNow } from 'date-fns';
 import { useApi } from '@/hooks';
 import { BACKDROPS, type Backdrop } from '@/components/agents/BrainView';
 import type {
+  ActivityDay,
   ActivityEvent,
+  AgentMetrics,
   AgentBoost,
   AgentBrain,
   AgentCosts,
@@ -75,6 +82,8 @@ const TAB_IDS = [
 ] as const;
 type TabId = (typeof TAB_IDS)[number];
 const RECENT_ACTIVITY = 8;
+/** The Activity tab lists this many; the chart above it uses everything fetched */
+const ACTIVITY_FEED_LIMIT = 50;
 
 export default function AgentPage(props: { params: Promise<{ id: string }> }) {
   // useSearchParams needs a Suspense boundary in the App Router
@@ -93,7 +102,17 @@ export default function AgentPage(props: { params: Promise<{ id: string }> }) {
 
 function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { status } = useSession();
+  const { data: session, status } = useSession();
+  // Customers (Portal.Viewer) get a read-only subset; undefined while the session loads
+  const isAdmin = session?.user.isAdmin ?? false;
+  const [boostOpen, setBoostOpen] = useState(false);
+  // Escape closes the panel wherever focus is (the trigger keeps focus when it opens)
+  useEffect(() => {
+    if (!boostOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setBoostOpen(false);
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [boostOpen]);
   const ready = status === 'authenticated';
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -101,6 +120,7 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
   const requestedTab: TabId | null = (TAB_IDS as readonly string[]).includes(requested ?? '')
     ? (requested as TabId)
     : null;
+  const demo = searchParams.get('demo') === '1';
   const requestedBg = searchParams.get('bg');
   const backdrop: Backdrop = (BACKDROPS as readonly string[]).includes(requestedBg ?? '')
     ? (requestedBg as Backdrop)
@@ -121,19 +141,33 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
   const soul = useApi<{ soul: AgentSoul | null; configured: boolean }>(
     ready ? `/api/agents/${id}/soul` : null
   );
-  const activity = useApi<{ events: ActivityEvent[] }>(
+  const metrics = useApi<{ metrics: AgentMetrics }>(
+    ready ? `/api/agents/${id}/metrics?hours=72` : null,
+    120_000
+  );
+  const activity = useApi<{ events: ActivityEvent[]; daily: ActivityDay[] }>(
     ready ? `/api/agents/${id}/activity` : null,
     120_000
   );
-  const costs = useApi<AgentCosts>(ready ? `/api/agents/${id}/costs` : null, 15 * 60_000);
+  const admin = ready && isAdmin;
+  const costs = useApi<AgentCosts>(admin ? `/api/agents/${id}/costs` : null, 15 * 60_000);
   const licensing = useApi<{ licensing: AgentLicensing }>(
-    ready ? `/api/agents/${id}/licenses` : null
+    admin ? `/api/agents/${id}/licenses` : null
   );
   const permissions = useApi<{ permissions: AgentPermissions }>(
-    ready ? `/api/agents/${id}/permissions` : null
+    admin ? `/api/agents/${id}/permissions` : null
   );
-  const boost = useApi<{ boost: AgentBoost }>(ready ? `/api/agents/${id}/boost` : null, 60_000);
-  const brain = useApi<{ brain: AgentBrain }>(ready ? `/api/agents/${id}/brain` : null);
+  const boost = useApi<{ boost: AgentBoost }>(admin ? `/api/agents/${id}/boost` : null, 60_000);
+  const brain = useApi<{ brain: AgentBrain }>(
+    ready ? `/api/agents/${id}/brain${demo ? '?demo=1' : ''}` : null
+  );
+  const setDemo = (on: boolean) => {
+    const next = new URLSearchParams(searchParams.toString());
+    if (on) next.set('demo', '1');
+    else next.delete('demo');
+    next.set('tab', 'brain');
+    router.replace(`/agents/${id}?${next.toString()}`);
+  };
 
   const agent = detail.data?.agent;
   const permissionCount = permissions.data
@@ -147,31 +181,43 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
         0
       )
     : undefined;
+  // One CPU line for the agent: the mean across its VMs at each sample time
+  const mergedCpu = useMemo(() => {
+    const series = metrics.data?.metrics.cpu ?? [];
+    if (series.length === 0) return null;
+    const byTs = new Map<number, number[]>();
+    for (const vm of series)
+      for (const p of vm.points)
+        if (p.value !== null) byTs.set(p.ts, [...(byTs.get(p.ts) ?? []), p.value]);
+    return [...byTs.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([ts, values]) => ({ ts, value: values.reduce((n, v) => n + v, 0) / values.length }));
+  }, [metrics.data]);
   const tabs: TabDef[] = [
     { id: 'overview', label: 'Overview', icon: <LayoutGrid size={14} /> },
-    ...(brain.data?.brain.available
+    {
+      id: 'brain',
+      label: 'Brain',
+      icon: <Brain size={14} />,
+      count: brain.data?.brain.snapshot?.stats.nodeCount,
+    },
+    ...(isAdmin ? [{ id: 'costs', label: 'Costs', icon: <Receipt size={14} /> }] : []),
+    ...(isAdmin
       ? [
           {
-            id: 'brain',
-            label: 'Brain',
-            icon: <Brain size={14} />,
-            count: brain.data.brain.snapshot?.stats.nodeCount,
+            id: 'licences',
+            label: 'Licences',
+            icon: <BadgeCheck size={14} />,
+            count: licensing.data?.licensing.licenses.length,
+          },
+          {
+            id: 'permissions',
+            label: 'Permissions',
+            icon: <ShieldCheck size={14} />,
+            count: permissionCount,
           },
         ]
       : []),
-    { id: 'costs', label: 'Costs', icon: <Receipt size={14} /> },
-    {
-      id: 'licences',
-      label: 'Licences',
-      icon: <BadgeCheck size={14} />,
-      count: licensing.data?.licensing.licenses.length,
-    },
-    {
-      id: 'permissions',
-      label: 'Permissions',
-      icon: <ShieldCheck size={14} />,
-      count: permissionCount,
-    },
     {
       id: 'skills',
       label: 'Skills',
@@ -251,6 +297,60 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                {isAdmin && boost.data?.boost.supported && (
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setBoostOpen((open) => !open)}
+                      className={[
+                        'btn-boost flex items-center gap-2 text-sm',
+                        boost.data.boost.active && 'is-active',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                      aria-expanded={boostOpen}
+                      aria-controls="boost-panel"
+                      title={
+                        boost.data.boost.active
+                          ? 'Boost is on: OpenAI Fast mode, metered API'
+                          : 'Boost: OpenAI Fast mode for a fixed time'
+                      }
+                    >
+                      <Zap size={14} />
+                      {boost.data.boost.active ? 'Boost on' : 'Boost'}
+                      {boost.data.boost.active && boost.data.boost.until && (
+                        <Countdown
+                          until={new Date(boost.data.boost.until).getTime()}
+                          className="text-xs opacity-90"
+                          onDone={() => boost.refetch()}
+                        />
+                      )}
+                    </button>
+                    {boostOpen && (
+                      <>
+                        <div
+                          className="fixed inset-0 z-10"
+                          aria-hidden
+                          onClick={() => setBoostOpen(false)}
+                        />
+                        <div
+                          id="boost-panel"
+                          role="dialog"
+                          aria-label="Boost"
+                          className="card absolute right-0 z-20 mt-2 w-[min(36rem,calc(100vw-2rem))] shadow-xl"
+                        >
+                          <BoostControl
+                            agentId={agent.id}
+                            boost={boost.data?.boost ?? null}
+                            isLoading={boost.isLoading}
+                            error={boost.error}
+                            onChanged={() => boost.refetch()}
+                          />
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
                 {agent.teamsChatUrl && (
                   <a
                     href={agent.teamsChatUrl}
@@ -298,6 +398,7 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
                     skills.refetch();
                     soul.refetch();
                     activity.refetch();
+                    metrics.refetch();
                     costs.refetch();
                     licensing.refetch();
                     permissions.refetch();
@@ -386,24 +487,18 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
               {tab === 'overview' && (
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
                   <div className="space-y-6 lg:col-span-2">
-                    {boost.data?.boost.supported && (
-                      <section className="card">
-                        <h2
-                          className="flex items-center gap-2 border-b p-4 text-lg font-semibold"
-                          style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-                        >
-                          <Zap size={18} style={{ color: 'var(--primary)' }} /> Boost
-                        </h2>
-                        <BoostControl
-                          agentId={agent.id}
-                          boost={boost.data?.boost ?? null}
-                          isLoading={boost.isLoading}
-                          error={boost.error}
-                          onChanged={() => boost.refetch()}
-                        />
-                      </section>
-                    )}
-
+                    <section className="card">
+                      <h2
+                        className="flex items-center gap-2 border-b p-4 text-lg font-semibold"
+                        style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                      >
+                        <CalendarDays size={18} style={{ color: 'var(--primary)' }} /> Activity
+                      </h2>
+                      <ActivityCalendar
+                        days={activity.data?.daily ?? null}
+                        isLoading={activity.isLoading}
+                      />
+                    </section>
                     {agent.repo && (soul.isLoading || soul.error || soul.data) && (
                       <section className="card">
                         <h2
@@ -456,7 +551,7 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
                     )}
                   </div>
 
-                  <section className="card self-start">
+                  <section className="card">
                     <h2
                       className="flex items-center gap-2 border-b p-4 text-lg font-semibold"
                       style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
@@ -501,6 +596,8 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
                     backdrop={backdrop}
                     isLoading={brain.isLoading}
                     error={brain.error}
+                    demo={demo}
+                    onDemoChange={setDemo}
                   />
                 </section>
               )}
@@ -570,19 +667,36 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
               )}
 
               {tab === 'activity' && (
-                <section className="card">
-                  <h2
-                    className="flex items-center gap-2 border-b p-4 text-lg font-semibold"
-                    style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-                  >
-                    <Activity size={18} style={{ color: 'var(--primary)' }} /> Activity
-                  </h2>
-                  <ActivityFeed
-                    events={activity.data?.events ?? null}
-                    isLoading={activity.isLoading}
-                    error={activity.error}
-                  />
-                </section>
+                <div className="space-y-6">
+                  <section className="card">
+                    <h2
+                      className="flex items-center gap-2 border-b p-4 text-lg font-semibold"
+                      style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                    >
+                      <BarChart3 size={18} style={{ color: 'var(--primary)' }} /> Last 3 days
+                    </h2>
+                    <ActivityChart
+                      events={activity.data?.events ?? null}
+                      hours={72}
+                      isLoading={activity.isLoading}
+                      cpu={mergedCpu}
+                    />
+                  </section>
+                  <section className="card">
+                    <h2
+                      className="flex items-center gap-2 border-b p-4 text-lg font-semibold"
+                      style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                    >
+                      <Activity size={18} style={{ color: 'var(--primary)' }} /> Activity
+                    </h2>
+                    <ActivityFeed
+                      events={activity.data?.events ?? null}
+                      isLoading={activity.isLoading}
+                      error={activity.error}
+                      limit={ACTIVITY_FEED_LIMIT}
+                    />
+                  </section>
+                </div>
               )}
             </div>
           </>
