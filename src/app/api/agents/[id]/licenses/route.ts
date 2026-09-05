@@ -1,19 +1,16 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { forbiddenForViewers, getUserContext } from '@/lib/tokens';
-import { getAgent, getLicensing } from '@/lib/agents/service';
+import { adminAgentGate } from '@/lib/admin-route';
+import { getLicensing } from '@/lib/agents/service';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
 export async function GET(req: NextRequest, { params }: RouteContext) {
-  const ctx = await getUserContext(req);
-  if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (!ctx.isAdmin) return forbiddenForViewers();
-
   const { id } = await params;
   try {
-    const agent = await getAgent(ctx, id);
-    if (!agent) return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
-    const licensing = await getLicensing(ctx, agent);
+    const gate = await adminAgentGate(req, id);
+    if (!gate.ok) return gate.response;
+
+    const licensing = await getLicensing(gate.ctx, gate.agent);
     return NextResponse.json({ licensing });
   } catch (error) {
     console.error(`Failed to load licences for ${id}:`, error);

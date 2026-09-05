@@ -71,6 +71,16 @@ export async function listAgents(ctx: UserContext): Promise<AgentDetail[]> {
   });
 }
 
+/**
+ * Whether the caller can see an agent with this id, from the cached agents list
+ * alone. Cheap enough to run before an authorisation check: it reads nothing the
+ * caller is not already entitled to and does not compose the agent's detail.
+ */
+export async function agentExists(ctx: UserContext, id: string): Promise<boolean> {
+  const agents = await listAgents(ctx);
+  return agents.some((a) => a.id === id.toLowerCase());
+}
+
 export async function getAgent(ctx: UserContext, id: string): Promise<AgentDetail | null> {
   const agents = await listAgents(ctx);
   const agent = agents.find((a) => a.id === id.toLowerCase());
