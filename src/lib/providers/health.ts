@@ -70,8 +70,11 @@ function isPrivateAddress(ip: string): boolean {
 
 /** The public address a URL may be probed at. */
 export interface ProbeTarget {
+  /** The first validated address, for callers that take one */
   address: string;
   family: 4 | 6;
+  /** Every validated address the name resolved to, so the socket can fall back within them */
+  addresses: { address: string; family: 4 | 6 }[];
 }
 
 /**
@@ -96,8 +99,12 @@ export async function probeTarget(url: string): Promise<ProbeTarget | null> {
       ? [{ address: host, family: literal }]
       : await lookup(host, { all: true });
     if (addresses.length === 0 || addresses.some((a) => isPrivateAddress(a.address))) return null;
-    const [first] = addresses;
-    return { address: first.address, family: first.family === 6 ? 6 : 4 };
+    const validated = addresses.map((a) => ({
+      address: a.address,
+      family: (a.family === 6 ? 6 : 4) as 4 | 6,
+    }));
+    const [first] = validated;
+    return { address: first.address, family: first.family, addresses: validated };
   } catch {
     return null;
   }
@@ -126,8 +133,11 @@ export function connectionPin(target: ProbeTarget) {
     ) => void
   ) => {
     // Node's network-family autoselection asks with { all: true } and expects
-    // the array form; answering with a string there fails the request
-    if (options?.all) callback(null, [{ address: target.address, family: target.family }]);
+    // the array form; answering with a string there fails the request. It gets
+    // every validated address, so an unreachable first record still falls back
+    // to the next one without another DNS lookup
+    if (options?.all)
+      callback(null, target.addresses ?? [{ address: target.address, family: target.family }]);
     else callback(null, target.address, target.family);
   };
 }

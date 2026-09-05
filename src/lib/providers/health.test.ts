@@ -233,20 +233,20 @@ describe('probeUrl', () => {
 });
 
 describe('connectionPin', () => {
+  const one = { address: '93.184.216.34', family: 4 as const };
+
   it('answers every hostname with the one address that was validated', () => {
     const resolved = vi.fn();
-    connectionPin({ address: '93.184.216.34', family: 4 })('anything.example', {}, resolved);
+    connectionPin({ ...one, addresses: [one] })('anything.example', {}, resolved);
     expect(resolved).toHaveBeenCalledWith(null, '93.184.216.34', 4);
   });
 
   it('answers in array form when Node asks for every address (family autoselection)', () => {
     const resolved = vi.fn();
-    connectionPin({ address: '93.184.216.34', family: 4 })(
-      'anything.example',
-      { all: true },
-      resolved
-    );
-    expect(resolved).toHaveBeenCalledWith(null, [{ address: '93.184.216.34', family: 4 }]);
+    const addresses = [{ address: '2606:2800:220:1::1', family: 6 as const }, one];
+    connectionPin({ ...addresses[0], addresses })('anything.example', { all: true }, resolved);
+    // every validated address, so an unreachable first record falls back to the next
+    expect(resolved).toHaveBeenCalledWith(null, addresses);
   });
 });
 
