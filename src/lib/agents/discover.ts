@@ -224,6 +224,9 @@ export function teamsCallUrl(
   entry: AgentRegistryEntry | undefined,
   resources: AzureResource[]
 ): string | undefined {
+  // A Bot Service agent is reachable in chat but has no callable account, even
+  // when a UPN is tagged or set in the registry.
+  if (resources.some((r) => r.type === 'microsoft.botservice/botservices')) return undefined;
   const upn = agentUpn(entry, resources);
   return upn
     ? `https://teams.microsoft.com/l/call/0/0?users=${encodeURIComponent(upn)}`

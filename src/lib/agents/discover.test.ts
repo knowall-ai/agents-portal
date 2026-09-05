@@ -179,6 +179,19 @@ describe('teamsCallUrl', () => {
     expect(teamsCallUrl({ id: 'winnie', name: 'Winnie' }, [])).toBeUndefined();
     expect(teamsCallUrl(undefined, [])).toBeUndefined();
   });
+
+  it('never offers a call link for a bot, even one with a UPN', () => {
+    const bot = resource({ type: 'microsoft.botservice/botservices', botAppId: 'abc' });
+    expect(
+      teamsCallUrl({ id: 'winnie', name: 'Winnie', teamsUpn: 'winnie@example.com' }, [bot])
+    ).toBeUndefined();
+    expect(
+      teamsCallUrl(undefined, [
+        resource({ type: 'microsoft.botservice/botservices', botAppId: 'abc' }),
+        resource({ tags: { 'agent-teams-upn': 'winnie@example.com' } }),
+      ])
+    ).toBeUndefined();
+  });
 });
 
 describe('teamsChatUrl', () => {
