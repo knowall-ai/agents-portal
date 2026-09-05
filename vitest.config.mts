@@ -25,9 +25,9 @@ export default defineConfig({
         // Ratchet: raised automatically as coverage rises, never lowered by hand.
         autoUpdate: true,
         lines: 41,
-        statements: 41,
+        statements: 42,
         functions: 44,
-        branches: 40,
+        branches: 41,
       },
     },
   },
