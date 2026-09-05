@@ -152,9 +152,6 @@ const PROBE_TIMEOUT_MS = 6_000;
  */
 function probeStatus(url: string, target: ProbeTarget): Promise<number> {
   return new Promise((resolve, reject) => {
-    // An absolute deadline: the socket's own inactivity timeout resets on every
-    // byte, so a server trickling headers could hold getAgent open indefinitely
-    const deadline = setTimeout(() => req.destroy(new Error('Probe timed out')), PROBE_TIMEOUT_MS);
     const req = request(
       url,
       {
@@ -175,6 +172,11 @@ function probeStatus(url: string, target: ProbeTarget): Promise<number> {
       clearTimeout(deadline);
       reject(error);
     });
+    // An absolute deadline, armed once the request exists: the socket's own
+    // inactivity timeout resets on every byte, so a server trickling headers
+    // could otherwise hold getAgent open indefinitely. The handlers above only
+    // run after this line, so they always see it.
+    const deadline = setTimeout(() => req.destroy(new Error('Probe timed out')), PROBE_TIMEOUT_MS);
     req.end();
   });
 }
