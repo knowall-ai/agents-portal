@@ -2,12 +2,13 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Activity, BookOpen, X, Github } from 'lucide-react';
+import { Home, Activity, BookOpen, Brain, X, Github } from 'lucide-react';
 import { AgentsPortalIcon } from '@/components/common';
 
 const mainNavItems = [
   { id: 'home', name: 'Agents', icon: <Home size={20} />, href: '/' },
   { id: 'activity', name: 'Activity', icon: <Activity size={20} />, href: '/activity' },
+  { id: 'brains', name: 'Brains', icon: <Brain size={20} />, href: '/brains' },
 ];
 
 interface SidebarProps {
