@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityCalendar as Calendar, type Activity } from 'react-activity-calendar';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { LoadingSpinner } from '@/components/common';
 import type { ActivityDay } from '@/types';
 
@@ -106,7 +106,7 @@ export default function ActivityCalendar({ days, isLoading }: ActivityCalendarPr
                   day.foundry ? `${day.foundry} Foundry` : null,
                 ].filter(Boolean)
               : [];
-            const label = `${format(new Date(activity.date), 'EEE d MMM')}: ${
+            const label = `${format(parseISO(activity.date), 'EEE d MMM')}: ${
               activity.count === 0 ? 'no activity' : parts.join(', ')
             }`;
             return (

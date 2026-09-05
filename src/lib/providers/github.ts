@@ -174,13 +174,17 @@ export async function listRepoCommits(
     throw new Error(`Invalid sinceDays: ${sinceDays}`);
   const since = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000).toISOString();
   const commits: RawCommit[] = [];
-  for (let page = 1; commits.length < limit; page++) {
-    const perPage = Math.min(100, limit - commits.length);
-    const batch = await ghJson<RawCommit[]>(
-      `/repos/${repo}/commits?per_page=${perPage}&page=${page}&since=${since}`
-    );
-    commits.push(...batch);
-    if (batch.length < perPage) break;
+  try {
+    for (let page = 1; commits.length < limit; page++) {
+      const perPage = Math.min(100, limit - commits.length);
+      const batch = await ghJson<RawCommit[]>(
+        `/repos/${repo}/commits?per_page=${perPage}&page=${page}&since=${since}`
+      );
+      commits.push(...batch);
+      if (batch.length < perPage) break;
+    }
+  } catch (error) {
+    console.warn(`listRepoCommits: failed to page commits for ${repo}`, error);
   }
   return commits.map((c) => ({
     id: `github:${agent.id}:${c.sha}`,
