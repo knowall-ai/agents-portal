@@ -103,12 +103,24 @@ export function summarisePlans(plans: RawPlan[]): { capabilities: string[]; othe
 }
 
 async function graphJson<T>(token: string, path: string): Promise<T> {
-  const response = await fetch(`${GRAPH}${path}`, {
+  const response = await fetch(path.startsWith('https://') ? path : `${GRAPH}${path}`, {
     headers: { Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(15_000),
   });
   if (!response.ok) throw new Error(`Graph ${response.status} ${path}`);
   return response.json() as Promise<T>;
+}
+
+/** Every page of a Graph collection, following `@odata.nextLink` until it runs out. */
+async function graphList<T>(token: string, path: string, maxPages = 20): Promise<T[]> {
+  const items: T[] = [];
+  let next: string | undefined = path;
+  for (let page = 0; next && page < maxPages; page++) {
+    const result: { value: T[]; '@odata.nextLink'?: string } = await graphJson(token, next);
+    items.push(...result.value);
+    next = result['@odata.nextLink'];
+  }
+  return items;
 }
 
 interface RawLicense {
@@ -165,7 +177,7 @@ export async function getUserAccess(
   const user = encodeURIComponent(upn);
   const [account, memberOf] = await Promise.all([
     graphJson<{ id: string }>(token, `/users/${user}?$select=id`),
-    graphJson<{ value: DirectoryObject[] }>(
+    graphList<DirectoryObject>(
       token,
       `/users/${user}/memberOf?$select=id,displayName,description&$top=999`
     ),
@@ -180,11 +192,11 @@ export async function getUserAccess(
   const byName = (a: PermissionItem, b: PermissionItem) => a.name.localeCompare(b.name);
   return {
     objectId: account.id,
-    directoryRoles: memberOf.value
+    directoryRoles: memberOf
       .filter((o) => o['@odata.type'] === '#microsoft.graph.directoryRole')
       .map((o) => toItem(o, 'directory-role'))
       .sort(byName),
-    groups: memberOf.value
+    groups: memberOf
       .filter((o) => o['@odata.type'] === '#microsoft.graph.group')
       .map((o) => toItem(o, 'group'))
       .sort(byName),

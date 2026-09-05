@@ -118,7 +118,9 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
     60_000
   );
   const skills = useApi<{ skills: Skill[] }>(ready ? `/api/agents/${id}/skills` : null);
-  const soul = useApi<{ soul: AgentSoul | null }>(ready ? `/api/agents/${id}/soul` : null);
+  const soul = useApi<{ soul: AgentSoul | null; configured: boolean }>(
+    ready ? `/api/agents/${id}/soul` : null
+  );
   const activity = useApi<{ events: ActivityEvent[] }>(
     ready ? `/api/agents/${id}/activity` : null,
     120_000
@@ -300,6 +302,7 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
                     licensing.refetch();
                     permissions.refetch();
                     boost.refetch();
+                    brain.refetch();
                   }}
                   className="btn-secondary flex items-center gap-2 text-sm"
                 >
@@ -422,6 +425,7 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
                         </h2>
                         <SoulPanel
                           soul={soul.data?.soul ?? null}
+                          configured={soul.data?.configured}
                           isLoading={soul.isLoading}
                           error={soul.error}
                         />

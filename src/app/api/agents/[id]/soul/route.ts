@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getUserContext } from '@/lib/tokens';
 import { getAgent, getSoul } from '@/lib/agents/service';
+import { getRegistryEntry } from '@/lib/registry';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -13,7 +14,8 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     const agent = await getAgent(ctx, id);
     if (!agent) return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
     const soul = await getSoul(ctx, agent);
-    return NextResponse.json({ soul });
+    // configured=false: no registry repo, so SOUL.md cannot be read by design
+    return NextResponse.json({ soul, configured: Boolean(getRegistryEntry(agent.id)?.repo) });
   } catch (error) {
     console.error(`Failed to load SOUL.md for ${id}:`, error);
     const message = error instanceof Error ? error.message : 'Unknown error';

@@ -116,7 +116,13 @@ export async function getSkills(ctx: UserContext, agent: AgentDetail): Promise<S
       const [repoLists, assistants] = await Promise.all([
         Promise.all(
           sources.map((source) =>
-            listRepoSkills(source.repo, source.path).catch((error) => {
+            // Repo skills come from the server-side GitHub token and are the same for
+            // every viewer, so cache them per repo rather than per user
+            cached(
+              `skills:repo:${source.repo}:${source.path}`,
+              () => listRepoSkills(source.repo, source.path),
+              10 * 60 * 1000
+            ).catch((error) => {
               console.warn(`GitHub skills lookup failed for ${agent.id} (${source.repo}):`, error);
               return [] as Skill[];
             })
@@ -157,7 +163,7 @@ export async function getSoul(ctx: UserContext, agent: AgentDetail): Promise<Age
 }
 
 /**
- * Microsoft licences on the agent's own Entra account (registry `teamsUpn`)
+ * Microsoft licences on the agent's own Entra account (`agent-teams-upn` tag or registry `teamsUpn`)
  * plus flat-fee subscriptions from the registry. Reading another user's
  * licences needs the User.Read.All delegated permission with admin consent;
  * without it the subscriptions still render and `licenseError` says why.
@@ -168,12 +174,12 @@ const DIRECTORY_ERROR_TTL = 60 * 1000;
 export async function getLicensing(ctx: UserContext, agent: AgentDetail): Promise<AgentLicensing> {
   const entry = getRegistryEntry(agent.id);
   const base: AgentLicensing = {
-    upn: entry?.teamsUpn,
+    upn: agent.teamsUpn,
     licenses: [],
     subscriptions: entry?.fixedCosts ?? [],
   };
-  if (!entry?.teamsUpn) return base;
-  const upn = entry.teamsUpn;
+  if (!agent.teamsUpn) return base;
+  const upn = agent.teamsUpn;
   return cached(
     `licensing:${scope(ctx)}:${agent.id}`,
     async () => {
@@ -224,9 +230,9 @@ export async function getPermissions(
       apps.set(r.botAppId.toLowerCase(), { appId: r.botAppId, label: `Bot Service ${r.name}` });
     }
   }
-  if (!entry?.teamsUpn && apps.size === 0) return { apps: [] };
+  if (!agent.teamsUpn && apps.size === 0) return { apps: [] };
 
-  const upn = entry?.teamsUpn;
+  const upn = agent.teamsUpn;
   const skeleton = (error: string): AgentPermissions => ({
     account: upn ? { upn, directoryRoles: [], groups: [], azureRoles: [] } : undefined,
     apps: [...apps.values()].map((a) => ({
@@ -435,7 +441,10 @@ export function brainSource(agent: AgentDetail): BrainSource | null {
   return { kind: 'reverie', url, token };
 }
 
-/** Snapshot of the agent's graph memory; short-lived cache, failures not cached. */
+/**
+ * Snapshot of the agent's graph memory. Cached briefly; a failed refresh serves
+ * the last good snapshot for a short while (see cache.ts) before erroring.
+ */
 export async function getBrain(agent: AgentDetail): Promise<AgentBrain> {
   const source = brainSource(agent);
   if (!source) {

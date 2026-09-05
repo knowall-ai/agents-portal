@@ -48,7 +48,7 @@
 |Reading another user's licence details also needs the *viewer* to hold an Entra role with `microsoft.directory/users/licenseDetails/read` (Global Reader, User Administrator, License Administrator, or a custom role). Assign the role and reload; failures are only cached for a minute.
 
 |**Brain tab missing or says no brain connected**
-|Set `brainUrl` in `config/agents.json` and `REVERIE_TOKEN` on the server; the agent VM must run `reverie serve` behind Caddy (`/reverie/*`). `BRAIN_FIXTURE=1` shows a built-in graph for development.
+|Set `brainUrl` in `config/agents.json` and `REVERIE_TOKEN` on the server. The URL must be `https` and route to the agent's `reverie serve` (a reverse proxy such as Caddy with a `/reverie/*` route is the usual way). `BRAIN_FIXTURE=1` shows a built-in graph for development.
 
 |**Brain shows "stream offline"**
 |The SSE proxy to `<brainUrl>/brain/events` dropped. Check `reverie-serve` on the VM and that the proxy does not buffer event streams.

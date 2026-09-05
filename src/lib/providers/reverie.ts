@@ -21,6 +21,8 @@ export async function fetchBrainSnapshot(
   const response = await fetch(`${baseUrl.replace(/\/$/, '')}/brain/graph?limit=${limit}`, {
     headers: headers(token),
     signal: AbortSignal.timeout(20_000),
+    // the token goes to the validated URL only: never follow it somewhere else
+    redirect: 'error',
   });
   if (!response.ok) throw new Error(`Reverie ${response.status} /brain/graph`);
   return response.json() as Promise<BrainSnapshot>;
@@ -33,10 +35,27 @@ export async function openBrainEvents(
   limit = 400,
   signal?: AbortSignal
 ): Promise<Response> {
-  const response = await fetch(`${baseUrl.replace(/\/$/, '')}/brain/events?limit=${limit}`, {
-    headers: { Authorization: `Bearer ${token}`, Accept: 'text/event-stream' },
-    signal,
-  });
-  if (!response.ok || !response.body) throw new Error(`Reverie ${response.status} /brain/events`);
-  return response;
+  // Bound the connection phase only: once headers arrive the stream may live
+  // for hours, so the timeout is cleared rather than applied to the whole fetch
+  const connect = new AbortController();
+  const timer = setTimeout(
+    () => connect.abort(new Error('Reverie connect timeout')),
+    CONNECT_TIMEOUT_MS
+  );
+  const onAbort = () => connect.abort(signal?.reason);
+  signal?.addEventListener('abort', onAbort, { once: true });
+  try {
+    const response = await fetch(`${baseUrl.replace(/\/$/, '')}/brain/events?limit=${limit}`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'text/event-stream' },
+      signal: connect.signal,
+      redirect: 'error',
+    });
+    if (!response.ok || !response.body) throw new Error(`Reverie ${response.status} /brain/events`);
+    return response;
+  } finally {
+    clearTimeout(timer);
+  }
 }
+
+/** How long Reverie gets to answer with headers before the stream request is dropped. */
+export const CONNECT_TIMEOUT_MS = 15_000;

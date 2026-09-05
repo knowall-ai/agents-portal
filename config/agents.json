@@ -18,7 +18,6 @@
       ],
       "resourceGroups": ["ka-agents"],
       "avatarUrl": "/agents/sallie.png",
-      "teamsUpn": "sallie@knowall.ai",
       "appRegistrations": [
         { "appId": "27756f8e-e451-4c5d-91c3-e76035f376a6", "label": "Sallie MS365 MCP" },
         { "appId": "2b052ffe-e0f5-4a0e-ba85-910d56751ebc", "label": "Sallie - ClawdBot Portal" }
@@ -73,8 +72,7 @@
       "description": "AI business analyst that joins Microsoft Teams meetings as a real-time participant (T-Minus-15).",
       "repo": "knowall-ai/preppie-bot",
       "resourceGroups": ["tminus15agents"],
-      "avatarUrl": "/agents/pennie.png",
-      "teamsUpn": "pennie@knowall.ai"
+      "avatarUrl": "/agents/pennie.png"
     },
     {
       "id": "pennie-test",

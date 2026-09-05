@@ -13,7 +13,10 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
   try {
     const agent = await getAgent(ctx, id);
     if (!agent) return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
-    return NextResponse.json({ brain: await getBrain(agent) });
+    return NextResponse.json(
+      { brain: await getBrain(agent) },
+      { headers: { 'Cache-Control': 'no-store, private' } }
+    );
   } catch (error) {
     console.error(`Failed to load brain for ${id}:`, error);
     const message = error instanceof Error ? error.message : 'Unknown error';

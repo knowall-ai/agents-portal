@@ -212,6 +212,10 @@ export default function BrainView({
   const backdropRef = useRef<Plate | null>(null);
   const focusRef = useRef<SimNode | null>(null);
 
+  // Mirrored into refs so the render loop reads them without restarting
+  const statusRef = useRef(agentStatus);
+  const selectedRef = useRef<SimNode | null>(null);
+
   const [feed, setFeed] = useState<BrainActivation[]>([]);
   const [stats, setStats] = useState<BrainStats | null>(null);
   const [state, setState] = useState<BrainState | null>(null);
@@ -222,9 +226,6 @@ export default function BrainView({
   const [rotating, setRotating] = useState(true);
   const [streamStatus, setStreamStatus] = useState<'connecting' | 'live' | 'offline'>('connecting');
   const [tick, setTick] = useState(0);
-  // Mirrored into refs so the render loop reads them without restarting
-  const statusRef = useRef(agentStatus);
-  const selectedRef = useRef<SimNode | null>(null);
   useEffect(() => {
     statusRef.current = agentStatus;
   }, [agentStatus]);
@@ -465,6 +466,21 @@ export default function BrainView({
     (sim.force('link') as ReturnType<typeof forceLink<SimNode, SimLink>>).links(links);
     sim.alpha(0.4).restart();
     if (diff.stats) setStats(diff.stats);
+    // Keep the FOCUS panel honest: drop it if its node went, else refresh its links
+    const sel = selectedRef.current;
+    if (sel) {
+      if (!byId.has(sel.id)) {
+        setSelected(null);
+        setSelectedLinks([]);
+        focusRef.current = null;
+      } else {
+        setSelectedLinks(
+          links
+            .filter((l) => endpointId(l.source) === sel.id || endpointId(l.target) === sel.id)
+            .slice(0, 12)
+        );
+      }
+    }
   }, []);
 
   // ---- live stream ------------------------------------------------------------
@@ -489,6 +505,7 @@ export default function BrainView({
       source.onerror = () => {
         setStreamStatus('offline');
         if (source.readyState === EventSource.CLOSED && !stopped) {
+          source.close(); // drop its listeners; a fresh instance replaces it
           clearTimeout(retry);
           retry = setTimeout(connect, delay);
           delay = Math.min(60_000, delay * 2);
@@ -511,7 +528,8 @@ export default function BrainView({
       source.addEventListener('state', (e) => {
         try {
           const next = JSON.parse((e as MessageEvent).data) as Partial<BrainState>;
-          setState((s) => ({ ...(s as BrainState), ...next }));
+          // a partial arriving before the snapshot has nothing to merge into
+          setState((s) => (s ? { ...s, ...next } : s));
           if (typeof next.dreaming === 'boolean') dreamingRef.current = next.dreaming;
           if (typeof next.cpuPercent === 'number') {
             const cpu = next.cpuPercent;
@@ -1027,9 +1045,7 @@ export default function BrainView({
     setSelectedLinks(
       node
         ? linksRef.current
-            .filter(
-              (l) => (l.source as SimNode).id === node.id || (l.target as SimNode).id === node.id
-            )
+            .filter((l) => endpointId(l.source) === node.id || endpointId(l.target) === node.id)
             .slice(0, 12)
         : []
     );
