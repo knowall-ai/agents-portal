@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, use, useState } from 'react';
+import { Suspense, use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
@@ -95,6 +95,13 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { status } = useSession();
   const [boostOpen, setBoostOpen] = useState(false);
+  // Escape closes the panel wherever focus is (the trigger keeps focus when it opens)
+  useEffect(() => {
+    if (!boostOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setBoostOpen(false);
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [boostOpen]);
   const ready = status === 'authenticated';
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -257,9 +264,12 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
                     <button
                       type="button"
                       onClick={() => setBoostOpen((open) => !open)}
-                      className={`btn-boost flex items-center gap-2 text-sm${
-                        boost.data.boost.active ? 'is-active' : ''
-                      }`}
+                      className={[
+                        'btn-boost flex items-center gap-2 text-sm',
+                        boost.data.boost.active && 'is-active',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
                       aria-expanded={boostOpen}
                       aria-controls="boost-panel"
                       title={
@@ -289,7 +299,6 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
                           role="dialog"
                           aria-label="Boost"
                           className="card absolute right-0 z-20 mt-2 w-[min(36rem,calc(100vw-2rem))] shadow-xl"
-                          onKeyDown={(e) => e.key === 'Escape' && setBoostOpen(false)}
                         >
                           <BoostControl
                             agentId={agent.id}
