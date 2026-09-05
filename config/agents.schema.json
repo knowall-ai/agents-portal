@@ -59,7 +59,12 @@
           },
           "resourceGroups": { "type": "array", "items": { "type": "string" } },
           "planned": { "type": "boolean" },
-          "avatarUrl": { "type": "string" },
+          "avatarUrl": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^https://",
+            "description": "Override only: an https URL for the picture. Leave unset so it comes from the Bot Service icon or the Entra account photo."
+          },
           "teamsUpn": {
             "type": "string",
             "format": "email",

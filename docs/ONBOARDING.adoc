@@ -47,7 +47,7 @@ Optional tags:
 |One-line description
 
 |`agent-avatar`
-|Profile image — an `https` URL (or add the file under `public/agents/` and use `avatarUrl` in the registry)
+|Profile image override — an `https` URL. Usually unset: the portal shows the Bot Service icon or the Entra account photo
 
 |`environment`
 |`prod`, `test` or `dev`
@@ -88,7 +88,7 @@ For richer metadata (skills repo, portal URL, health URL) or for resources you c
 * `boost` enables the *Boost* card: `script` is the absolute path of the agent's `boost.sh` on its VM (`on <hours>` / `off` / `status`, prints one JSON line), `defaultHours` and `maxHours` bound the duration. The VM reverts on its own via a systemd timer, so a forgotten Boost never outlives its window. Viewers need Virtual Machine Contributor on the VM to use it.
 * `soulPath` points at the agent's `SOUL.md`; leave it out for the OpenClaw default (`workspace/SOUL.md`, then `SOUL.md`). It renders on the agent page.
 * Agents appear automatically once their Azure resources are tagged — a registry entry is only needed for metadata. Set `"planned": true` only when you deliberately want an agent listed before anything is deployed.
-* `avatarUrl` points at a file in `public/agents/` (256 px square PNG works well) or an `https` URL.
+* `avatarUrl` is an override only (an `https` URL). Leave it unset so the picture comes from the Bot Service icon or the Entra account photo.
 * The agent's own Entra account comes from the `agent-teams-upn` tag on any of its Azure resources (`az resource update --ids <resource-id> --set tags.agent-teams-upn=<agent>@<tenant-domain>`); `teamsUpn` in the registry overrides it but should stay unused, because this repo is public and must not carry addresses. It powers the *Chat in Teams* button and the *Licences* card (account state and Microsoft licences read from Graph). `fixedCosts` entries are listed there too as subscriptions. Bots do not need it — their Bot Service app ID is used instead.
 * Registry values override tag values.
 
@@ -137,7 +137,8 @@ and set `healthUrl` to `https://<agent>.knowall.ai/health`.
 
 == 6. Profile image and Teams chat
 
-* *OpenClaw agents* usually have their own Entra user. Upload a photo to that account (`az rest --method put --url "https://graph.microsoft.com/v1.0/users/<upn>/photo/$value" --body @photo.jpg`) and copy it into `public/agents/<id>.png`, then set `avatarUrl` and `teamsUpn`.
+* *OpenClaw agents* usually have their own Entra user. Upload a photo to that account (`az rest --method put --url 'https://graph.microsoft.com/v1.0/users/<upn>/photo/$value' --headers 'Content-Type=image/jpeg' --body @photo.jpg`; Graph requires the JPEG content type, and `az rest` does not set it for a non-JSON body) and tag a resource with `agent-teams-upn`; the portal reads the photo from there.
+* *Bot Service agents* get their picture from the bot's icon: Azure portal → the Bot Service resource → *Bot profile* → *Icon*.
 * *Bots* get a Teams link automatically from their Bot Service resource, provided the bot has the Teams channel enabled and the user has the app installed.
 
 == 7. Costs

@@ -197,7 +197,32 @@ export function safeHttpsUrl(value?: string): string | undefined {
   }
 }
 
-/** Avatar may be a same-origin path (/agents/x.png) or an https URL. */
+/** Bot Framework's placeholder icon says nothing about the agent, so it counts as no icon. */
+export function isDefaultBotIcon(url?: string): boolean {
+  if (!url) return true;
+  try {
+    const { hostname, pathname } = new URL(url);
+    return hostname === 'docs.botframework.com' && pathname.endsWith('/bot-framework-default.png');
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Where the portal can fetch the agent's picture from Azure or Entra: the Bot
+ * Service icon or the account photo behind `agent-teams-upn`. Undefined when
+ * the agent has neither, so the Avatar falls back to initials.
+ */
+export function azureAvatarPath(
+  id: string,
+  resources: AzureResource[],
+  upn?: string
+): string | undefined {
+  const hasBot = resources.some((r) => r.type === 'microsoft.botservice/botservices');
+  return hasBot || upn ? `/api/agents/${encodeURIComponent(id)}/avatar` : undefined;
+}
+
+/** Avatar may be a same-origin path (the avatar route) or an https URL. */
 export function safeAvatarUrl(value?: string): string | undefined {
   if (!value) return undefined;
   if (/^\/[A-Za-z0-9_\-./]+$/.test(value) && !value.includes('..')) return value;
@@ -307,7 +332,9 @@ export function buildAgent(
     ),
     resourceCount: resources.length,
     source: entry && bucket.fromTags ? 'both' : entry ? 'registry' : 'tags',
-    avatarUrl: safeAvatarUrl(entry?.avatarUrl ?? firstTag(resources, 'agent-avatar')),
+    avatarUrl:
+      safeAvatarUrl(entry?.avatarUrl ?? firstTag(resources, 'agent-avatar')) ??
+      azureAvatarPath(bucket.id, resources, agentUpn(entry, resources)),
     teamsChatUrl: teamsChatUrl(entry, resources),
     teamsCallUrl: teamsCallUrl(entry, resources),
     teamsUpn: agentUpn(entry, resources),
