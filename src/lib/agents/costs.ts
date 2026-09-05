@@ -57,7 +57,8 @@ function linesFor(
     lines.push({ source: 'azure', label: row.service, amount: row.amount, currency: row.currency });
   }
 
-  const openaiProject = agent.openaiProjectId ?? entry?.openaiProjectId;
+  // Validated at discovery (registry override or tag), so no raw registry fallback here
+  const openaiProject = agent.openaiProjectId;
   if (openaiProject) {
     for (const row of inputs.openai[timeframe]) {
       if (row.groupId !== openaiProject) continue;
@@ -70,7 +71,7 @@ function linesFor(
     }
   }
 
-  const anthropicWorkspace = agent.anthropicWorkspaceId ?? entry?.anthropicWorkspaceId;
+  const anthropicWorkspace = agent.anthropicWorkspaceId;
   if (anthropicWorkspace) {
     for (const row of inputs.anthropic[timeframe]) {
       if (row.groupId !== anthropicWorkspace) continue;
@@ -104,11 +105,7 @@ export function buildAgentCosts(
   now = new Date()
 ): AgentCosts {
   const sources: CostSourceStatus[] = inputs.sources.map((s) => {
-    if (
-      s.source === 'openai' &&
-      s.status === 'ok' &&
-      !(agent.openaiProjectId ?? entry?.openaiProjectId)
-    ) {
+    if (s.source === 'openai' && s.status === 'ok' && !agent.openaiProjectId) {
       return {
         ...s,
         status: 'no-mapping',
@@ -116,11 +113,7 @@ export function buildAgentCosts(
           'Tag a resource agent-openai-project=proj_… (or set openaiProjectId in the registry)',
       };
     }
-    if (
-      s.source === 'anthropic' &&
-      s.status === 'ok' &&
-      !(agent.anthropicWorkspaceId ?? entry?.anthropicWorkspaceId)
-    ) {
+    if (s.source === 'anthropic' && s.status === 'ok' && !agent.anthropicWorkspaceId) {
       return {
         ...s,
         status: 'no-mapping',
