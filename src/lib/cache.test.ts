@@ -106,6 +106,46 @@ describe('invalidate', () => {
     release('stale');
     await expect(first).resolves.toBe('stale');
   });
+
+  it('does not let a load invalidated mid-flight overwrite the newer value', async () => {
+    const key = `test:overwrite:${Math.random()}`;
+    let release: (value: string) => void = () => undefined;
+    const slow = vi.fn(() => new Promise<string>((resolve) => (release = resolve)));
+    const first = cached(key, slow, 60_000);
+
+    invalidate(key);
+
+    // A newer load starts and stores its result while the old one is still running
+    await expect(cached(key, async () => 'fresh', 60_000)).resolves.toBe('fresh');
+
+    // The old loader finishes last. Its own caller still gets its value...
+    release('stale');
+    await expect(first).resolves.toBe('stale');
+
+    // ...but it must not have written it over the newer one.
+    const reload = vi.fn(async () => 'reloaded');
+    await expect(cached(key, reload, 60_000)).resolves.toBe('fresh');
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('does not let a load invalidated mid-flight resurrect a stale value on failure', async () => {
+    const key = `test:stale-overwrite:${Math.random()}`;
+    expect(await cached(key, async () => 'good', 0)).toBe('good');
+
+    let fail: (error: Error) => void = () => undefined;
+    const slow = vi.fn(() => new Promise<string>((_, reject) => (fail = reject)));
+    const first = cached(key, slow, 60_000);
+
+    invalidate(key);
+    await expect(cached(key, async () => 'fresh', 60_000)).resolves.toBe('fresh');
+
+    fail(new Error('upstream down'));
+    await expect(first).resolves.toBe('good');
+
+    const reload = vi.fn(async () => 'reloaded');
+    await expect(cached(key, reload, 60_000)).resolves.toBe('fresh');
+    expect(reload).not.toHaveBeenCalled();
+  });
 });
 
 describe('getCacheTtlMs', () => {

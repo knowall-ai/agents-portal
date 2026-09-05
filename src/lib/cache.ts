@@ -13,6 +13,16 @@ interface Entry<T> {
 const store = new Map<string, Entry<unknown>>();
 /** Loads in progress, so concurrent callers share one loader run per key. */
 const inflight = new Map<string, Promise<unknown>>();
+/**
+ * Bumped by invalidate(). A loader captures the generation it started in and
+ * writes nothing if it has moved on: by the time a load that was invalidated
+ * mid-flight finishes, a newer load may already have stored a newer value.
+ */
+const generations = new Map<string, number>();
+
+function generationOf(key: string): number {
+  return generations.get(key) ?? 0;
+}
 
 export function getCacheTtlMs(): number {
   const seconds = Number(process.env.CACHE_TTL_SECONDS ?? '60');
@@ -37,7 +47,7 @@ export async function cached<T>(
   // first, so an older run can never overwrite a newer result
   const running = inflight.get(key) as Promise<T> | undefined;
   if (running) return running;
-  const run = load(key, hit, loader, ttlMs).finally(() => {
+  const run = load(key, hit, loader, ttlMs, generationOf(key)).finally(() => {
     if (inflight.get(key) === run) inflight.delete(key);
   });
   inflight.set(key, run);
@@ -48,8 +58,12 @@ async function load<T>(
   key: string,
   hit: Entry<T> | undefined,
   loader: () => Promise<T>,
-  ttlMs: number | ((value: T) => number)
+  ttlMs: number | ((value: T) => number),
+  generation: number
 ): Promise<T> {
+  // Invalidated while the loader ran: hand the caller its own result, but leave
+  // the store to whatever load replaced this one.
+  const mayStore = () => generationOf(key) === generation;
   let value: T;
   try {
     value = await loader();
@@ -63,14 +77,16 @@ async function load<T>(
     if (hit && failedAt < staleUntil) {
       const message = error instanceof Error ? error.message : String(error);
       console.warn(`cache: serving stale ${key} after failure: ${message.slice(0, 160)}`);
-      store.set(key, { value: hit.value, expiresAt: failedAt + STALE_RETRY_MS, staleUntil });
+      if (mayStore()) {
+        store.set(key, { value: hit.value, expiresAt: failedAt + STALE_RETRY_MS, staleUntil });
+      }
       return hit.value;
     }
-    store.delete(key);
+    if (mayStore()) store.delete(key);
     throw error;
   }
   const ttl = typeof ttlMs === 'function' ? ttlMs(value) : ttlMs;
-  store.set(key, { value, expiresAt: Date.now() + ttl });
+  if (mayStore()) store.set(key, { value, expiresAt: Date.now() + ttl });
   return value;
 }
 
@@ -81,9 +97,15 @@ const STALE_MAX_MS = 5 * 60_000;
 
 export function invalidate(prefix: string): void {
   for (const key of store.keys()) {
-    if (key.startsWith(prefix)) store.delete(key);
+    if (key.startsWith(prefix)) drop(key);
   }
   for (const key of inflight.keys()) {
-    if (key.startsWith(prefix)) inflight.delete(key);
+    if (key.startsWith(prefix)) drop(key);
   }
+}
+
+function drop(key: string): void {
+  store.delete(key);
+  inflight.delete(key);
+  generations.set(key, generationOf(key) + 1);
 }
