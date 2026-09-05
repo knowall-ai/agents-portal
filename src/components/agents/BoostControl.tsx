@@ -52,7 +52,8 @@ export default function BoostControl({
       const response = await fetch(`/api/agents/${agentId}/boost`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(action === 'refresh' ? { action } : { action, hours }),
+        // only `on` takes a duration; the API refuses hours on off and refresh
+        body: JSON.stringify(action === 'on' ? { action, hours } : { action }),
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
