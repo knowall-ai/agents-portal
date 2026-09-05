@@ -30,6 +30,7 @@ import {
 } from '@/lib/providers/graph';
 import { fetchBrainSnapshot, isValidBrainUrl } from '@/lib/providers/reverie';
 import { fixtureSnapshot } from '@/lib/brain-fixture';
+import { reverieTokenFor } from '@/lib/reverie-token';
 import { isOnCall } from '@/lib/presence';
 import {
   FOUNDRY_SCOPE,
@@ -608,12 +609,13 @@ export type BrainSource = { kind: 'fixture' } | { kind: 'reverie'; url: string; 
 
 /**
  * Where an agent's brain view reads from. Only the registry's `brainUrl` is
- * honoured (never a tag) because the server-side REVERIE_TOKEN is sent to it.
+ * honoured (never a tag) because a server-side token (REVERIE_TOKEN_<AGENT>, else
+ * REVERIE_TOKEN) is sent to it.
  */
 export function brainSource(agent: AgentDetail, demo = false): BrainSource | null {
   if (demo || process.env.BRAIN_FIXTURE === '1') return { kind: 'fixture' };
   const url = getRegistryEntry(agent)?.brainUrl;
-  const token = process.env.REVERIE_TOKEN;
+  const token = reverieTokenFor(agent.id);
   if (!url || !token || !isValidBrainUrl(url)) return null;
   return { kind: 'reverie', url, token };
 }
@@ -633,7 +635,7 @@ export async function getBrain(agent: AgentDetail, demo = false): Promise<AgentB
         ? 'No brainUrl in the registry for this agent'
         : !isValidBrainUrl(entry.brainUrl)
           ? 'brainUrl in the registry is not a valid https URL'
-          : 'REVERIE_TOKEN is not set on the server',
+          : `REVERIE_TOKEN_${agent.id.toUpperCase().replace(/[^A-Z0-9]/g, '_')} (or REVERIE_TOKEN) is not set on the server`,
     };
   }
   if (source.kind === 'fixture')

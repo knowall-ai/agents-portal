@@ -92,6 +92,13 @@
       "description": "Test deployment of Pennie on a spot VM.",
       "repo": "knowall-ai/preppie-bot",
       "resourceGroups": ["tminus15agents-test"]
+    },
+    {
+      "id": "poppie",
+      "name": "Poppie",
+      "customer": "KnowAll AI",
+      "environment": "prod",
+      "brainUrl": "https://poppie.knowall.ai/reverie"
     }
   ]
 }
