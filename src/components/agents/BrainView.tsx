@@ -169,6 +169,10 @@ interface BrainViewProps {
   backdrop?: Backdrop;
   isLoading: boolean;
   error?: string | null;
+  /** Tile mode for the Brains grid: no HUD, no controls, just the living graph */
+  compact?: boolean;
+  /** Canvas height in px (ignored in full page) */
+  height?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -185,6 +189,8 @@ export default function BrainView({
   backdrop = 'bridge',
   isLoading,
   error,
+  compact = false,
+  height = CANVAS_HEIGHT,
 }: BrainViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -597,7 +603,7 @@ export default function BrainView({
       const frame = t * 0.06; // ≈ frames at 60 fps, continuous across restarts
       const w = wrap.clientWidth;
       const h = wrap.clientHeight;
-      const cx = w / 2 + 40;
+      const cx = compact ? w / 2 + 110 : w / 2 + 40;
       const cy = h / 2 - 80 + panRef.current.y;
       const now = Date.now();
       const focus = focusRef.current
@@ -628,7 +634,7 @@ export default function BrainView({
           sum += x * x + y * y + z * z;
         }
         const rms = Math.sqrt(sum / Math.max(1, nodesRef.current.length));
-        const fit = (Math.min(w - 400, h) * 0.5) / Math.max(80, rms * 1.9);
+        const fit = (Math.min(compact ? w - 280 : w - 400, h) * 0.5) / Math.max(80, rms * 1.9);
         zoomRef.current +=
           (Math.min(2.5, Math.max(0.3, fit)) - zoomRef.current) * Math.min(1, dt * 1.5);
       }
@@ -1135,7 +1141,7 @@ export default function BrainView({
     <div
       ref={wrapRef}
       className="relative overflow-hidden"
-      style={{ height: isFull ? '100vh' : CANVAS_HEIGHT, backgroundColor: '#05070b' }}
+      style={{ height: isFull ? '100vh' : height, backgroundColor: '#05070b' }}
     >
       <canvas
         ref={canvasRef}
@@ -1149,297 +1155,366 @@ export default function BrainView({
         style={{ display: 'block', cursor: 'grab' }}
       />
 
-      {/* Left: state, search, focus, deep-brain feed, usage, telemetry — one column */}
-      <div
-        className="pointer-events-none absolute top-3 bottom-3 left-3 flex flex-col gap-2"
-        style={{ width: HUD.colWidth, fontFamily: HUD.font, fontSize: 12, color: HUD.text }}
-      >
-        <div className="flex items-center gap-2">
-          <span
-            className="inline-flex items-center gap-1 border px-2 py-0.5 text-[11px] font-semibold tracking-widest uppercase"
-            style={{
-              borderColor: hexToRgba(moodColour, 0.6),
-              backgroundColor: HUD.panel,
-              color: moodColour,
-            }}
+      {compact ? (
+        // Camera tile: the deep-brain feed and telemetry only, in a narrower column
+        <div
+          className="pointer-events-none absolute top-2 bottom-2 left-2 flex flex-col gap-1"
+          style={{ width: 260, fontFamily: HUD.font, fontSize: 11, color: HUD.text }}
+        >
+          <div
+            className="text-xs font-semibold tracking-widest uppercase"
+            style={{ color: HUD.dim }}
           >
-            {asleep ? <Moon size={11} /> : dreaming ? <Sparkles size={11} /> : <Sun size={11} />}
-            {mood}
-          </span>
-          <span style={{ color: streamStatus === 'live' ? HUD.g : HUD.dim }}>
-            {streamStatus === 'live'
-              ? '● STREAM LIVE'
-              : streamStatus === 'connecting'
-                ? '○ STREAM CONNECTING'
-                : '○ STREAM OFFLINE'}
-          </span>
-          {brain.fixture && (
-            <span style={{ color: HUD.amber }} title="Built-in sample graph, not an agent's memory">
-              DEMO DATA
-            </span>
-          )}
-        </div>
-        <div className="pointer-events-auto relative">
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && results[0]) {
-                const node = byIdRef.current.get(results[0].id);
-                if (node) focusNode(node);
-                setQuery('');
+            {agentName}
+            {brain?.fixture && <span style={{ color: HUD.amber }}> · demo</span>}
+          </div>
+          <HudPanel title="DEEP BRAIN" className="min-h-0 flex-1 overflow-hidden">
+            {feed.length === 0 ? (
+              <HudRow colour={HUD.dim}>waiting…</HudRow>
+            ) : (
+              feed.slice(0, 12).map((ev, i) => (
+                <HudRow key={`${ev.ts}-${i}`} colour={activationColour(ev.kind)}>
+                  {activationGlyph(ev.kind)} {ev.kind.toUpperCase().padEnd(8)}
+                  <span style={{ color: HUD.text }}>{activationText(ev).slice(0, 22)}</span>
+                </HudRow>
+              ))
+            )}
+          </HudPanel>
+          <HudPanel title="TELEMETRY">
+            <HudGauge
+              label="CPU"
+              frac={(state?.cpuPercent ?? 0) / 100}
+              value={state?.cpuPercent != null ? `${state.cpuPercent.toFixed(0)}%` : '--'}
+              colour={(state?.cpuPercent ?? 0) > 85 ? HUD.amber : HUD.g}
+            />
+            <HudGauge
+              label="RAM"
+              frac={
+                state?.memTotalGb && state.memUsedGb != null
+                  ? state.memUsedGb / state.memTotalGb
+                  : (state?.memPercent ?? 0) / 100
               }
-              if (e.key === 'Escape') setQuery('');
-            }}
-            placeholder={`search ${agentName}'s memory…`}
-            className="w-full px-2 py-1 outline-none"
-            style={{
-              border: `1px solid ${HUD.dim}`,
-              backgroundColor: HUD.panel,
-              color: HUD.text,
-              fontFamily: HUD.font,
-              fontSize: 12,
-            }}
-          />
-          {query && results.length > 0 && (
-            <ul
-              className="absolute right-0 left-0 z-10 mt-1"
-              style={{ border: `1px solid ${HUD.dim}`, backgroundColor: 'rgba(6, 12, 9, 0.92)' }}
-            >
-              {results.map((r) => (
-                <li key={r.id}>
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-2 px-2 py-1 text-left hover:bg-white/5"
-                    onClick={() => {
-                      const node = byIdRef.current.get(r.id);
-                      if (node) focusNode(node);
-                      setQuery('');
-                    }}
-                  >
-                    <span
-                      className="h-1.5 w-1.5 rounded-full"
-                      style={{ backgroundColor: colourFor(r.label) }}
-                    />
-                    <span className="flex-1 truncate">{r.name}</span>
-                    <span style={{ color: HUD.dim }}>{r.label}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-        {selected && (
-          <HudPanel title="FOCUS">
-            <HudRow colour={colourFor(selected.label)}>{selected.name}</HudRow>
-            <HudRow colour={HUD.dim}>
-              {selected.label} {selected.degree} CONNECTIONS
-            </HudRow>
-            {Object.entries(selected.props)
-              .filter(([k]) => k !== 'name')
-              .slice(0, 4)
-              .map(([k, v]) => (
-                <HudRow key={k}>
-                  <span style={{ color: HUD.dim }}>{k.toUpperCase()} </span>
-                  {String(v).slice(0, 34)}
-                </HudRow>
-              ))}
-            {selectedLinks.map((l) => {
-              const src = l.source as SimNode;
-              const tgt = l.target as SimNode;
-              const other = src.id === selected.id ? tgt : src;
-              return (
-                <HudRow key={l.id}>
-                  <span style={{ color: HUD.dim }}>
-                    {src.id === selected.id ? '→' : '←'} {l.type}{' '}
-                  </span>
-                  {other.name.slice(0, 26)}
-                </HudRow>
-              );
-            })}
-          </HudPanel>
-        )}
-        <HudPanel
-          title={`${agentName.toUpperCase()} // DEEP BRAIN`}
-          className="min-h-0 flex-1 overflow-hidden"
-        >
-          {feed.length === 0 ? (
-            <HudRow colour={HUD.dim}>waiting for the first thought…</HudRow>
-          ) : (
-            feed.slice(0, 40).map((ev, i) => (
-              <HudRow key={`${ev.ts}-${i}`} colour={activationColour(ev.kind)}>
-                {activationGlyph(ev.kind)} {ev.kind.toUpperCase().padEnd(9)}
-                <span style={{ color: HUD.text }}>{activationText(ev).slice(0, 30)}</span>
-                <span style={{ color: HUD.dim }}> {shortAgo(ev.ts)}</span>
-              </HudRow>
-            ))
-          )}
-        </HudPanel>
-        <div className="mt-auto">
-          {boostChip && <HudBoostChip minutesLeft={boostChip.minutes} />}
-          <HudPanel
-            title={`OPENAI // USAGE — ${usageMode === 'api' ? 'API' : 'SUB'} MODE${boostChip ? ' · BOOST' : ''}`}
-            boost={!!boostChip}
-          >
-            {usage?.sub?.pct_left != null ? (
-              <HudGauge
-                label="SUB"
-                frac={usage.sub.pct_left / 100}
-                value={`${usage.sub.pct_left}%${
-                  usage.sub.reset_at
-                    ? ` → ${new Date(usage.sub.reset_at * 1000).toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}`
-                    : usage.sub.reset
-                      ? ` → in ${usage.sub.reset}`
-                      : ''
-                }`}
-                colour={
-                  usage.sub.pct_left < HUD.subRedBelow
-                    ? HUD.red
-                    : usage.sub.pct_left < HUD.subAmberBelow
-                      ? HUD.amber
-                      : HUD.g
-                }
-                dim={usageMode === 'api' ? HUD.dim : HUD.dimStrong}
-              />
-            ) : (
-              <HudRow colour={HUD.dim}>SUB --</HudRow>
-            )}
-            {usage?.api?.usd_mtd != null && usage.budget ? (
-              <HudGauge
-                label="API"
-                frac={usage.api.usd_mtd / usage.budget}
-                value={`$${usage.api.usd_mtd.toFixed(0)}/$${usage.budget.toFixed(0)} → ${nextMonthLabel(clock)}`}
-                colour={
-                  usage.api.usd_mtd / usage.budget > HUD.apiRedOver
-                    ? HUD.red
-                    : usage.api.usd_mtd / usage.budget > HUD.apiAmberOver
-                      ? HUD.amber
-                      : HUD.g
-                }
-                dim={usageMode === 'api' ? HUD.dimStrong : HUD.dim}
-              />
-            ) : usage?.api?.usd_mtd != null ? (
-              <HudRow colour={HUD.dim}>API ${usage.api.usd_mtd.toFixed(2)} this month</HudRow>
-            ) : (
-              <HudRow colour={HUD.dim}>API -- needs OPENAI_ADMIN_KEY</HudRow>
-            )}
-            {costs && (
-              <HudRow colour={HUD.dim}>
-                AZURE {formatTotals(costs.monthToDate.totals)} MTD ·{' '}
-                {formatTotals(costs.lastMonth.totals)} LAST
-              </HudRow>
-            )}
-          </HudPanel>
-        </div>
-        <HudPanel title={`${agentName.toUpperCase()} // TELEMETRY`}>
-          <HudGauge
-            label="CPU"
-            frac={(state?.cpuPercent ?? 0) / 100}
-            value={state?.cpuPercent != null ? `${state.cpuPercent.toFixed(0)}%` : '--'}
-            colour={(state?.cpuPercent ?? 0) > 85 ? HUD.amber : HUD.g}
-          />
-          <HudGauge
-            label="RAM"
-            frac={
-              state?.memTotalGb && state.memUsedGb != null
-                ? state.memUsedGb / state.memTotalGb
-                : (state?.memPercent ?? 0) / 100
-            }
-            value={
-              state?.memTotalGb && state.memUsedGb != null
-                ? `${state.memUsedGb.toFixed(1)}/${state.memTotalGb.toFixed(0)}G`
-                : state?.memPercent != null
-                  ? `${state.memPercent.toFixed(0)}%`
+              value={
+                state?.memTotalGb && state.memUsedGb != null
+                  ? `${state.memUsedGb.toFixed(1)}/${state.memTotalGb.toFixed(0)}G`
                   : '--'
-            }
-          />
-          <HudGauge
-            label="LOAD"
-            frac={(state?.load1 ?? 0) / 4}
-            value={state?.load1 != null ? state.load1.toFixed(2) : '--'}
-            colour={(state?.load1 ?? 0) > 3 ? HUD.amber : HUD.g}
-          />
-          <HudGauge label="ACT" frac={activityPerMin / 20} value={`${activityPerMin}/min`} />
-          <div className="mt-[2px]">
-            <HudSparkline values={cpuHistory} />
+              }
+            />
+            <HudGauge label="ACT" frac={activityPerMin / 20} value={`${activityPerMin}/min`} />
+            <div className="mt-[2px]">
+              <HudSparkline values={cpuHistory} height={14} />
+            </div>
+          </HudPanel>
+        </div>
+      ) : (
+        <>
+          {/* Left: state, search, focus, deep-brain feed, usage, telemetry — one column */}
+          <div
+            className="pointer-events-none absolute top-3 bottom-3 left-3 flex flex-col gap-2"
+            style={{ width: HUD.colWidth, fontFamily: HUD.font, fontSize: 12, color: HUD.text }}
+          >
+            <div className="flex items-center gap-2">
+              <span
+                className="inline-flex items-center gap-1 border px-2 py-0.5 text-[11px] font-semibold tracking-widest uppercase"
+                style={{
+                  borderColor: hexToRgba(moodColour, 0.6),
+                  backgroundColor: HUD.panel,
+                  color: moodColour,
+                }}
+              >
+                {asleep ? (
+                  <Moon size={11} />
+                ) : dreaming ? (
+                  <Sparkles size={11} />
+                ) : (
+                  <Sun size={11} />
+                )}
+                {mood}
+              </span>
+              <span style={{ color: streamStatus === 'live' ? HUD.g : HUD.dim }}>
+                {streamStatus === 'live'
+                  ? '● STREAM LIVE'
+                  : streamStatus === 'connecting'
+                    ? '○ STREAM CONNECTING'
+                    : '○ STREAM OFFLINE'}
+              </span>
+              {brain.fixture && (
+                <span
+                  style={{ color: HUD.amber }}
+                  title="Built-in sample graph, not an agent's memory"
+                >
+                  DEMO DATA
+                </span>
+              )}
+            </div>
+            <div className="pointer-events-auto relative">
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && results[0]) {
+                    const node = byIdRef.current.get(results[0].id);
+                    if (node) focusNode(node);
+                    setQuery('');
+                  }
+                  if (e.key === 'Escape') setQuery('');
+                }}
+                placeholder={`search ${agentName}'s memory…`}
+                className="w-full px-2 py-1 outline-none"
+                style={{
+                  border: `1px solid ${HUD.dim}`,
+                  backgroundColor: HUD.panel,
+                  color: HUD.text,
+                  fontFamily: HUD.font,
+                  fontSize: 12,
+                }}
+              />
+              {query && results.length > 0 && (
+                <ul
+                  className="absolute right-0 left-0 z-10 mt-1"
+                  style={{
+                    border: `1px solid ${HUD.dim}`,
+                    backgroundColor: 'rgba(6, 12, 9, 0.92)',
+                  }}
+                >
+                  {results.map((r) => (
+                    <li key={r.id}>
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-2 px-2 py-1 text-left hover:bg-white/5"
+                        onClick={() => {
+                          const node = byIdRef.current.get(r.id);
+                          if (node) focusNode(node);
+                          setQuery('');
+                        }}
+                      >
+                        <span
+                          className="h-1.5 w-1.5 rounded-full"
+                          style={{ backgroundColor: colourFor(r.label) }}
+                        />
+                        <span className="flex-1 truncate">{r.name}</span>
+                        <span style={{ color: HUD.dim }}>{r.label}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            {selected && (
+              <HudPanel title="FOCUS">
+                <HudRow colour={colourFor(selected.label)}>{selected.name}</HudRow>
+                <HudRow colour={HUD.dim}>
+                  {selected.label} {selected.degree} CONNECTIONS
+                </HudRow>
+                {Object.entries(selected.props)
+                  .filter(([k]) => k !== 'name')
+                  .slice(0, 4)
+                  .map(([k, v]) => (
+                    <HudRow key={k}>
+                      <span style={{ color: HUD.dim }}>{k.toUpperCase()} </span>
+                      {String(v).slice(0, 34)}
+                    </HudRow>
+                  ))}
+                {selectedLinks.map((l) => {
+                  const src = l.source as SimNode;
+                  const tgt = l.target as SimNode;
+                  const other = src.id === selected.id ? tgt : src;
+                  return (
+                    <HudRow key={l.id}>
+                      <span style={{ color: HUD.dim }}>
+                        {src.id === selected.id ? '→' : '←'} {l.type}{' '}
+                      </span>
+                      {other.name.slice(0, 26)}
+                    </HudRow>
+                  );
+                })}
+              </HudPanel>
+            )}
+            <HudPanel
+              title={`${agentName.toUpperCase()} // DEEP BRAIN`}
+              className="min-h-0 flex-1 overflow-hidden"
+            >
+              {feed.length === 0 ? (
+                <HudRow colour={HUD.dim}>waiting for the first thought…</HudRow>
+              ) : (
+                feed.slice(0, 40).map((ev, i) => (
+                  <HudRow key={`${ev.ts}-${i}`} colour={activationColour(ev.kind)}>
+                    {activationGlyph(ev.kind)} {ev.kind.toUpperCase().padEnd(9)}
+                    <span style={{ color: HUD.text }}>{activationText(ev).slice(0, 30)}</span>
+                    <span style={{ color: HUD.dim }}> {shortAgo(ev.ts)}</span>
+                  </HudRow>
+                ))
+              )}
+            </HudPanel>
+            <div className="mt-auto">
+              {boostChip && <HudBoostChip minutesLeft={boostChip.minutes} />}
+              <HudPanel
+                title={`OPENAI // USAGE — ${usageMode === 'api' ? 'API' : 'SUB'} MODE${boostChip ? ' · BOOST' : ''}`}
+                boost={!!boostChip}
+              >
+                {usage?.sub?.pct_left != null ? (
+                  <HudGauge
+                    label="SUB"
+                    frac={usage.sub.pct_left / 100}
+                    value={`${usage.sub.pct_left}%${
+                      usage.sub.reset_at
+                        ? ` → ${new Date(usage.sub.reset_at * 1000).toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}`
+                        : usage.sub.reset
+                          ? ` → in ${usage.sub.reset}`
+                          : ''
+                    }`}
+                    colour={
+                      usage.sub.pct_left < HUD.subRedBelow
+                        ? HUD.red
+                        : usage.sub.pct_left < HUD.subAmberBelow
+                          ? HUD.amber
+                          : HUD.g
+                    }
+                    dim={usageMode === 'api' ? HUD.dim : HUD.dimStrong}
+                  />
+                ) : (
+                  <HudRow colour={HUD.dim}>SUB --</HudRow>
+                )}
+                {usage?.api?.usd_mtd != null && usage.budget ? (
+                  <HudGauge
+                    label="API"
+                    frac={usage.api.usd_mtd / usage.budget}
+                    value={`$${usage.api.usd_mtd.toFixed(0)}/$${usage.budget.toFixed(0)} → ${nextMonthLabel(clock)}`}
+                    colour={
+                      usage.api.usd_mtd / usage.budget > HUD.apiRedOver
+                        ? HUD.red
+                        : usage.api.usd_mtd / usage.budget > HUD.apiAmberOver
+                          ? HUD.amber
+                          : HUD.g
+                    }
+                    dim={usageMode === 'api' ? HUD.dimStrong : HUD.dim}
+                  />
+                ) : usage?.api?.usd_mtd != null ? (
+                  <HudRow colour={HUD.dim}>API ${usage.api.usd_mtd.toFixed(2)} this month</HudRow>
+                ) : (
+                  <HudRow colour={HUD.dim}>API -- needs OPENAI_ADMIN_KEY</HudRow>
+                )}
+                {costs && (
+                  <HudRow colour={HUD.dim}>
+                    AZURE {formatTotals(costs.monthToDate.totals)} MTD ·{' '}
+                    {formatTotals(costs.lastMonth.totals)} LAST
+                  </HudRow>
+                )}
+              </HudPanel>
+            </div>
+            <HudPanel title={`${agentName.toUpperCase()} // TELEMETRY`}>
+              <HudGauge
+                label="CPU"
+                frac={(state?.cpuPercent ?? 0) / 100}
+                value={state?.cpuPercent != null ? `${state.cpuPercent.toFixed(0)}%` : '--'}
+                colour={(state?.cpuPercent ?? 0) > 85 ? HUD.amber : HUD.g}
+              />
+              <HudGauge
+                label="RAM"
+                frac={
+                  state?.memTotalGb && state.memUsedGb != null
+                    ? state.memUsedGb / state.memTotalGb
+                    : (state?.memPercent ?? 0) / 100
+                }
+                value={
+                  state?.memTotalGb && state.memUsedGb != null
+                    ? `${state.memUsedGb.toFixed(1)}/${state.memTotalGb.toFixed(0)}G`
+                    : state?.memPercent != null
+                      ? `${state.memPercent.toFixed(0)}%`
+                      : '--'
+                }
+              />
+              <HudGauge
+                label="LOAD"
+                frac={(state?.load1 ?? 0) / 4}
+                value={state?.load1 != null ? state.load1.toFixed(2) : '--'}
+                colour={(state?.load1 ?? 0) > 3 ? HUD.amber : HUD.g}
+              />
+              <HudGauge label="ACT" frac={activityPerMin / 20} value={`${activityPerMin}/min`} />
+              <div className="mt-[2px]">
+                <HudSparkline values={cpuHistory} />
+              </div>
+              <div className="mt-[6px]">
+                <HudRow>
+                  NODES {stats?.nodeCount ?? 0} EDGES {stats?.relCount ?? 0} SHOWN{' '}
+                  {stats?.shown ?? 0}
+                </HudRow>
+                <HudRow>
+                  READS {state?.recentReads ?? 0} WRITES {state?.recentWrites ?? 0} DREAM{' '}
+                  {state?.lastDreamAt ? shortAgo(state.lastDreamAt) : '--'}
+                </HudRow>
+              </div>
+              {deepNow && (
+                <HudDeep label={`${deepNow.kind} ${activationText(deepNow)}`} since={deepNow.ts} />
+              )}
+            </HudPanel>
           </div>
-          <div className="mt-[6px]">
-            <HudRow>
-              NODES {stats?.nodeCount ?? 0} EDGES {stats?.relCount ?? 0} SHOWN {stats?.shown ?? 0}
-            </HudRow>
-            <HudRow>
-              READS {state?.recentReads ?? 0} WRITES {state?.recentWrites ?? 0} DREAM{' '}
-              {state?.lastDreamAt ? shortAgo(state.lastDreamAt) : '--'}
-            </HudRow>
+
+          {/* Top-right: controls */}
+          <div className="absolute top-3 right-3 flex items-center gap-1">
+            <button
+              type="button"
+              className="btn-secondary flex items-center gap-1 px-2 py-1 text-xs"
+              onClick={() => {
+                rotateRef.current = !rotateRef.current;
+                setRotating(rotateRef.current);
+              }}
+              title={rotating ? 'Pause rotation' : 'Resume rotation'}
+            >
+              {rotating ? <Pause size={12} /> : <Play size={12} />}
+            </button>
+            <button
+              type="button"
+              className="btn-secondary flex items-center gap-1 px-2 py-1 text-xs"
+              onClick={() => {
+                userZoomRef.current = false;
+                angleRef.current = 0.6;
+                tiltRef.current = TILT;
+                focusNode(null);
+              }}
+              title="Reset view"
+            >
+              <RotateCcw size={12} />
+            </button>
+            <button
+              type="button"
+              className="btn-secondary flex items-center gap-1 px-2 py-1 text-xs"
+              onClick={toggleFull}
+              title={isFull ? 'Exit full page' : 'Full page'}
+            >
+              {isFull ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+            </button>
           </div>
-          {deepNow && (
-            <HudDeep label={`${deepNow.kind} ${activationText(deepNow)}`} since={deepNow.ts} />
-          )}
-        </HudPanel>
-      </div>
 
-      {/* Top-right: controls */}
-      <div className="absolute top-3 right-3 flex items-center gap-1">
-        <button
-          type="button"
-          className="btn-secondary flex items-center gap-1 px-2 py-1 text-xs"
-          onClick={() => {
-            rotateRef.current = !rotateRef.current;
-            setRotating(rotateRef.current);
-          }}
-          title={rotating ? 'Pause rotation' : 'Resume rotation'}
-        >
-          {rotating ? <Pause size={12} /> : <Play size={12} />}
-        </button>
-        <button
-          type="button"
-          className="btn-secondary flex items-center gap-1 px-2 py-1 text-xs"
-          onClick={() => {
-            userZoomRef.current = false;
-            angleRef.current = 0.6;
-            tiltRef.current = TILT;
-            focusNode(null);
-          }}
-          title="Reset view"
-        >
-          <RotateCcw size={12} />
-        </button>
-        <button
-          type="button"
-          className="btn-secondary flex items-center gap-1 px-2 py-1 text-xs"
-          onClick={toggleFull}
-          title={isFull ? 'Exit full page' : 'Full page'}
-        >
-          {isFull ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
-        </button>
-      </div>
-
-      {/* Bottom-right: legend */}
-      <div
-        className="pointer-events-none absolute right-3 bottom-3 flex items-center gap-3 font-mono text-[10px]"
-        style={{ color: HOLO_DIM }}
-      >
-        <span className="flex items-center gap-1">
-          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: READ_COLOUR }} /> READING
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: WRITE_COLOUR }} />{' '}
-          WRITING
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: NEW_COLOUR }} /> NEW
-        </span>
-        <span className="flex items-center gap-1">
-          <span
-            className="h-2 w-5 rounded-full"
-            style={{ background: `linear-gradient(90deg, ${OTHER_COLOUR}, ${WRITE_COLOUR})` }}
-          />{' '}
-          OLDER → RECENT
-        </span>
-        <span className="flex items-center gap-1">
-          <Zap size={10} /> DRAG TO TURN · WHEEL TO ZOOM · CLICK A NODE
-        </span>
-      </div>
+          {/* Bottom-right: legend */}
+          <div
+            className="pointer-events-none absolute right-3 bottom-3 flex items-center gap-3 font-mono text-[10px]"
+            style={{ color: HOLO_DIM }}
+          >
+            <span className="flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: READ_COLOUR }} />{' '}
+              READING
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: WRITE_COLOUR }} />{' '}
+              WRITING
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: NEW_COLOUR }} /> NEW
+            </span>
+            <span className="flex items-center gap-1">
+              <span
+                className="h-2 w-5 rounded-full"
+                style={{ background: `linear-gradient(90deg, ${OTHER_COLOUR}, ${WRITE_COLOUR})` }}
+              />{' '}
+              OLDER → RECENT
+            </span>
+            <span className="flex items-center gap-1">
+              <Zap size={10} /> DRAG TO TURN · WHEEL TO ZOOM · CLICK A NODE
+            </span>
+          </div>
+        </>
+      )}
     </div>
   );
 }
