@@ -1,3 +1,5 @@
+export { default as ActivityCalendar } from './ActivityCalendar';
+export { default as ActivityChart } from './ActivityChart';
 export { default as ActivityFeed } from './ActivityFeed';
 export { default as AgentCard } from './AgentCard';
 export { default as AgentTable } from './AgentTable';

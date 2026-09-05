@@ -25,7 +25,7 @@ export default function AgentTable({ agents, costs }: AgentTableProps) {
             <th className="px-4 py-3 font-medium">Env</th>
             <th className="px-4 py-3 font-medium">Resource groups</th>
             <th className="px-4 py-3 text-right font-medium">Resources</th>
-            <th className="px-4 py-3 text-right font-medium">Cost (MTD)</th>
+            {costs && <th className="px-4 py-3 text-right font-medium">Cost (MTD)</th>}
             <th className="px-4 py-3 font-medium">Links</th>
           </tr>
         </thead>
@@ -86,12 +86,14 @@ export default function AgentTable({ agents, costs }: AgentTableProps) {
               <td className="px-4 py-3 text-right" style={{ color: 'var(--text-secondary)' }}>
                 {agent.resourceCount}
               </td>
-              <td
-                className="px-4 py-3 text-right font-mono whitespace-nowrap"
-                style={{ color: 'var(--text-secondary)' }}
-              >
-                {costs ? formatTotals(costs.get(agent.id) ?? {}, '—') : ''}
-              </td>
+              {costs && (
+                <td
+                  className="px-4 py-3 text-right font-mono whitespace-nowrap"
+                  style={{ color: 'var(--text-secondary)' }}
+                >
+                  {formatTotals(costs.get(agent.id) ?? {}, '—')}
+                </td>
+              )}
               <td className="px-4 py-3 whitespace-nowrap">
                 <span className="flex items-center gap-2" style={{ color: 'var(--text-muted)' }}>
                   {agent.teamsChatUrl && (

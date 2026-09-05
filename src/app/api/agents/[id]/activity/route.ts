@@ -1,6 +1,10 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getUserContext } from '@/lib/tokens';
 import { getActivity, getAgent } from '@/lib/agents/service';
+import { dailyActivity } from '@/lib/activity-buckets';
+
+/** The feed lists this many; the calendar is built from everything fetched */
+const FEED_LIMIT = 400;
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -13,7 +17,10 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     const agent = await getAgent(ctx, id);
     if (!agent) return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
     const events = await getActivity(ctx, agent);
-    return NextResponse.json({ events });
+    return NextResponse.json({
+      events: events.slice(0, FEED_LIMIT),
+      daily: dailyActivity(events),
+    });
   } catch (error) {
     console.error(`Failed to load activity for ${id}:`, error);
     const message = error instanceof Error ? error.message : 'Unknown error';

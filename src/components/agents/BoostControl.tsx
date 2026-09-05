@@ -48,14 +48,12 @@ export default function BoostControl({
     setBusy(action);
     setMessage(null);
     try {
-      const response =
-        action === 'refresh'
-          ? await fetch(`/api/agents/${agentId}/boost?refresh=1`)
-          : await fetch(`/api/agents/${agentId}/boost`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ action, hours }),
-            });
+      // every action, refresh included, is a run-command on the VM: always POST
+      const response = await fetch(`/api/agents/${agentId}/boost`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(action === 'refresh' ? { action } : { action, hours }),
+      });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
         throw new Error(
