@@ -1,4 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+// Only the VM round trip is faked; the rest of the Azure helpers stay real.
+const runVmScript = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/providers/azure', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/providers/azure')>()),
+  runVmScript,
+}));
+
 import { parseBoostOutput, setBoost } from './service';
 import { findVm, parseRunCommandMessage } from '@/lib/providers/azure';
 import type { UserContext } from '@/lib/tokens';
@@ -56,12 +64,26 @@ describe('setBoost', () => {
   const agent = { id: 'sallie', resources: [vm] } as unknown as AgentDetail;
   const ctx = { armToken: 'token' } as unknown as UserContext;
 
-  it('rejects hours that are not whole numbers or are out of range', async () => {
-    await expect(setBoost(ctx, agent, true, 1.5)).rejects.toThrow(/whole number between 1 and 8/);
-    await expect(setBoost(ctx, agent, true, 0)).rejects.toThrow(/whole number between 1 and 8/);
-    await expect(setBoost(ctx, agent, true, 9)).rejects.toThrow(/whole number between 1 and 8/);
-    await expect(setBoost(ctx, agent, true, Number.NaN)).rejects.toThrow(
-      /whole number between 1 and 8/
-    );
+  beforeEach(() => {
+    runVmScript.mockReset();
+    runVmScript.mockResolvedValue({ stdout: '{"active":true,"hours":0.5}', stderr: '' });
+  });
+
+  it('rejects hours that are not quarter hours or are out of range', async () => {
+    const message = /Hours must be a multiple of 0\.25 between 0\.25 and 8/;
+    await expect(setBoost(ctx, agent, true, 0)).rejects.toThrow(message);
+    await expect(setBoost(ctx, agent, true, 0.3)).rejects.toThrow(message);
+    await expect(setBoost(ctx, agent, true, 9)).rejects.toThrow(message);
+    await expect(setBoost(ctx, agent, true, Number.NaN)).rejects.toThrow(message);
+    expect(runVmScript).not.toHaveBeenCalled();
+  });
+
+  it('accepts quarter hours, including the 30-minute option the UI offers', async () => {
+    await expect(setBoost(ctx, agent, true, 0.5)).resolves.toMatchObject({ active: true });
+    await expect(setBoost(ctx, agent, true, 1.5)).resolves.toMatchObject({ active: true });
+    expect(runVmScript.mock.calls.map((call) => call[2][0])).toEqual([
+      expect.stringContaining('boost.sh on 0.5'),
+      expect.stringContaining('boost.sh on 1.5'),
+    ]);
   });
 });

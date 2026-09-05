@@ -422,9 +422,17 @@ export async function setBoost(
   if (!base.supported) throw new Error('Boost is not configured for this agent');
   if (!on) return runBoost(ctx, agent, 'off');
   const requested = hours ?? base.defaultHours;
-  // `boost.sh on N` takes whole hours: a fraction would reach the VM verbatim
-  if (!Number.isInteger(requested) || requested <= 0 || requested > base.maxHours) {
-    throw new Error(`Hours must be a whole number between 1 and ${base.maxHours}`);
+  // `boost.sh on N` accepts quarter hours (the UI offers 30 min); anything
+  // finer would reach the VM verbatim, so pin the granularity here.
+  if (
+    !Number.isFinite(requested) ||
+    !Number.isInteger(requested * 4) ||
+    requested < 0.25 ||
+    requested > base.maxHours
+  ) {
+    throw new Error(
+      `Hours must be a multiple of 0.25 between 0.25 and ${base.maxHours}, got ${requested}`
+    );
   }
   return runBoost(ctx, agent, `on ${requested}`);
 }

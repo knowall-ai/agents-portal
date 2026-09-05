@@ -41,8 +41,8 @@
             "additionalProperties": false,
             "properties": {
               "script": { "type": "string" },
-              "defaultHours": { "type": "number", "minimum": 0.25 },
-              "maxHours": { "type": "number", "minimum": 0.25 }
+              "defaultHours": { "type": "number", "minimum": 0.25, "multipleOf": 0.25 },
+              "maxHours": { "type": "number", "minimum": 0.25, "multipleOf": 0.25 }
             }
           },
           "appRegistrations": {
