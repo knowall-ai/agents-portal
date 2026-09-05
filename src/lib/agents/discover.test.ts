@@ -38,6 +38,23 @@ const registry: AgentRegistryEntry[] = [
 ];
 
 describe('groupResources', () => {
+  it('never hands a tagged resource to the resource-group claimant, even when the tag is junk', () => {
+    const buckets = groupResources(
+      [
+        resource({
+          name: 'stray-vm',
+          type: 'microsoft.compute/virtualmachines',
+          resourceGroup: 'ka-agents',
+          tags: { agent: '!!!' },
+        }),
+      ],
+      registry,
+      ['agent']
+    );
+    expect(buckets.find((b) => b.id === 'sallie')?.resources).toEqual([]);
+    expect(buckets.flatMap((b) => b.resources)).toEqual([]);
+  });
+
   it('claims untagged resources by registry resource group', () => {
     const buckets = groupResources(
       [
@@ -53,6 +70,23 @@ describe('groupResources', () => {
     const sallie = buckets.find((b) => b.id === 'sallie');
     expect(sallie?.resources).toHaveLength(1);
     expect(sallie?.fromTags).toBe(false);
+  });
+
+  it('lets a tag beat a registry resource-group claim (shared resource group)', () => {
+    const buckets = groupResources(
+      [
+        resource({ name: 'ka-sallie-vm', resourceGroup: 'ka-agents' }),
+        resource({ name: 'ka-poppie-vm', resourceGroup: 'KA-Agents', tags: { agent: 'poppie' } }),
+      ],
+      registry,
+      ['agent', 'project']
+    );
+    expect(buckets.find((b) => b.id === 'sallie')?.resources.map((r) => r.name)).toEqual([
+      'ka-sallie-vm',
+    ]);
+    const poppie = buckets.find((b) => b.id === 'poppie');
+    expect(poppie?.resources.map((r) => r.name)).toEqual(['ka-poppie-vm']);
+    expect(poppie?.fromTags).toBe(true);
   });
 
   it('discovers agents from tags, case-insensitively', () => {
