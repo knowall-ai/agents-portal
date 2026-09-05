@@ -104,6 +104,13 @@ export default function BrainsPage() {
     request?.catch(() => undefined);
   };
 
+  // Refresh also remounts the tiles, so a monitor that lost its signal asks again
+  const [generation, setGeneration] = useState(0);
+  const refresh = () => {
+    void agents.refetch();
+    setGeneration((g) => g + 1);
+  };
+
   const withBrains = (agents.data?.agents ?? []).filter(hasOwnVm);
   const tileCount = Math.max(MIN_TILES, Math.ceil(withBrains.length / 2) * 2);
   const rows = tileCount / 2;
@@ -126,10 +133,7 @@ export default function BrainsPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={agents.refetch}
-              className="btn-secondary flex items-center gap-2 text-sm"
-            >
+            <button onClick={refresh} className="btn-secondary flex items-center gap-2 text-sm">
               <RefreshCw size={14} className={agents.isLoading ? 'animate-spin' : ''} />
               Refresh
             </button>
@@ -145,11 +149,11 @@ export default function BrainsPage() {
         </div>
         <div
           ref={wallRef}
-          className="grid grid-cols-1 gap-0 md:grid-cols-2"
+          className="grid grid-cols-2 gap-0"
           style={{ backgroundColor: '#05070b' }}
         >
           {withBrains.map((agent) => (
-            <BrainTile key={agent.id} agent={agent} height={tileHeight} />
+            <BrainTile key={`${agent.id}-${generation}`} agent={agent} height={tileHeight} />
           ))}
           {Array.from({ length: tileCount - withBrains.length }, (_, i) => (
             <EmptyTile key={`empty-${i}`} height={tileHeight} />
