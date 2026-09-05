@@ -6,6 +6,11 @@ export default defineConfig({
     environment: 'node',
     include: ['src/**/*.test.ts'],
     globals: true,
+    // dailyActivity's DST test needs a UK clock to exercise the transition;
+    // pin it so the suite is deterministic on any host/CI timezone.
+    env: {
+      TZ: 'Europe/London',
+    },
   },
   resolve: {
     alias: {
