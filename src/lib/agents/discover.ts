@@ -215,7 +215,7 @@ export function azureAvatarPath(
   return hasBot || upn ? `/api/agents/${encodeURIComponent(id)}/avatar` : undefined;
 }
 
-/** Avatar may be a same-origin path (/agents/x.png) or an https URL. */
+/** Avatar may be a same-origin path (the avatar route) or an https URL. */
 export function safeAvatarUrl(value?: string): string | undefined {
   if (!value) return undefined;
   if (/^\/[A-Za-z0-9_\-./]+$/.test(value) && !value.includes('..')) return value;

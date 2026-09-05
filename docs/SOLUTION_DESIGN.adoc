@@ -156,7 +156,7 @@ Every Resource Graph row carries `tenantId` — the tenant that owns the resourc
 
 === Agent identity: avatars and Teams
 
-Each agent card, row and detail header shows a profile image with a status dot. The image comes from `avatarUrl` in the registry (a path under `public/agents/` or an `https` URL) or the `agent-avatar` tag, falling back to initials on the brand gradient.
+Each agent card, row and detail header shows a profile image with a status dot. The image comes from where the agent lives, through `GET /api/agents/[id]/avatar`: the Bot Service icon, else the profile photo of the Entra account behind `agent-teams-upn`, read with the user's own tokens and cached for an hour. An `https` `avatarUrl` in the registry or an `agent-avatar` tag overrides it. With none of these the card shows initials on the brand gradient. No pictures live in the repo.
 
 "Chat in Teams" opens a Teams deep link built by `teamsChatUrl()` in `discover.ts`:
 

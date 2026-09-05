@@ -81,7 +81,7 @@
 |Set `teamsUpn` in `config/agents.json` for agents with their own Entra account. Bots need a Bot Service resource in a subscription you can read; the link uses its Microsoft App ID.
 
 |**Avatar shows initials instead of the image**
-|`avatarUrl` must be a path under `public/` (e.g. `/agents/sallie.png`) or an `https` URL. Check the file exists and the browser network tab for a 404.
+|The picture comes from the agent's Bot Service icon (Bot profile in the Azure portal) or the profile photo of the account behind `agent-teams-upn`; the Bot Framework placeholder icon counts as none. Check `/api/agents/<id>/avatar` in the browser network tab: 404 means neither is set, 401 means the Graph consent for `User.Read.All` is missing. An `avatarUrl` override must be an `https` URL.
 
 |**`az webapp create` fails with "Linux Runtime 'NODE\|20-lts' is not supported"**
 |App Service has retired Node 20 for new sites. Use `--runtime "NODE:22-lts"` (`az webapp list-runtimes --os-type linux` lists what is available).
