@@ -114,6 +114,25 @@ describe('getActivity', () => {
     expect(events.map((e) => e.source)).toEqual(['github', 'azure', 'azure']);
   });
 
+  it('still renders the other sources when the Foundry assistants lookup fails', async () => {
+    // This one is awaited before the runs call, so it must be inside the same
+    // isolation or it takes the whole feed down with it.
+    vi.mocked(listAssistants).mockRejectedValue(new Error('Foundry 500 assistants'));
+
+    const events = await getActivity(ctx, agent('assistants-down'));
+
+    expect(events.map((e) => e.source)).toEqual(['github', 'azure', 'azure']);
+    expect(listRecentRuns).not.toHaveBeenCalled();
+  });
+
+  it('still renders the other sources when the Foundry token exchange throws', async () => {
+    vi.mocked(getResourceToken).mockRejectedValue(new Error('Entra 503'));
+
+    const events = await getActivity(ctx, agent('token-down'));
+
+    expect(events.map((e) => e.source)).toEqual(['github', 'azure', 'azure']);
+  });
+
   it('skips Foundry when the scope has not been consented, and skips GitHub with no repo', async () => {
     vi.mocked(getResourceToken).mockResolvedValue(null);
     const noRepo = { ...agent('no-repo'), repo: undefined } as AgentDetail;
