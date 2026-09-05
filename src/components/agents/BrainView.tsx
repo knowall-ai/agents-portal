@@ -602,7 +602,7 @@ export default function BrainView({
       const frame = t * 0.06; // ≈ frames at 60 fps, continuous across restarts
       const w = wrap.clientWidth;
       const h = wrap.clientHeight;
-      const cx = compact ? w / 2 : w / 2 + 40;
+      const cx = compact ? w / 2 + 110 : w / 2 + 40;
       const cy = h / 2 - 80 + panRef.current.y;
       const now = Date.now();
       const focus = focusRef.current
@@ -633,7 +633,7 @@ export default function BrainView({
           sum += x * x + y * y + z * z;
         }
         const rms = Math.sqrt(sum / Math.max(1, nodesRef.current.length));
-        const fit = (Math.min(compact ? w : w - 400, h) * 0.5) / Math.max(80, rms * 1.9);
+        const fit = (Math.min(compact ? w - 280 : w - 400, h) * 0.5) / Math.max(80, rms * 1.9);
         zoomRef.current +=
           (Math.min(2.5, Math.max(0.3, fit)) - zoomRef.current) * Math.min(1, dt * 1.5);
       }
@@ -1157,12 +1157,55 @@ export default function BrainView({
       />
 
       {compact ? (
+        // Camera tile: the deep-brain feed and telemetry only, in a narrower column
         <div
-          className="pointer-events-none absolute top-2 left-3 text-xs font-semibold tracking-widest uppercase"
-          style={{ color: HUD.dim, fontFamily: HUD.font }}
+          className="pointer-events-none absolute top-2 bottom-2 left-2 flex flex-col gap-1"
+          style={{ width: 260, fontFamily: HUD.font, fontSize: 11, color: HUD.text }}
         >
-          {agentName}
-          {brain?.fixture && <span style={{ color: HUD.amber }}> · demo</span>}
+          <div
+            className="text-xs font-semibold tracking-widest uppercase"
+            style={{ color: HUD.dim }}
+          >
+            {agentName}
+            {brain?.fixture && <span style={{ color: HUD.amber }}> · demo</span>}
+          </div>
+          <HudPanel title="DEEP BRAIN" className="min-h-0 flex-1 overflow-hidden">
+            {feed.length === 0 ? (
+              <HudRow colour={HUD.dim}>waiting…</HudRow>
+            ) : (
+              feed.slice(0, 12).map((ev, i) => (
+                <HudRow key={`${ev.ts}-${i}`} colour={activationColour(ev.kind)}>
+                  {activationGlyph(ev.kind)} {ev.kind.toUpperCase().padEnd(8)}
+                  <span style={{ color: HUD.text }}>{activationText(ev).slice(0, 22)}</span>
+                </HudRow>
+              ))
+            )}
+          </HudPanel>
+          <HudPanel title="TELEMETRY">
+            <HudGauge
+              label="CPU"
+              frac={(state?.cpuPercent ?? 0) / 100}
+              value={state?.cpuPercent != null ? `${state.cpuPercent.toFixed(0)}%` : '--'}
+              colour={(state?.cpuPercent ?? 0) > 85 ? HUD.amber : HUD.g}
+            />
+            <HudGauge
+              label="RAM"
+              frac={
+                state?.memTotalGb && state.memUsedGb != null
+                  ? state.memUsedGb / state.memTotalGb
+                  : (state?.memPercent ?? 0) / 100
+              }
+              value={
+                state?.memTotalGb && state.memUsedGb != null
+                  ? `${state.memUsedGb.toFixed(1)}/${state.memTotalGb.toFixed(0)}G`
+                  : '--'
+              }
+            />
+            <HudGauge label="ACT" frac={activityPerMin / 20} value={`${activityPerMin}/min`} />
+            <div className="mt-[2px]">
+              <HudSparkline values={cpuHistory} height={14} />
+            </div>
+          </HudPanel>
         </div>
       ) : (
         <>

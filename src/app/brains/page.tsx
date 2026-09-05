@@ -21,11 +21,13 @@ function hasOwnVm(agent: AgentSummary): boolean {
 
 function BrainTile({ agent, height }: { agent: AgentSummary; height: number }) {
   const brain = useApi<{ brain: AgentBrain }>(`/api/agents/${agent.id}/brain`);
+  // A monitor with nothing to show reads NO SIGNAL, like the empty slots
+  const loaded = !brain.isLoading || brain.data !== null;
+  if (loaded && (brain.error || !brain.data?.brain.available)) {
+    return <EmptyTile height={height} label={agent.name} />;
+  }
   return (
-    <div
-      className="group relative overflow-hidden rounded-md"
-      style={{ backgroundColor: '#05070b' }}
-    >
+    <div className="group relative overflow-hidden" style={{ backgroundColor: '#05070b' }}>
       <BrainView
         agentId={agent.id}
         agentName={agent.name}
@@ -48,10 +50,10 @@ function BrainTile({ agent, height }: { agent: AgentSummary; height: number }) {
   );
 }
 
-function EmptyTile({ height }: { height: number }) {
+function EmptyTile({ height, label }: { height: number; label?: string }) {
   return (
     <div
-      className="flex items-center justify-center rounded-md border"
+      className="relative flex items-center justify-center border"
       style={{
         height,
         backgroundColor: '#05070b',
@@ -59,6 +61,14 @@ function EmptyTile({ height }: { height: number }) {
         fontFamily: HUD.font,
       }}
     >
+      {label && (
+        <span
+          className="absolute top-2 left-3 text-xs font-semibold tracking-widest uppercase"
+          style={{ color: HUD.dim }}
+        >
+          {label}
+        </span>
+      )}
       <span className="text-xs tracking-[0.3em] uppercase" style={{ color: HUD.dim }}>
         No signal
       </span>
@@ -98,8 +108,7 @@ export default function BrainsPage() {
   const tileCount = Math.max(MIN_TILES, Math.ceil(withBrains.length / 2) * 2);
   const rows = tileCount / 2;
   // In full page the wall fills the screen; otherwise fixed monitors
-  const tileHeight =
-    isFull && viewportHeight ? Math.floor((viewportHeight - 16 * (rows + 1)) / rows) : TILE_HEIGHT;
+  const tileHeight = isFull && viewportHeight ? Math.floor(viewportHeight / rows) : TILE_HEIGHT;
 
   return (
     <MainLayout>
@@ -136,8 +145,8 @@ export default function BrainsPage() {
         </div>
         <div
           ref={wallRef}
-          className="grid grid-cols-1 gap-4 md:grid-cols-2"
-          style={{ backgroundColor: '#05070b', padding: isFull ? 16 : 0 }}
+          className="grid grid-cols-1 gap-0 md:grid-cols-2"
+          style={{ backgroundColor: '#05070b' }}
         >
           {withBrains.map((agent) => (
             <BrainTile key={agent.id} agent={agent} height={tileHeight} />
