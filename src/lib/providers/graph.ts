@@ -129,6 +129,24 @@ interface RawLicense {
   servicePlans: RawPlan[];
 }
 
+export interface UserPhoto {
+  contentType: string;
+  base64: string;
+}
+
+/** The account's profile photo, or null when it has none (Graph answers 404). */
+export async function getUserPhoto(token: string, upn: string): Promise<UserPhoto | null> {
+  const response = await fetch(`${GRAPH}/users/${encodeURIComponent(upn)}/photo/$value`, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`Graph ${response.status} photo`);
+  const contentType = response.headers.get('content-type') ?? 'image/jpeg';
+  if (!contentType.startsWith('image/')) return null;
+  return { contentType, base64: Buffer.from(await response.arrayBuffer()).toString('base64') };
+}
+
 /** Account state and assigned licences for a user principal name. */
 export async function getUserLicensing(
   token: string,

@@ -138,6 +138,18 @@ export async function listAgentResources(token: string): Promise<AzureResource[]
 }
 
 /** Subscriptions visible to the user, with Lighthouse delegation info. */
+/** The icon set on a Bot Service resource (Bot profile in the Azure portal), if any. */
+export async function getBotIconUrl(
+  token: string,
+  botResourceId: string
+): Promise<string | undefined> {
+  const bot = await armFetch<{ properties?: { iconUrl?: string } }>(
+    token,
+    `${botResourceId}?api-version=2022-09-15`
+  );
+  return bot.properties?.iconUrl || undefined;
+}
+
 export async function listSubscriptions(token: string): Promise<AzureSubscription[]> {
   const result = await armFetch<{
     data: {

@@ -4,6 +4,7 @@ import { cached, invalidate } from '@/lib/cache';
 import { getRegistry, getRegistryEntry } from '@/lib/registry';
 import {
   findVm,
+  getBotIconUrl,
   listActivityLog,
   listAgentResources,
   listRoleAssignments,
@@ -18,7 +19,13 @@ import {
 } from '@/lib/providers/foundry';
 import { getRepoMarkdown, listRepoCommits, listRepoSkills } from '@/lib/providers/github';
 import { probeUrl } from '@/lib/providers/health';
-import { getAppAccess, getUserAccess, getUserLicensing } from '@/lib/providers/graph';
+import {
+  getAppAccess,
+  getUserAccess,
+  getUserLicensing,
+  getUserPhoto,
+  type UserPhoto,
+} from '@/lib/providers/graph';
 import { fetchBrainSnapshot, isValidBrainUrl } from '@/lib/providers/reverie';
 import { fixtureSnapshot } from '@/lib/brain-fixture';
 import {
@@ -42,7 +49,7 @@ import type {
   FoundryAssistant,
   Skill,
 } from '@/types';
-import { buildAgent, groupResources, sortAgents } from './discover';
+import { buildAgent, groupResources, isDefaultBotIcon, safeHttpsUrl, sortAgents } from './discover';
 import { addTotals, buildAgentCosts, type CostInputs } from './costs';
 import { mergeSkillSources, skillSourcesFor } from './skills';
 import {
@@ -133,6 +140,47 @@ export async function getSkills(ctx: UserContext, agent: AgentDetail): Promise<S
       return [...mergeSkillSources(repoLists), ...assistantsToSkills(assistants)];
     },
     10 * 60 * 1000
+  );
+}
+
+export type AgentAvatar = { redirect: string } | UserPhoto;
+
+const AVATAR_TTL = 60 * 60 * 1000;
+
+/**
+ * The agent's picture from where it lives: the Bot Service icon (set under Bot
+ * profile in the Azure portal), else the profile photo of the Entra account
+ * behind `agent-teams-upn`. Read with the signed-in user's tokens, so a viewer
+ * who cannot read the bot or the directory gets initials instead.
+ */
+export async function getAvatar(ctx: UserContext, agent: AgentDetail): Promise<AgentAvatar | null> {
+  return cached(
+    `avatar:${scope(ctx)}:${agent.id}`,
+    async (): Promise<AgentAvatar | null> => {
+      const bot = agent.resources.find((r) => r.type === 'microsoft.botservice/botservices');
+      if (bot) {
+        try {
+          const icon = await getBotIconUrl(ctx.armToken, bot.id);
+          const url = isDefaultBotIcon(icon) ? undefined : safeHttpsUrl(icon);
+          if (url) return { redirect: url };
+        } catch (error) {
+          console.warn(`Bot icon lookup failed for ${agent.id}:`, error);
+        }
+      }
+      if (agent.teamsUpn) {
+        try {
+          const token = await getResourceToken(ctx, GRAPH_DIRECTORY_SCOPE);
+          if (token) {
+            const photo = await getUserPhoto(token, agent.teamsUpn);
+            if (photo) return photo;
+          }
+        } catch (error) {
+          console.warn(`Account photo lookup failed for ${agent.id}:`, error);
+        }
+      }
+      return null;
+    },
+    AVATAR_TTL
   );
 }
 
