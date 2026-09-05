@@ -157,14 +157,35 @@ interface RawCommit {
   commit: { message: string; author: { name: string; date: string } };
 }
 
-/** Recent commits on the agent's repo as activity events. */
+/**
+ * Commits on the agent's repo from the last `sinceDays`, newest first, paged
+ * 100 at a time up to `limit`. Both bounds must be positive integers.
+ */
 export async function listRepoCommits(
   repo: string,
   agent: { id: string; name: string },
-  limit = 15
+  limit = 15,
+  sinceDays = 90
 ): Promise<ActivityEvent[]> {
   if (!isValidRepo(repo)) throw new Error(`Invalid repo slug: ${repo}`);
-  const commits = await ghJson<RawCommit[]>(`/repos/${repo}/commits?per_page=${limit}`);
+  if (!Number.isInteger(limit) || limit < 1 || limit > 5000)
+    throw new Error(`Invalid limit: ${limit}`);
+  if (!Number.isInteger(sinceDays) || sinceDays < 1 || sinceDays > 3650)
+    throw new Error(`Invalid sinceDays: ${sinceDays}`);
+  const since = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000).toISOString();
+  const commits: RawCommit[] = [];
+  try {
+    for (let page = 1; commits.length < limit; page++) {
+      const perPage = Math.min(100, limit - commits.length);
+      const batch = await ghJson<RawCommit[]>(
+        `/repos/${repo}/commits?per_page=${perPage}&page=${page}&since=${since}`
+      );
+      commits.push(...batch);
+      if (batch.length < perPage) break;
+    }
+  } catch (error) {
+    console.warn(`listRepoCommits: failed to page commits for ${repo}`, error);
+  }
   return commits.map((c) => ({
     id: `github:${agent.id}:${c.sha}`,
     agentId: agent.id,
