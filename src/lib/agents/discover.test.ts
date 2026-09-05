@@ -8,6 +8,7 @@ import {
   safeAvatarUrl,
   safeHttpsUrl,
   slugify,
+  teamsCallUrl,
   teamsChatUrl,
 } from './discover';
 
@@ -163,6 +164,20 @@ describe('helpers', () => {
   });
   it('slugifies tag values', () => {
     expect(slugify('Zaplie Test')).toBe('zaplie-test');
+  });
+});
+
+describe('teamsCallUrl', () => {
+  it('calls the agent account by UPN and nothing else', () => {
+    expect(teamsCallUrl({ id: 'sallie', name: 'Sallie', teamsUpn: 'sallie@example.com' }, [])).toBe(
+      'https://teams.microsoft.com/l/call/0/0?users=sallie%40example.com'
+    );
+    const tagged = resource({ tags: { agent: 'sallie', 'agent-teams-upn': 'sallie@example.com' } });
+    expect(teamsCallUrl(undefined, [tagged])).toBe(
+      'https://teams.microsoft.com/l/call/0/0?users=sallie%40example.com'
+    );
+    expect(teamsCallUrl({ id: 'winnie', name: 'Winnie' }, [])).toBeUndefined();
+    expect(teamsCallUrl(undefined, [])).toBeUndefined();
   });
 });
 
