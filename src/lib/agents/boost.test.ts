@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseBoostOutput } from './service';
+import { parseBoostOutput, parseBoostRequest } from './service';
 import { findVm, parseRunCommandMessage } from '@/lib/providers/azure';
 import type { AzureResource } from '@/types';
 
@@ -40,5 +40,26 @@ describe('findVm', () => {
       name: 'ka-sallie-vm',
     });
     expect(findVm([web])).toBeUndefined();
+  });
+});
+
+describe('parseBoostRequest', () => {
+  it('accepts only the documented bodies', () => {
+    expect(parseBoostRequest({ action: 'refresh' })).toEqual({ action: 'refresh' });
+    expect(parseBoostRequest({ action: 'on' })).toEqual({ action: 'on' });
+    expect(parseBoostRequest({ action: 'on', hours: 4 })).toEqual({ action: 'on', hours: 4 });
+    expect(parseBoostRequest({ action: 'off' })).toEqual({ action: 'off' });
+  });
+
+  it('rejects malformed payloads rather than throwing on them', () => {
+    expect(parseBoostRequest(null)).toBeNull();
+    expect(parseBoostRequest(['on'])).toBeNull();
+    expect(parseBoostRequest('on')).toBeNull();
+    expect(parseBoostRequest({})).toBeNull();
+    expect(parseBoostRequest({ action: 'reboot' })).toBeNull();
+    expect(parseBoostRequest({ action: 'on', script: '/tmp/evil.sh' })).toBeNull();
+    expect(parseBoostRequest({ action: 'refresh', hours: 2 })).toBeNull();
+    expect(parseBoostRequest({ action: 'on', hours: '4' })).toBeNull();
+    expect(parseBoostRequest({ action: 'on', hours: Number.NaN })).toBeNull();
   });
 });

@@ -2,10 +2,12 @@
 //
 // Discovery rules (first match wins):
 //   1. Resource tag `agent` (or any key in AGENT_TAG_KEYS) names the agent slug.
-//   2. A registry entry whose `resourceGroups` contains the resource's group claims it.
+//   2. A registry entry whose `resourceGroups` contains the resource's group claims it,
+//      but only inside the entry's `subscriptionIds` or the registry's own tenant.
 //   3. Anything else is ignored.
 //
 // Registry metadata (name, customer, kind, URLs) overrides tag-derived values.
+import { registryTenant } from '@/lib/tenants';
 import type {
   AgentDetail,
   AgentKind,
@@ -124,6 +126,29 @@ interface Bucket {
   fromTags: boolean;
 }
 
+/**
+ * Is this resource inside the scope a registry entry claims? Resource-group
+ * names are only unique within a subscription, so an entry claims its groups in
+ * the subscriptions it names, or — when it names none — in the registry's own
+ * tenant (`registryTenant`). Without that anchor anyone who can create a
+ * same-named resource group in their own subscription would inherit the entry's
+ * brain URL, repo and boost script, which are read with server-held tokens.
+ */
+export function claimsResource(
+  entry: AgentRegistryEntry,
+  resource: Pick<AzureResource, 'resourceGroup' | 'subscriptionId' | 'tenantId'>,
+  env: Record<string, string | undefined> = process.env
+): boolean {
+  const subscriptions = (entry.subscriptionIds ?? []).map((s) => s.toLowerCase());
+  const inScope =
+    subscriptions.length > 0
+      ? subscriptions.includes(resource.subscriptionId.toLowerCase())
+      : resource.tenantId.toLowerCase() === registryTenant(env);
+  if (!inScope) return false;
+  const groups = (entry.resourceGroups ?? []).map((g) => g.toLowerCase());
+  return groups.length === 0 || groups.includes(resource.resourceGroup.toLowerCase());
+}
+
 /** Group resources into agents. Exported for unit tests. */
 export function groupResources(
   resources: AzureResource[],
@@ -131,10 +156,7 @@ export function groupResources(
   tagKeys: string[] = getTagKeys()
 ): Bucket[] {
   const buckets = new Map<string, Bucket>();
-  const byGroup = new Map<string, AgentRegistryEntry>();
-  for (const entry of registry) {
-    for (const rg of entry.resourceGroups ?? []) byGroup.set(rg.toLowerCase(), entry);
-  }
+  const claiming = registry.filter((entry) => (entry.resourceGroups ?? []).length > 0);
 
   const bucketFor = (id: string): Bucket => {
     let bucket = buckets.get(id);
@@ -151,7 +173,7 @@ export function groupResources(
   };
 
   for (const resource of resources) {
-    const claimed = byGroup.get(resource.resourceGroup);
+    const claimed = claiming.find((entry) => claimsResource(entry, resource));
     if (claimed) {
       bucketFor(claimed.id).resources.push(resource);
       continue;

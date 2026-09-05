@@ -7,7 +7,7 @@
 
 Agents Portal is a read-only operations portal for the AI agents KnowAll AI builds and runs. It answers three questions for every agent: *Is it up?*, *What can it do?* and *What has it been doing?* — across KnowAll's own tenant and customer tenants.
 
-It stores nothing. Everything is read live from Azure, GitHub and Azure AI Foundry using the signed-in user's own permissions, then cached in memory for a minute.
+It persists nothing — there is no database and nothing is written to disk. Everything is read live from Azure, GitHub and Azure AI Foundry using the signed-in user's own permissions, then held in a per-process in-memory cache for a minute (see _Caching_).
 
 == Architecture
 
@@ -120,7 +120,7 @@ Resources
 
 Resources are grouped into agents by `groupResources()` in `src/lib/agents/discover.ts`:
 
-. A registry entry in `config/agents.json` whose `resourceGroups` contains the resource's group claims it.
+. A registry entry in `config/agents.json` whose `resourceGroups` contains the resource's group claims it, but only inside the subscriptions in its `subscriptionIds` or, when it names none, the registry's own tenant (`AZURE_AD_TENANT_ID`, or the single tenant in `AZURE_AD_ALLOWED_TENANTS`).
 . Otherwise the first tag found from `AGENT_TAG_KEYS` (default `agent`, then `project`) names the agent; the value is slugified (`Zaplie Test` → `zaplie-test`).
 . Anything else is ignored.
 
@@ -296,7 +296,9 @@ All routes require a session unless noted; they return `401` when unauthenticate
 
 * The dashboard never holds credentials with more access than the signed-in user; Azure RBAC decides what is visible.
 * Access and refresh tokens stay inside the encrypted NextAuth JWT cookie and are only read server-side (`getUserContext`); the session object sent to the browser carries no tokens.
-* Only `GITHUB_TOKEN` and the Entra client secret are server-held secrets. The GitHub token needs Contents: read only.
+* The server-held secrets are the Entra client secret, `GITHUB_TOKEN` (Contents: read only), `REVERIE_TOKEN` (sent only to the registry's `brainUrl`) and the optional provider admin keys `OPENAI_ADMIN_KEY` and `ANTHROPIC_ADMIN_KEY` used for the cost reports. Everything else is read with the signed-in user's own token.
+* Sign-in is refused unless the user's tenant is on the `AZURE_AD_ALLOWED_TENANTS` allow-list, which a production deployment must set: with the multi-tenant authority `common` and no list there is nothing to check against, so no one is admitted.
+* A registry entry only applies to an agent when the caller can see one of its Azure resources inside the scope the entry claims — the subscriptions in its `subscriptionIds`, or the registry's own tenant — so a same-named resource group elsewhere cannot inherit its brain URL, repo or boost script.
 * Values that originate from Azure resource tags are untrusted because anyone with Contributor on a resource can set them:
 ** `agent-url` / `portalUrl` must be `https`, and the reachability probe refuses hosts that resolve to loopback, link-local (including the 169.254.169.254 metadata endpoint) or private ranges. Response bodies are never read.
 ** `agent-repo` / `repo` must match `owner/name` before it is placed in a GitHub API path.

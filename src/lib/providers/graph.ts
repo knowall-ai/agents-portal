@@ -111,7 +111,12 @@ async function graphJson<T>(token: string, path: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-/** Every page of a Graph collection, following `@odata.nextLink` until it runs out. */
+/**
+ * Every page of a Graph collection, following `@odata.nextLink` until it runs
+ * out. The page cap stops a runaway loop; hitting it with pages still to come
+ * throws, because a truncated grant or assignment list would show a granted
+ * permission as missing.
+ */
 async function graphList<T>(token: string, path: string, maxPages = 20): Promise<T[]> {
   const items: T[] = [];
   let next: string | undefined = path;
@@ -120,6 +125,7 @@ async function graphList<T>(token: string, path: string, maxPages = 20): Promise
     items.push(...result.value);
     next = result['@odata.nextLink'];
   }
+  if (next) throw new Error(`Graph list incomplete: more than ${maxPages} pages for ${path}`);
   return items;
 }
 

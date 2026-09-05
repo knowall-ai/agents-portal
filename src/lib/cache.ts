@@ -36,19 +36,22 @@ export async function cached<T>(
     value = await loader();
   } catch (error) {
     // Serve the last good value while the upstream is throttled or flaky, and
-    // hold off retrying for a short while so we do not make the throttle worse
-    const staleUntil = hit?.staleUntil ?? now + STALE_MAX_MS;
-    if (hit && now < staleUntil) {
+    // hold off retrying for a short while so we do not make the throttle worse.
+    // The loader may have taken longer than the hold-off, so time the retry
+    // from the failure, not from when the loader started.
+    const failedAt = Date.now();
+    const staleUntil = hit?.staleUntil ?? failedAt + STALE_MAX_MS;
+    if (hit && failedAt < staleUntil) {
       const message = error instanceof Error ? error.message : String(error);
       console.warn(`cache: serving stale ${key} after failure: ${message.slice(0, 160)}`);
-      store.set(key, { value: hit.value, expiresAt: now + STALE_RETRY_MS, staleUntil });
+      store.set(key, { value: hit.value, expiresAt: failedAt + STALE_RETRY_MS, staleUntil });
       return hit.value;
     }
     store.delete(key);
     throw error;
   }
   const ttl = typeof ttlMs === 'function' ? ttlMs(value) : ttlMs;
-  store.set(key, { value, expiresAt: now + ttl });
+  store.set(key, { value, expiresAt: Date.now() + ttl });
   return value;
 }
 

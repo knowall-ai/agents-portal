@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getUserContext } from '@/lib/tokens';
-import { getAgent, getBoost, setBoost } from '@/lib/agents/service';
+import { getAgent, getBoost, parseBoostRequest, setBoost } from '@/lib/agents/service';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -53,14 +53,18 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   }
 
   const { id } = await params;
-  let body: { action?: string; hours?: number } = {};
+  let raw: unknown;
   try {
-    body = await req.json();
+    raw = await req.json();
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
-  if (body.action !== 'on' && body.action !== 'off' && body.action !== 'refresh') {
-    return NextResponse.json({ error: 'action must be "on", "off" or "refresh"' }, { status: 400 });
+  const body = parseBoostRequest(raw);
+  if (!body) {
+    return NextResponse.json(
+      { error: 'Body must be { action: "on" | "off" | "refresh", hours?: number }' },
+      { status: 400 }
+    );
   }
   try {
     const agent = await getAgent(ctx, id);

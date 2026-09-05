@@ -21,7 +21,11 @@ export const AGENT_RESOURCE_TYPES = [
   'microsoft.containerinstance/containergroups',
 ];
 
-/** Every page of an ARM list, following `nextLink` until it runs out (bounded). */
+/**
+ * Every page of an ARM list, following `nextLink` until it runs out. The page
+ * cap stops a runaway loop; hitting it with pages still to come throws rather
+ * than returning a truncated list, which callers would read as complete.
+ */
 async function armList<T>(token: string, path: string, maxPages = 20): Promise<T[]> {
   const items: T[] = [];
   let next: string | undefined = path;
@@ -30,6 +34,7 @@ async function armList<T>(token: string, path: string, maxPages = 20): Promise<T
     items.push(...result.value);
     next = result.nextLink;
   }
+  if (next) throw new Error(`ARM list incomplete: more than ${maxPages} pages for ${path}`);
   return items;
 }
 
@@ -319,6 +324,8 @@ export async function listRoleAssignments(
           token,
           `/subscriptions/${sub}/providers/Microsoft.Authorization/roleAssignments?api-version=2022-04-01&$filter=${encodeURIComponent(`principalId eq '${principalId}'`)}`
         ).catch((error) => {
+          // Includes an incomplete (page-capped) list: a subscription whose
+          // assignments could not be read in full contributes none of them
           console.warn(`Role assignments failed for ${sub}:`, error);
           return [] as RoleAssignmentRow[];
         })

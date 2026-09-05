@@ -43,7 +43,7 @@ import type {
   FoundryAssistant,
   Skill,
 } from '@/types';
-import { buildAgent, groupResources, sortAgents } from './discover';
+import { buildAgent, claimsResource, groupResources, sortAgents } from './discover';
 import { addTotals, buildAgentCosts, type CostInputs } from './costs';
 import { mergeSkillSources, skillSourcesFor } from './skills';
 import {
@@ -62,21 +62,16 @@ function scope(ctx: UserContext): string {
 
 /**
  * The registry entry behind an agent, but only when the caller can see at least
- * one of its Azure resources and, if the entry claims resource groups, one of
- * those. Registry-only agents (nothing visible, or a tag-derived slug that
- * merely matches an entry id) get nothing, because server-held tokens
- * (REVERIE_TOKEN, GITHUB_TOKEN) are spent on the entry's URLs.
+ * one Azure resource inside the scope the entry claims (`claimsResource`:
+ * the entry's subscriptions, or the registry's own tenant, and its resource
+ * groups when it names any). Registry-only agents (nothing visible, or a
+ * tag-derived slug that merely matches an entry id) get nothing, because
+ * server-held tokens (REVERIE_TOKEN, GITHUB_TOKEN) are spent on the entry's URLs.
  */
 function getRegistryEntry(agent: AgentDetail): AgentRegistryEntry | undefined {
   const entry = lookupRegistryEntry(agent.id);
-  if (!entry || agent.resources.length === 0) return undefined;
-  const claimed = (entry.resourceGroups ?? []).map((g) => g.toLowerCase());
-  if (
-    claimed.length > 0 &&
-    !agent.resources.some((r) => claimed.includes(r.resourceGroup.toLowerCase()))
-  )
-    return undefined;
-  return entry;
+  if (!entry) return undefined;
+  return agent.resources.some((r) => claimsResource(entry, r)) ? entry : undefined;
 }
 
 /** All agents visible to the user (cached per user for CACHE_TTL_SECONDS). */
@@ -334,6 +329,27 @@ const BOOST_WARNING =
   'while Boost is on, then switched back automatically by the VM.';
 
 const BOOST_CACHE_TTL = 12 * 60 * 60 * 1000;
+
+export interface BoostRequest {
+  action: 'on' | 'off' | 'refresh';
+  hours?: number;
+}
+
+/**
+ * The request body `POST /api/agents/:id/boost` accepts: `{ action: "refresh" }`
+ * or `{ action: "on" | "off", hours?: number }`. Anything else — null, an array,
+ * a primitive, an unknown key or a non-numeric `hours` — is rejected here so a
+ * malformed payload is a 400 rather than a 500.
+ */
+export function parseBoostRequest(body: unknown): BoostRequest | null {
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) return null;
+  const { action, hours, ...rest } = body as Record<string, unknown>;
+  if (Object.keys(rest).length > 0) return null;
+  if (action !== 'on' && action !== 'off' && action !== 'refresh') return null;
+  if (hours === undefined) return { action };
+  if (action === 'refresh' || typeof hours !== 'number' || !Number.isFinite(hours)) return null;
+  return { action, hours };
+}
 
 interface BoostScriptState {
   active?: boolean;

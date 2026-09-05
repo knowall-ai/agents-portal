@@ -101,6 +101,8 @@ src/
 - **Do not put email addresses in the public repo** — use generic references
 - Do not commit `.env`; the app registration secret lives in App Service settings / GitHub secrets
 - All upstream calls use the signed-in user's own tokens — the dashboard never has more access than the user
+- Sign-in needs the user's tenant on `AZURE_AD_ALLOWED_TENANTS`; with the `common` authority and no list nobody is admitted, so production must set it
+- Registry entries (brain URL, repo, boost script) only apply inside the scope they claim: their `subscriptionIds`, or the registry's own tenant — see `claimsResource` in `src/lib/agents/discover.ts`
 
 ## Testing
 
@@ -129,7 +131,7 @@ bun run lint:fix       # Auto-fix lint
 | `NEXTAUTH_SECRET`          | Secret for NextAuth encryption                                                                             | Yes                           |
 | `AZURE_AD_CLIENT_ID`       | Entra app registration client ID                                                                           | Yes                           |
 | `AZURE_AD_CLIENT_SECRET`   | Entra app registration client secret                                                                       | Yes                           |
-| `AZURE_AD_ALLOWED_TENANTS` | Comma-separated tenant ids allowed to sign in (default: `AZURE_AD_TENANT_ID` alone; with `common`, anyone) | Yes in production             |
+| `AZURE_AD_ALLOWED_TENANTS` | Comma-separated tenant ids allowed to sign in (default: `AZURE_AD_TENANT_ID` alone; with `common`, no one) | Yes in production             |
 | `AZURE_AD_TENANT_ID`       | Default sign-in tenant (`common` for multi-tenant)                                                         | No (default: `common`)        |
 | `GITHUB_TOKEN`             | Token with Contents: read on agent + skill-pack repos                                                      | For private repos             |
 | `REVERIE_TOKEN`            | Bearer token for each agent's `reverie serve` (Brain tab)                                                  | For the Brain tab             |

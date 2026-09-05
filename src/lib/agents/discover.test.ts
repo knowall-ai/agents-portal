@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { AgentRegistryEntry, AzureResource } from '@/types';
 import {
   buildAgent,
+  claimsResource,
   deriveStatus,
   groupResources,
   normaliseEnvironment,
@@ -33,6 +34,7 @@ const registry: AgentRegistryEntry[] = [
     kind: 'openclaw',
     customer: 'KnowAll AI',
     resourceGroups: ['ka-agents'],
+    subscriptionIds: ['sub'],
   },
   { id: 'allie', name: 'Allie', customer: 'Cairn Homes', planned: true },
 ];
@@ -90,6 +92,59 @@ describe('groupResources', () => {
   it('keeps planned registry agents with no resources', () => {
     const buckets = groupResources([], registry, ['agent']);
     expect(buckets.find((b) => b.id === 'allie')?.resources).toHaveLength(0);
+  });
+
+  it('does not let a same-named resource group in another subscription claim an entry', () => {
+    const buckets = groupResources(
+      [resource({ resourceGroup: 'ka-agents', subscriptionId: 'other-sub' })],
+      registry,
+      ['agent']
+    );
+    expect(buckets.find((b) => b.id === 'sallie')?.resources ?? []).toHaveLength(0);
+  });
+});
+
+describe('claimsResource', () => {
+  const entry: AgentRegistryEntry = {
+    id: 'sallie',
+    name: 'Sallie',
+    customer: 'KnowAll AI',
+    resourceGroups: ['ka-agents'],
+  };
+  const home = { AZURE_AD_TENANT_ID: 'tenant-a' };
+
+  it('claims the named groups in the registry tenant', () => {
+    expect(claimsResource(entry, resource({ resourceGroup: 'ka-agents' }), home)).toBe(true);
+    expect(claimsResource(entry, resource({ resourceGroup: 'KA-Agents' }), home)).toBe(true);
+    expect(claimsResource(entry, resource({ resourceGroup: 'other-rg' }), home)).toBe(false);
+    expect(
+      claimsResource(entry, resource({ resourceGroup: 'ka-agents', tenantId: 'tenant-b' }), home)
+    ).toBe(false);
+  });
+
+  it('claims by subscription when the entry names one, in any tenant', () => {
+    const scoped = { ...entry, subscriptionIds: ['SUB'] };
+    expect(
+      claimsResource(scoped, resource({ resourceGroup: 'ka-agents', tenantId: 'tenant-b' }), {})
+    ).toBe(true);
+    expect(
+      claimsResource(
+        scoped,
+        resource({ resourceGroup: 'ka-agents', subscriptionId: 'other' }),
+        home
+      )
+    ).toBe(false);
+  });
+
+  it('claims nothing when several tenants are trusted and no subscription is named', () => {
+    const multi = { AZURE_AD_ALLOWED_TENANTS: 'tenant-a,tenant-b' };
+    expect(claimsResource(entry, resource({ resourceGroup: 'ka-agents' }), multi)).toBe(false);
+  });
+
+  it('scopes entries that name no resource group to the registry tenant', () => {
+    const anyGroup: AgentRegistryEntry = { id: 'allie', name: 'Allie', customer: 'Cairn Homes' };
+    expect(claimsResource(anyGroup, resource({ resourceGroup: 'anything' }), home)).toBe(true);
+    expect(claimsResource(anyGroup, resource({ tenantId: 'tenant-b' }), home)).toBe(false);
   });
 });
 
