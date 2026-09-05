@@ -3,6 +3,7 @@ import { getUserContext } from '@/lib/tokens';
 import { brainSource, getAgent } from '@/lib/agents/service';
 import { openBrainEvents } from '@/lib/providers/reverie';
 import { fixtureHostStats, fixtureTick } from '@/lib/brain-fixture';
+import { parseDemoQuery } from '@/lib/brain-query';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,7 +29,14 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
   const { id } = await params;
   const agent = await getAgent(ctx, id);
   if (!agent) return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
-  const source = brainSource(agent, req.nextUrl.searchParams.get('demo') === '1');
+  const demo = parseDemoQuery(req.nextUrl.searchParams);
+  if (demo === null) {
+    return NextResponse.json(
+      { error: 'Only demo=1 is accepted as a query parameter' },
+      { status: 400 }
+    );
+  }
+  const source = brainSource(agent, demo);
   if (!source) return NextResponse.json({ error: 'No brain configured' }, { status: 404 });
 
   if (source.kind === 'fixture') {

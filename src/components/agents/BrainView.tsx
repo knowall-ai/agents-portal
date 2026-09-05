@@ -1191,6 +1191,17 @@ export default function BrainView({
                 ? '○ STREAM CONNECTING'
                 : '○ STREAM OFFLINE'}
           </span>
+          {!brain.fixture && onDemoChange && (
+            <button
+              type="button"
+              className="pointer-events-auto underline-offset-2 hover:underline"
+              style={{ color: HUD.dim }}
+              title="Show the built-in demo graph instead of this agent's memory"
+              onClick={() => onDemoChange(true)}
+            >
+              DEMO
+            </button>
+          )}
           {brain.fixture &&
             (brain.liveAvailable && onDemoChange ? (
               <button
