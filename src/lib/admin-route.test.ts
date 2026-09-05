@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { NextRequest } from 'next/server';
 import type { AgentDetail } from '@/types';
 import type { UserContext } from '@/lib/tokens';
+import { ADMIN_ROLE, VIEWER_ROLE } from '@/lib/roles';
 
 const getUserContext = vi.fn();
 const agentExists = vi.fn();
@@ -27,7 +28,7 @@ function context(isAdmin: boolean): UserContext {
     armToken: 'token',
     tenantId: 'tenant',
     userId: 'user',
-    roles: isAdmin ? ['Portal.Admin'] : ['Portal.Viewer'],
+    roles: isAdmin ? [ADMIN_ROLE] : [VIEWER_ROLE],
     isAdmin,
   };
 }
