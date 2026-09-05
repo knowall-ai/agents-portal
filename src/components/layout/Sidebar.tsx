@@ -68,7 +68,7 @@ export default function Sidebar({ isOpen = false, onClose, counts }: SidebarProp
         })}
       </nav>
 
-      <div className="flex-1 overflow-y-auto border-t" style={{ borderColor: 'var(--border)' }}>
+      <div className="flex-1 overflow-y-auto">
         <div className="p-3">
           <div
             className="mb-2 text-xs font-semibold uppercase"
@@ -104,7 +104,7 @@ export default function Sidebar({ isOpen = false, onClose, counts }: SidebarProp
           </div>
         </div>
 
-        <div className="border-t p-3" style={{ borderColor: 'var(--border)' }}>
+        <div className="p-3 pt-1">
           <a
             href="https://github.com/knowall-ai/agents-portal/blob/main/docs/ONBOARDING.adoc"
             target="_blank"

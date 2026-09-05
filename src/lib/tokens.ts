@@ -5,7 +5,8 @@
 // consented to (Azure AI Foundry, Microsoft Graph), so API routes call
 // getResourceToken() with the resource they need.
 import { getToken } from 'next-auth/jwt';
-import type { NextRequest } from 'next/server';
+import { isPortalAdmin } from '@/lib/roles';
+import { NextResponse, type NextRequest } from 'next/server';
 import { createHash } from 'crypto';
 import { cached } from './cache';
 
@@ -22,6 +23,10 @@ export interface UserContext {
   refreshToken?: string;
   tenantId: string;
   userId: string;
+  /** Entra app roles from the ID token */
+  roles: string[];
+  /** Portal.Admin, or no roles configured yet (see src/lib/roles.ts) */
+  isAdmin: boolean;
 }
 
 /** Load the caller's tokens from the NextAuth JWT cookie. Returns null when unauthenticated. */
@@ -33,7 +38,17 @@ export async function getUserContext(req: NextRequest): Promise<UserContext | nu
     refreshToken: token.refreshToken,
     tenantId: token.tenantId ?? 'common',
     userId: token.id ?? token.sub ?? 'unknown',
+    roles: token.roles ?? [],
+    isAdmin: isPortalAdmin(token.roles),
   };
+}
+
+/** 403 for routes that customers (Portal.Viewer) must not reach. */
+export function forbiddenForViewers(): NextResponse {
+  return NextResponse.json(
+    { error: 'This view is for KnowAll administrators (Portal.Admin)' },
+    { status: 403 }
+  );
 }
 
 /**
@@ -68,6 +83,7 @@ export async function getResourceToken(ctx: UserContext, scope: string): Promise
       }
       return data.access_token as string;
     },
-    5 * 60 * 1000
+    // a null (failed exchange) must not be remembered for the full window
+    (value) => (value ? 5 * 60 * 1000 : 15 * 1000)
   );
 }

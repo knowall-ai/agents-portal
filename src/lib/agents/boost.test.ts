@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Only the VM round trip is faked; the rest of the Azure helpers stay real.
 const runVmScript = vi.hoisted(() => vi.fn());
@@ -7,7 +7,7 @@ vi.mock('@/lib/providers/azure', async (importOriginal) => ({
   runVmScript,
 }));
 
-import { parseBoostOutput, setBoost } from './service';
+import { parseBoostOutput, parseBoostRequest, setBoost } from './service';
 import { findVm, parseRunCommandMessage } from '@/lib/providers/azure';
 import type { UserContext } from '@/lib/tokens';
 import type { AgentDetail, AzureResource } from '@/types';
@@ -52,6 +52,32 @@ describe('findVm', () => {
   });
 });
 
+describe('parseBoostRequest', () => {
+  it('accepts only the documented bodies', () => {
+    expect(parseBoostRequest({ action: 'refresh' })).toEqual({ action: 'refresh' });
+    expect(parseBoostRequest({ action: 'on' })).toEqual({ action: 'on' });
+    expect(parseBoostRequest({ action: 'on', hours: 4 })).toEqual({ action: 'on', hours: 4 });
+    expect(parseBoostRequest({ action: 'off' })).toEqual({ action: 'off' });
+  });
+
+  it('rejects malformed payloads rather than throwing on them', () => {
+    expect(parseBoostRequest(null)).toBeNull();
+    expect(parseBoostRequest(['on'])).toBeNull();
+    expect(parseBoostRequest('on')).toBeNull();
+    expect(parseBoostRequest({})).toBeNull();
+    expect(parseBoostRequest({ action: 'reboot' })).toBeNull();
+    expect(parseBoostRequest({ action: 'on', script: '/tmp/evil.sh' })).toBeNull();
+    expect(parseBoostRequest({ action: 'refresh', hours: 2 })).toBeNull();
+    expect(parseBoostRequest({ action: 'on', hours: '4' })).toBeNull();
+    expect(parseBoostRequest({ action: 'on', hours: Number.NaN })).toBeNull();
+    expect(parseBoostRequest({ action: 'on', hours: -1 })).toBeNull();
+    expect(parseBoostRequest({ action: 'on', hours: 0 })).toBeNull();
+    expect(parseBoostRequest({ action: 'on', hours: 0.3 })).toBeNull();
+    expect(parseBoostRequest({ action: 'off', hours: 2 })).toBeNull();
+    expect(parseBoostRequest({ action: 'on', hours: 0.5 })).toEqual({ action: 'on', hours: 0.5 });
+  });
+});
+
 describe('setBoost', () => {
   const vm = {
     id: '1',
@@ -59,15 +85,20 @@ describe('setBoost', () => {
     type: 'microsoft.compute/virtualmachines',
     resourceGroup: 'ka-agents',
     subscriptionId: 'sub',
+    tenantId: 'tenant-1',
   } as unknown as AzureResource;
   // `sallie` is the registry entry with a boost script, so Boost is supported here
   const agent = { id: 'sallie', resources: [vm] } as unknown as AgentDetail;
   const ctx = { armToken: 'token' } as unknown as UserContext;
 
   beforeEach(() => {
+    // The registry only applies to resources in its own tenant
+    vi.stubEnv('AZURE_AD_TENANT_ID', 'tenant-1');
     runVmScript.mockReset();
     runVmScript.mockResolvedValue({ stdout: '{"active":true,"hours":0.5}', stderr: '' });
   });
+
+  afterEach(() => vi.unstubAllEnvs());
 
   it('rejects hours that are not quarter hours or are out of range', async () => {
     const message = /Hours must be a multiple of 0\.25 between 0\.25 and 8/;

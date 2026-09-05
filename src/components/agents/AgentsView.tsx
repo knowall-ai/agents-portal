@@ -27,6 +27,8 @@ const VIEW_KEY = 'agents-portal-agents-view';
 /** KPIs + filterable agent list. Used as the home page. */
 export default function AgentsView() {
   const { data: session, status } = useSession();
+  // Customers (Portal.Viewer) never see costs
+  const isAdmin = session?.user.isAdmin ?? false;
   const router = useRouter();
   const params = useSearchParams();
   const [view, setView] = useState<ViewMode>('list');
@@ -35,7 +37,7 @@ export default function AgentsView() {
     60_000
   );
   const costsApi = useApi<CostsSummary>(
-    status === 'authenticated' ? '/api/costs' : null,
+    status === 'authenticated' && isAdmin ? '/api/costs' : null,
     15 * 60_000
   );
   const costByAgent = useMemo(() => {
@@ -85,12 +87,21 @@ export default function AgentsView() {
     return true;
   });
 
-  const setParam = (key: string, value: string) => {
-    const next = new URLSearchParams(params.toString());
+  /** Query keys this view reads — anything else is dropped when rebuilding the URL. */
+  const FILTER_KEYS = ['q', 'status', 'kind', 'customer'] as const;
+
+  /** The agents URL with one query parameter changed and every other supported filter kept. */
+  const hrefWith = (key: string, value: string) => {
+    const next = new URLSearchParams();
+    for (const filterKey of FILTER_KEYS) {
+      const current = params.get(filterKey);
+      if (current) next.set(filterKey, current);
+    }
     if (value) next.set(key, value);
     else next.delete(key);
-    router.replace(`/${next.toString() ? `?${next}` : ''}`);
+    return `/${next.toString() ? `?${next}` : ''}`;
   };
+  const setParam = (key: string, value: string) => router.replace(hrefWith(key, value));
 
   const byCustomer = filtered.reduce<Record<string, AgentSummary[]>>((acc, agent) => {
     (acc[agent.customer] ??= []).push(agent);
@@ -143,24 +154,30 @@ export default function AgentsView() {
       color: 'var(--primary)',
       status: '',
     },
-    (() => {
-      const summary = costsApi.data;
-      const azure = summary?.sources.find((s) => s.source === 'azure');
-      const failed = !summary ? Boolean(costsApi.error) : azure?.status === 'error';
-      return {
-        title: 'Cost this month',
-        value: failed ? 'n/a' : summary ? formatTotals(summary.totals.monthToDate, '—') : '',
-        icon: <Receipt size={22} />,
-        color: failed ? 'var(--text-muted)' : 'var(--status-degraded)',
-        status: '',
-        loading: costsApi.isLoading && !summary,
-        hint: failed
-          ? (azure?.detail ?? costsApi.error ?? 'Cost lookup failed').replace(/\{.*$/, '').trim()
-          : summary
-            ? `Last month ${formatTotals(summary.totals.lastMonth, '—')}`
-            : undefined,
-      };
-    })(),
+    ...(isAdmin
+      ? [
+          (() => {
+            const summary = costsApi.data;
+            const azure = summary?.sources.find((s) => s.source === 'azure');
+            const failed = !summary ? Boolean(costsApi.error) : azure?.status === 'error';
+            return {
+              title: 'Cost this month',
+              value: failed ? 'n/a' : summary ? formatTotals(summary.totals.monthToDate, '—') : '',
+              icon: <Receipt size={22} />,
+              color: failed ? 'var(--text-muted)' : 'var(--status-degraded)',
+              status: '',
+              loading: costsApi.isLoading && !summary,
+              hint: failed
+                ? (azure?.detail ?? costsApi.error ?? 'Cost lookup failed')
+                    .replace(/\{.*$/, '')
+                    .trim()
+                : summary
+                  ? `Last month ${formatTotals(summary.totals.lastMonth, '—')}`
+                  : undefined,
+            };
+          })(),
+        ]
+      : []),
   ];
 
   return (
@@ -188,7 +205,8 @@ export default function AgentsView() {
           return (
             <Link
               key={kpi.title}
-              href={kpi.status ? `/?status=${kpi.status}` : '/'}
+              // a second click on the active card clears the status filter only
+              href={hrefWith('status', kpi.status && !active ? kpi.status : '')}
               className="card p-4 transition-colors hover:bg-[var(--surface-hover)]"
               style={active ? { borderColor: kpi.color } : undefined}
               aria-pressed={active}
@@ -347,7 +365,7 @@ export default function AgentsView() {
           />
         </div>
       ) : view === 'list' ? (
-        <AgentTable agents={filtered} costs={costByAgent} />
+        <AgentTable agents={filtered} costs={isAdmin ? costByAgent : undefined} />
       ) : (
         Object.entries(byCustomer).map(([customer, list]) => (
           <section key={customer} className="mb-8">
