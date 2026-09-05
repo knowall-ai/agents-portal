@@ -26,6 +26,7 @@ import {
   CalendarDays,
   Brain,
   Zap,
+  PhoneCall,
 } from 'lucide-react';
 import { MainLayout } from '@/components/layout';
 import {
@@ -55,6 +56,7 @@ import {
 import { Countdown } from '@/components/common';
 import { formatDistanceToNow } from 'date-fns';
 import { useApi } from '@/hooks';
+import { presenceLabel } from '@/lib/presence';
 import { BACKDROPS, type Backdrop } from '@/components/agents/BrainView';
 import type {
   ActivityDay,
@@ -62,6 +64,7 @@ import type {
   AgentMetrics,
   AgentBoost,
   AgentBrain,
+  AgentPresence,
   AgentCosts,
   AgentDetail,
   AgentLicensing,
@@ -168,6 +171,14 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
     next.set('tab', 'brain');
     router.replace(`/agents/${id}?${next.toString()}`);
   };
+  const presence = useApi<{ presence: AgentPresence }>(
+    ready ? `/api/agents/${id}/presence` : null,
+    15_000
+  );
+  // A failed poll leaves the last reading in `presence.data`; an agent that hung
+  // up while the request was failing would keep its chip. Show nothing instead.
+  const presenceNow = presence.error ? null : (presence.data?.presence ?? null);
+  const onCall = Boolean(presenceNow?.onCall);
 
   const agent = detail.data?.agent;
   const permissionCount = permissions.data
@@ -269,6 +280,19 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
                       {agent.name}
                     </h1>
                     <StatusBadge status={agent.status} title={agent.statusReason} />
+                    {onCall && (
+                      <span className="on-call" title="The agent's Teams account is in a call">
+                        <PhoneCall size={12} /> On a call
+                      </span>
+                    )}
+                    {presenceNow && !presenceNow.error && !onCall && (
+                      <span
+                        className="kind-badge"
+                        title={`Teams presence: ${presenceNow.availability} / ${presenceNow.activity}`}
+                      >
+                        Teams · {presenceLabel(presenceNow.availability)}
+                      </span>
+                    )}
                     <KindBadge kind={agent.kind} />
                     <EnvironmentBadge environment={agent.environment} />
                     {agent.delegated && (
@@ -590,6 +614,7 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
                     agentId={agent.id}
                     agentName={agent.name}
                     agentStatus={agent.status}
+                    onCall={onCall}
                     brain={brain.data?.brain ?? null}
                     costs={costs.data}
                     boost={boost.data?.boost ?? null}

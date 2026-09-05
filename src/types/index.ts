@@ -219,6 +219,19 @@ export interface BoostConfig {
 }
 
 /** BOOST state as reported by the VM (or last known). */
+/** Teams presence of the agent's own account (Microsoft Graph). */
+export interface AgentPresence {
+  /** Available, Busy, Away, DoNotDisturb, Offline, PresenceUnknown… */
+  availability: string;
+  /** Available, InACall, InAConferenceCall, Presenting, Away… */
+  activity: string;
+  /** The activity says the account is on a Teams call */
+  onCall: boolean;
+  checkedAt: string;
+  /** Why presence could not be read (no account, missing consent, Graph error) */
+  error?: string;
+}
+
 export interface AgentBoost {
   supported: boolean;
   active: boolean;

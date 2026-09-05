@@ -8,7 +8,7 @@ import { MainLayout } from '@/components/layout';
 import { BrainView } from '@/components/agents';
 import { HUD } from '@/components/common/hud/Hud';
 import { useApi } from '@/hooks';
-import type { AgentBrain, AgentSummary } from '@/types';
+import type { AgentBrain, AgentPresence, AgentSummary } from '@/types';
 
 /** Never fewer tiles than this, so the wall reads as a bank of monitors */
 const MIN_TILES = 4;
@@ -21,6 +21,7 @@ function hasOwnVm(agent: AgentSummary): boolean {
 
 function BrainTile({ agent, height }: { agent: AgentSummary; height: number }) {
   const brain = useApi<{ brain: AgentBrain }>(`/api/agents/${agent.id}/brain`);
+  const presence = useApi<{ presence: AgentPresence }>(`/api/agents/${agent.id}/presence`, 15_000);
   // A monitor with nothing to show reads NO SIGNAL, like the empty slots
   const loaded = !brain.isLoading || brain.data !== null;
   if (loaded && (brain.error || !brain.data?.brain.available)) {
@@ -37,6 +38,7 @@ function BrainTile({ agent, height }: { agent: AgentSummary; height: number }) {
         error={brain.error}
         compact
         height={height}
+        onCall={!presence.error && Boolean(presence.data?.presence.onCall)}
       />
       <Link
         href={`/agents/${agent.id}?tab=brain`}

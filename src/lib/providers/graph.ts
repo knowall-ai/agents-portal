@@ -103,13 +103,40 @@ export function summarisePlans(plans: RawPlan[]): { capabilities: string[]; othe
   return { capabilities, otherPlans: active.length - named };
 }
 
+/** A failed Graph request, carrying the status so callers can relabel it. */
+class GraphRequestError extends Error {
+  constructor(
+    readonly status: number,
+    path: string
+  ) {
+    super(`Graph ${status} ${path}`);
+    this.name = 'GraphRequestError';
+  }
+}
+
 async function graphJson<T>(token: string, path: string): Promise<T> {
   const response = await fetch(path.startsWith('https://') ? path : `${GRAPH}${path}`, {
     headers: { Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(15_000),
   });
-  if (!response.ok) throw new Error(`Graph ${response.status} ${path}`);
+  if (!response.ok) throw new GraphRequestError(response.status, path);
   return response.json() as Promise<T>;
+}
+
+/**
+ * Runs a lookup whose Graph paths contain the account's UPN, and rethrows any
+ * failure with the status and a label only. The message ends up in a log line
+ * and in an API response, and an encoded address is still an address.
+ */
+async function withoutUpn<T>(label: string, run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    if (error instanceof GraphRequestError) throw new Error(`Graph ${error.status} ${label}`);
+    throw new Error(`${label} failed: ${error instanceof Error ? error.name : 'Unknown error'}`, {
+      cause: error,
+    });
+  }
 }
 
 /**
@@ -149,33 +176,54 @@ export async function getUserPhoto(token: string, upn: string): Promise<UserPhot
   return { contentType, base64: Buffer.from(await response.arrayBuffer()).toString('base64') };
 }
 
+/** Teams presence of a user (object id or UPN): availability and activity. */
+export async function getUserPresence(
+  token: string,
+  upn: string
+): Promise<{ availability: string; activity: string }> {
+  const user = encodeURIComponent(upn);
+  return withoutUpn('presence lookup', async () => {
+    const account = await graphJson<{ id: string }>(token, `/users/${user}?$select=id`);
+    const presence = await graphJson<{ availability?: string; activity?: string }>(
+      token,
+      `/users/${account.id}/presence`
+    );
+    return {
+      availability: presence.availability ?? 'PresenceUnknown',
+      activity: presence.activity ?? 'PresenceUnknown',
+    };
+  });
+}
+
 /** Account state and assigned licences for a user principal name. */
 export async function getUserLicensing(
   token: string,
   upn: string
 ): Promise<Pick<AgentLicensing, 'displayName' | 'accountEnabled' | 'usageLocation' | 'licenses'>> {
   const user = encodeURIComponent(upn);
-  const [account, details] = await Promise.all([
-    graphJson<{ displayName?: string; accountEnabled?: boolean; usageLocation?: string }>(
-      token,
-      `/users/${user}?$select=displayName,accountEnabled,usageLocation`
-    ),
-    graphJson<{ value: RawLicense[] }>(token, `/users/${user}/licenseDetails`),
-  ]);
-  const licenses: AgentLicense[] = details.value
-    .map((l) => ({
-      skuId: l.skuId,
-      skuPartNumber: l.skuPartNumber,
-      name: friendlySkuName(l.skuPartNumber),
-      ...summarisePlans(l.servicePlans ?? []),
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name));
-  return {
-    displayName: account.displayName,
-    accountEnabled: account.accountEnabled,
-    usageLocation: account.usageLocation,
-    licenses,
-  };
+  return withoutUpn('licence lookup', async () => {
+    const [account, details] = await Promise.all([
+      graphJson<{ displayName?: string; accountEnabled?: boolean; usageLocation?: string }>(
+        token,
+        `/users/${user}?$select=displayName,accountEnabled,usageLocation`
+      ),
+      graphJson<{ value: RawLicense[] }>(token, `/users/${user}/licenseDetails`),
+    ]);
+    const licenses: AgentLicense[] = details.value
+      .map((l) => ({
+        skuId: l.skuId,
+        skuPartNumber: l.skuPartNumber,
+        name: friendlySkuName(l.skuPartNumber),
+        ...summarisePlans(l.servicePlans ?? []),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    return {
+      displayName: account.displayName,
+      accountEnabled: account.accountEnabled,
+      usageLocation: account.usageLocation,
+      licenses,
+    };
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -195,13 +243,15 @@ export async function getUserAccess(
   upn: string
 ): Promise<Pick<AgentAccountAccess, 'objectId' | 'directoryRoles' | 'groups'>> {
   const user = encodeURIComponent(upn);
-  const [account, memberOf] = await Promise.all([
-    graphJson<{ id: string }>(token, `/users/${user}?$select=id`),
-    graphList<DirectoryObject>(
-      token,
-      `/users/${user}/memberOf?$select=id,displayName,description&$top=999`
-    ),
-  ]);
+  const [account, memberOf] = await withoutUpn('access lookup', () =>
+    Promise.all([
+      graphJson<{ id: string }>(token, `/users/${user}?$select=id`),
+      graphList<DirectoryObject>(
+        token,
+        `/users/${user}/memberOf?$select=id,displayName,description&$top=999`
+      ),
+    ])
+  );
   const toItem = (o: DirectoryObject, kind: PermissionItem['kind']): PermissionItem => ({
     id: o.id,
     name: o.displayName ?? o.id,

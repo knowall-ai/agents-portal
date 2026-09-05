@@ -13,6 +13,7 @@ import {
   Sparkles,
   Sun,
   Zap,
+  PhoneCall,
 } from 'lucide-react';
 import { EmptyState, LoadingSpinner } from '@/components/common';
 import {
@@ -188,6 +189,8 @@ interface BrainViewProps {
   compact?: boolean;
   /** Canvas height in px (ignored in full page) */
   height?: number;
+  /** The agent's Teams account is on a call right now */
+  onCall?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -197,6 +200,7 @@ interface BrainViewProps {
 export default function BrainView({
   agentId,
   agentName,
+  onCall = false,
   agentStatus,
   brain,
   costs,
@@ -1277,6 +1281,11 @@ export default function BrainView({
           >
             {agentName}
             {brain?.fixture && <span style={{ color: HUD.amber }}> · demo</span>}
+            {onCall && (
+              <span className="on-call ml-2 align-middle normal-case" style={{ fontSize: 10 }}>
+                <PhoneCall size={10} /> On a call
+              </span>
+            )}
           </div>
           <HudPanel title="DEEP BRAIN" className="min-h-0 flex-1 overflow-hidden">
             {feed.length === 0 ? (
@@ -1590,6 +1599,14 @@ export default function BrainView({
               )}
             </HudPanel>
           </div>
+
+          {onCall && (
+            <div className="pointer-events-none absolute top-3 left-1/2 -translate-x-1/2">
+              <span className="on-call" style={{ fontFamily: HUD.font }}>
+                <PhoneCall size={12} /> On a call
+              </span>
+            </div>
+          )}
 
           {/* Top-right: controls */}
           <div className="absolute top-3 right-3 flex items-center gap-1">
