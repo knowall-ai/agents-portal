@@ -17,11 +17,9 @@ vi.mock('@/lib/providers/graph', () => ({
   getUserLicensing: vi.fn(),
   getUserPresence: vi.fn(),
 }));
-vi.mock('@/lib/tokens', () => ({
-  FOUNDRY_SCOPE: 'foundry',
-  GRAPH_DIRECTORY_SCOPE: 'user-read-all',
-  GRAPH_DIRECTORY_READ_ALL_SCOPE: 'directory-read-all',
-  GRAPH_PRESENCE_SCOPE: 'presence-read-all',
+// Real scope constants, so a change to them cannot pass unnoticed here
+vi.mock('@/lib/tokens', async (actual) => ({
+  ...(await actual<typeof import('@/lib/tokens')>()),
   getResourceToken: vi.fn(),
 }));
 
