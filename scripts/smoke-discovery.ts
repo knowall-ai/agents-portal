@@ -23,6 +23,10 @@ const tenantId = execSync('az account show --query tenantId -o tsv', {
   stdio: ['ignore', 'pipe', 'ignore'],
 }).trim();
 
+// Registry resource-group claims only apply inside the registry's own tenant
+// (or an entry's subscriptionIds); for a smoke run that tenant is the az session's.
+process.env.AZURE_AD_TENANT_ID = tenantId;
+
 const armToken = azToken('https://management.azure.com/.default');
 const [resources, subscriptions] = await Promise.all([
   listAgentResources(armToken),

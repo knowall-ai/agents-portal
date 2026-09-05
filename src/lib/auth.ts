@@ -8,6 +8,7 @@ import type { NextAuthOptions } from 'next-auth';
 import type { JWT } from 'next-auth/jwt';
 import AzureADProvider from 'next-auth/providers/azure-ad';
 import { isPortalAdmin, rolesFromIdToken } from '@/lib/roles';
+import { isAllowedTenant } from '@/lib/tenants';
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -102,6 +103,16 @@ export function getAuthOptions(tenantId?: string): NextAuthOptions {
       }),
     ],
     callbacks: {
+      // The app registration is multi-tenant so customers can be invited as guests,
+      // but only tenants on the allowlist may sign in at all
+      async signIn({ account }) {
+        const tid = tenantFromIdToken(account?.id_token);
+        if (isAllowedTenant(tid)) return true;
+        console.warn(
+          `Sign-in refused for tenant ${tid ?? 'unknown'}: not in AZURE_AD_ALLOWED_TENANTS`
+        );
+        return false;
+      },
       async jwt({ token, account, user }) {
         if (account && user) {
           return {
