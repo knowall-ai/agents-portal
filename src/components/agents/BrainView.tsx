@@ -102,10 +102,17 @@ const TILT = 0.32;
  * octagon's corners chamfered; stars drift only inside it (as on the video
  * feed's bridge scene). Plates without a window get no stars.
  */
-const PLATE_WINDOW: Partial<Record<Backdrop, { x0: number; x1: number; y0: number; y1: number }>> =
-  {
-    bridge: { x0: 0.24, x1: 0.77, y0: 0.1, y1: 0.61 },
-  };
+const PLATE_WINDOW: Partial<
+  Record<
+    Backdrop,
+    { x0: number; x1: number; y0: number; y1: number; chamferX: number; chamferY: number }
+  >
+> = {
+  // Measured on the glass inside the bevel of bg-bridge.jpg (1600×1067): the
+  // pane spans x 385–1093 and y 116–641, and its corners are cut 132 px in and
+  // 167 px down, so the chamfers are quoted per axis as fractions of the pane
+  bridge: { x0: 0.245, x1: 0.68, y0: 0.113, y1: 0.596, chamferX: 0.19, chamferY: 0.32 },
+};
 const STAR_COUNT = 130;
 /** radians per second — one full turn every ~2.5 minutes */
 const AUTO_ROTATE = 0.042;
@@ -723,17 +730,18 @@ export default function BrainView({
           const wx1 = ox + win.x1 * pw;
           const wy0 = oy + win.y0 * ph;
           const wy1 = oy + win.y1 * ph;
-          const chamfer = 0.16 * (wx1 - wx0);
+          const cxm = win.chamferX * (wx1 - wx0);
+          const cym = win.chamferY * (wy1 - wy0);
           ctx.save();
           ctx.beginPath();
-          ctx.moveTo(wx0 + chamfer, wy0);
-          ctx.lineTo(wx1 - chamfer, wy0);
-          ctx.lineTo(wx1, wy0 + chamfer);
-          ctx.lineTo(wx1, wy1 - chamfer);
-          ctx.lineTo(wx1 - chamfer, wy1);
-          ctx.lineTo(wx0 + chamfer, wy1);
-          ctx.lineTo(wx0, wy1 - chamfer);
-          ctx.lineTo(wx0, wy0 + chamfer);
+          ctx.moveTo(wx0 + cxm, wy0);
+          ctx.lineTo(wx1 - cxm, wy0);
+          ctx.lineTo(wx1, wy0 + cym);
+          ctx.lineTo(wx1, wy1 - cym);
+          ctx.lineTo(wx1 - cxm, wy1);
+          ctx.lineTo(wx0 + cxm, wy1);
+          ctx.lineTo(wx0, wy1 - cym);
+          ctx.lineTo(wx0, wy0 + cym);
           ctx.closePath();
           ctx.clip();
           ctx.globalCompositeOperation = 'lighter';
@@ -1388,14 +1396,6 @@ export default function BrainView({
                     DEMO DATA
                   </span>
                 ))}
-              {brain.fixture && (
-                <span
-                  style={{ color: HUD.amber }}
-                  title="Built-in sample graph, not an agent's memory"
-                >
-                  DEMO DATA
-                </span>
-              )}
             </div>
             <div className="pointer-events-auto relative">
               <input
