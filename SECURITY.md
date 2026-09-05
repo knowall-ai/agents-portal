@@ -31,7 +31,7 @@ We ask that you practise responsible disclosure: give us reasonable time to fix 
 ## Of particular interest
 
 - Signing in from a tenant that is not allowed, or seeing an agent, cost, licence or permission that Azure RBAC does not grant the signed-in user
-- Any way to reach a server-held token (`REVERIE_TOKEN`, `GITHUB_TOKEN`, the app client secret) or to have it sent somewhere other than its intended host
+- Any way to reach a server-held secret (`REVERIE_TOKEN`, `GITHUB_TOKEN`, `OPENAI_ADMIN_KEY`, `ANTHROPIC_ADMIN_KEY`, the app client secret) or to have it sent somewhere other than its intended host
 - Reaching Boost, or any other run-command on a VM, without the Azure role that permits it, or without the request appearing in the Activity Log under the caller's identity
 - Server-side request forgery through resource tags, registry values or the health probe
 - Cross-site requests that change state (Boost, tenant selection) or leak data
