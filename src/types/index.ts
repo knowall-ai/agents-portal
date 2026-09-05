@@ -341,6 +341,8 @@ export interface AgentSummary {
   avatarUrl?: string;
   /** Deep link that opens a Teams chat with the agent (user account or bot) */
   teamsChatUrl?: string;
+  /** Teams deep link that calls the agent's account; only when it has a teamsUpn */
+  teamsCallUrl?: string;
   /** The agent's own Entra account, from the agent-teams-upn tag or the registry */
   teamsUpn?: string;
 }

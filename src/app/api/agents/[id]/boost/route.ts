@@ -4,6 +4,9 @@ import { getAgent, getBoost, parseBoostRequest, setBoost } from '@/lib/agents/se
 
 type RouteContext = { params: Promise<{ id: string }> };
 
+/** Boost state is per-user and changes on demand: never let a cache hold on to it. */
+const NO_STORE = { 'Cache-Control': 'no-store, private' } as const;
+
 function statusFor(error: unknown): number {
   const message = error instanceof Error ? error.message : '';
   if (/^ARM 403/.test(message)) return 403;
@@ -13,21 +16,22 @@ function statusFor(error: unknown): number {
 
 export async function GET(req: NextRequest, { params }: RouteContext) {
   const ctx = await getUserContext(req);
-  if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE });
 
   const { id } = await params;
   // GET is read-only: cached state only. Asking the VM is a write (a run-command
   // that lands in the Activity Log), so it goes through POST {action: "refresh"}.
   try {
     const agent = await getAgent(ctx, id);
-    if (!agent) return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
-    return NextResponse.json({ boost: await getBoost(ctx, agent, false) });
+    if (!agent)
+      return NextResponse.json({ error: 'Agent not found' }, { status: 404, headers: NO_STORE });
+    return NextResponse.json({ boost: await getBoost(ctx, agent, false) }, { headers: NO_STORE });
   } catch (error) {
     console.error(`Failed to read boost for ${id}:`, error);
     const message = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
       { error: 'Failed to read Boost state', details: message },
-      { status: statusFor(error) }
+      { status: statusFor(error), headers: NO_STORE }
     );
   }
 }

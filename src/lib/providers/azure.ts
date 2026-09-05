@@ -287,13 +287,20 @@ function roleDefinition(token: string, id: string) {
     pending = armFetch<{ properties: { roleName: string; description?: string } }>(
       token,
       `${id}?api-version=2022-04-01`
-    ).then((r) => r.properties);
+    )
+      .then((r) => r.properties)
+      // A rejected promise must not be cached: one transient ARM failure would
+      // otherwise show a GUID instead of the role name until the process restarts
+      .catch((error) => {
+        roleDefinitionCache.delete(id);
+        throw error;
+      });
     roleDefinitionCache.set(id, pending);
   }
   return pending;
 }
 
-/** "/subscriptions/…/resourceGroups/rg/providers/…/vaults/kv" → "kv (Key Vault)" style short scope. */
+/** "/subscriptions/…/resourceGroups/rg/providers/Microsoft.KeyVault/vaults/kv" → "kv (Microsoft.KeyVault)". */
 export function shortenScope(scope: string): string {
   const parts = scope.split('/').filter(Boolean);
   if (parts.length <= 2)
@@ -427,6 +434,10 @@ export async function runVmScript(
     throw new Error(`ARM ${start.status} runCommand: ${body.slice(0, 300)}`);
   }
   const poll = start.headers.get('azure-asyncoperation') ?? start.headers.get('location');
+  if (start.status === 202 && !poll) {
+    // Accepted but nowhere to poll: treating that as success would report an empty result
+    throw new Error('ARM 202 runCommand without an Azure-AsyncOperation or Location header');
+  }
   const deadline = Date.now() + timeoutMs;
   let result: RunCommandOperation = start.status === 200 ? await start.json() : {};
   while (poll && (!result.status || result.status === 'InProgress')) {

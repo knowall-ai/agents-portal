@@ -248,6 +248,20 @@ export function teamsChatUrl(
   return undefined;
 }
 
+/** Teams deep link that starts a call with the agent's own account (bots cannot be called this way). */
+export function teamsCallUrl(
+  entry: AgentRegistryEntry | undefined,
+  resources: AzureResource[]
+): string | undefined {
+  // A Bot Service agent is reachable in chat but has no callable account, even
+  // when a UPN is tagged or set in the registry.
+  if (resources.some((r) => r.type === 'microsoft.botservice/botservices')) return undefined;
+  const upn = agentUpn(entry, resources);
+  return upn
+    ? `https://teams.microsoft.com/l/call/0/0?users=${encodeURIComponent(upn)}`
+    : undefined;
+}
+
 /**
  * The agent's own Entra account: the `agent-teams-upn` tag on any of its
  * resources, or the registry's `teamsUpn` as an override. Keeping it in Azure
@@ -317,6 +331,7 @@ export function buildAgent(
     source: entry && bucket.fromTags ? 'both' : entry ? 'registry' : 'tags',
     avatarUrl: safeAvatarUrl(entry?.avatarUrl ?? firstTag(resources, 'agent-avatar')),
     teamsChatUrl: teamsChatUrl(entry, resources),
+    teamsCallUrl: teamsCallUrl(entry, resources),
     teamsUpn: agentUpn(entry, resources),
     resources: [...resources].sort(
       (a, b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name)
@@ -346,6 +361,7 @@ export function toSummary(agent: AgentDetail): AgentSummary {
     source: agent.source,
     avatarUrl: agent.avatarUrl,
     teamsChatUrl: agent.teamsChatUrl,
+    teamsCallUrl: agent.teamsCallUrl,
     teamsUpn: agent.teamsUpn,
   };
 }

@@ -40,6 +40,10 @@ export async function cached<T>(
     // The loader may have taken longer than the hold-off, so time the retry
     // from the failure, not from when the loader started.
     const failedAt = Date.now();
+    // A concurrent refresh may have stored a newer entry while this loader ran;
+    // never replace or delete that one because of an older failure
+    const current = store.get(key) as Entry<T> | undefined;
+    if (current && current !== hit) return current.value;
     const staleUntil = hit?.staleUntil ?? failedAt + STALE_MAX_MS;
     if (hit && failedAt < staleUntil) {
       const message = error instanceof Error ? error.message : String(error);

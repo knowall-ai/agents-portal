@@ -256,6 +256,9 @@ export async function getPermissions(
       label: a.label,
       permissions: [],
       azureRoles: [],
+      // Without this the panel would read the empty lists as "No API
+      // permissions requested" instead of "could not be read".
+      error,
     })),
     error,
   });
@@ -286,11 +289,16 @@ export async function getPermissions(
             })
           : Promise.resolve([]);
 
+      // A failed lookup must not be cached for the full TTL as "no roles": an
+      // empty account is indistinguishable from an unprivileged one, so the
+      // failure is recorded and the TTL selector below picks the short TTL.
+      let accountError: string | undefined;
       const account = upn
         ? await getUserAccess(graph, upn)
             .then(async (access) => ({ upn, ...access, azureRoles: await roles(access.objectId) }))
             .catch((error) => {
               console.warn(`User access lookup failed for ${agent.id}:`, error);
+              accountError = error instanceof Error ? error.message : String(error);
               return { upn, directoryRoles: [], groups: [], azureRoles: [] };
             })
         : undefined;
@@ -312,7 +320,7 @@ export async function getPermissions(
             }))
         )
       );
-      return { account, apps: appAccess };
+      return { account, apps: appAccess, error: accountError };
     },
     (value) => (value.error ? DIRECTORY_ERROR_TTL : DIRECTORY_TTL)
   );
@@ -347,7 +355,9 @@ export function parseBoostRequest(body: unknown): BoostRequest | null {
   if (Object.keys(rest).length > 0) return null;
   if (action !== 'on' && action !== 'off' && action !== 'refresh') return null;
   if (hours === undefined) return { action };
-  if (action === 'refresh' || typeof hours !== 'number' || !Number.isFinite(hours)) return null;
+  // Only `on` takes a duration, in quarter hours; the bounds are checked in setBoost
+  if (action !== 'on' || typeof hours !== 'number' || !Number.isFinite(hours)) return null;
+  if (hours <= 0 || !Number.isInteger(hours * 4)) return null;
   return { action, hours };
 }
 
@@ -453,8 +463,17 @@ export async function setBoost(
   if (!base.supported) throw new Error('Boost is not configured for this agent');
   if (!on) return runBoost(ctx, agent, 'off');
   const requested = hours ?? base.defaultHours;
-  if (!Number.isFinite(requested) || requested <= 0 || requested > base.maxHours) {
-    throw new Error(`Hours must be between 0 and ${base.maxHours}`);
+  // `boost.sh on N` accepts quarter hours (the UI offers 30 min); anything
+  // finer would reach the VM verbatim, so pin the granularity here.
+  if (
+    !Number.isFinite(requested) ||
+    !Number.isInteger(requested * 4) ||
+    requested < 0.25 ||
+    requested > base.maxHours
+  ) {
+    throw new Error(
+      `Hours must be a multiple of 0.25 between 0.25 and ${base.maxHours}, got ${requested}`
+    );
   }
   return runBoost(ctx, agent, `on ${requested}`);
 }

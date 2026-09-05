@@ -21,6 +21,8 @@ export async function fetchBrainSnapshot(
   const response = await fetch(`${baseUrl.replace(/\/$/, '')}/brain/graph?limit=${limit}`, {
     headers: headers(token),
     signal: AbortSignal.timeout(20_000),
+    // the token goes to the validated URL only: never follow it somewhere else
+    redirect: 'error',
   });
   if (!response.ok) throw new Error(`Reverie ${response.status} /brain/graph`);
   return response.json() as Promise<BrainSnapshot>;
@@ -41,16 +43,26 @@ export async function openBrainEvents(
     CONNECT_TIMEOUT_MS
   );
   const onAbort = () => connect.abort(signal?.reason);
-  signal?.addEventListener('abort', onAbort, { once: true });
+  // An already-aborted signal never fires the event, so honour it up front
+  // rather than letting the fetch run on until the connect timeout
+  if (signal?.aborted) connect.abort(signal.reason);
+  else signal?.addEventListener('abort', onAbort, { once: true });
+  let streaming = false;
   try {
     const response = await fetch(`${baseUrl.replace(/\/$/, '')}/brain/events?limit=${limit}`, {
       headers: { Authorization: `Bearer ${token}`, Accept: 'text/event-stream' },
       signal: connect.signal,
+      redirect: 'error',
     });
     if (!response.ok || !response.body) throw new Error(`Reverie ${response.status} /brain/events`);
+    streaming = true;
     return response;
   } finally {
     clearTimeout(timer);
+    // Nothing was handed back, so there is nothing left for the caller's signal
+    // to abort: drop the listener. On the streaming path it stays wired, since
+    // that is what tears the upstream down when the browser goes away.
+    if (!streaming) signal?.removeEventListener('abort', onAbort);
   }
 }
 

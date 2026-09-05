@@ -149,12 +149,17 @@ export default function PermissionsPanel({ permissions, isLoading, error }: Perm
   if (error && !permissions) {
     return <EmptyState title="Could not load permissions" description={error} />;
   }
+  if (permissions?.error && !permissions.account && permissions.apps.length === 0) {
+    // Nothing came back *because* the directory read failed: say so, do not
+    // pass it off as an agent with nothing configured.
+    return <EmptyState title="Could not load permissions" description={permissions.error} />;
+  }
   if (!permissions || (!permissions.account && permissions.apps.length === 0)) {
     return (
       <EmptyState
         icon={<ShieldCheck size={28} />}
         title="Nothing to show"
-        description="Set teamsUpn and/or appRegistrations in the registry. Bot Service app IDs are picked up automatically."
+        description="Tag one of the agent's Azure resources with agent-teams-upn (its own account) and/or list appRegistrations in the registry. Bot Service app IDs are picked up automatically."
       />
     );
   }
