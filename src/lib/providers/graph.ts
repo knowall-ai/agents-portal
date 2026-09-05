@@ -5,6 +5,7 @@ import type {
   AgentLicense,
   AgentLicensing,
   PermissionItem,
+  UserPhoto,
 } from '@/types';
 
 const GRAPH = 'https://graph.microsoft.com/v1.0';
@@ -127,11 +128,6 @@ interface RawLicense {
   skuId: string;
   skuPartNumber: string;
   servicePlans: RawPlan[];
-}
-
-export interface UserPhoto {
-  contentType: string;
-  base64: string;
 }
 
 /** The account's profile photo, or null when it has none (Graph answers 404). */
