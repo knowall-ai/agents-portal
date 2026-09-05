@@ -49,6 +49,12 @@ Optional tags:
 |`agent-avatar`
 |Profile image override — an `https` URL. Usually unset: the portal shows the Bot Service icon or the Entra account photo
 
+|`agent-openai-project`
+|OpenAI project id (`proj_…`) whose API spend belongs to this agent (Costs tab). Create one project per agent and issue the agent's API key inside it
+
+|`agent-anthropic-workspace`
+|Anthropic workspace id (`wrkspc_…`) whose API spend belongs to this agent
+
 |`environment`
 |`prod`, `test` or `dev`
 |===
@@ -174,6 +180,6 @@ See link:CUSTOMER-ACCESS.adoc[Customer access]: invite them as a guest, grant `R
 * [ ] Portal / health URL set
 * [ ] GitHub repo and `skillsPath` set (OpenClaw agents); `skillSources` if the agent loads shared skill packs; `SOUL.md` in the repo if you want the Soul card
 * [ ] `avatarUrl` set and, for agents with their own account, the `agent-teams-upn` tag on a resource
-* [ ] `openaiProjectId` / `anthropicWorkspaceId` / `fixedCosts` set so the cost breakdown is complete
+* [ ] `agent-openai-project` / `agent-anthropic-workspace` tags (or the registry ids) and `fixedCosts` set so the cost breakdown is complete
 * [ ] `brainUrl` set for agents running `reverie serve`, and `REVERIE_TOKEN` set on the server (never `BRAIN_FIXTURE=1` outside development)
 * [ ] Lighthouse delegation in place (customer-hosted agents)

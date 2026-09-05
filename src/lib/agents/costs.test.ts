@@ -79,12 +79,12 @@ describe('buildAgentCosts', () => {
   });
 
   it('adds LLM spend only for mapped projects/workspaces and keeps currencies separate', () => {
+    // the project id arrives on the agent, validated at discovery (registry or tag)
     const costs = buildAgentCosts(
-      agent,
+      { ...agent, openaiProjectId: 'proj_sallie' },
       {
         id: 'sallie',
         name: 'Sallie',
-        openaiProjectId: 'proj_sallie',
         fixedCosts: [{ label: 'ChatGPT', amount: 20, currency: 'USD' }],
       },
       inputs
