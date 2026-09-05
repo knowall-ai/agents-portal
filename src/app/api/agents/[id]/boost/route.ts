@@ -4,6 +4,9 @@ import { getBoost, setBoost } from '@/lib/agents/service';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
+/** Boost state is per-user and changes on demand: never let a cache hold on to it. */
+const NO_STORE = { 'Cache-Control': 'no-store, private' } as const;
+
 function statusFor(error: unknown): number {
   const message = error instanceof Error ? error.message : '';
   if (/^ARM 403/.test(message)) return 403;
@@ -18,13 +21,16 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     const gate = await adminAgentGate(req, id);
     if (!gate.ok) return gate.response;
 
-    return NextResponse.json({ boost: await getBoost(gate.ctx, gate.agent, refresh) });
+    return NextResponse.json(
+      { boost: await getBoost(gate.ctx, gate.agent, refresh) },
+      { headers: NO_STORE }
+    );
   } catch (error) {
     console.error(`Failed to read boost for ${id}:`, error);
     const message = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
       { error: 'Failed to read Boost state', details: message },
-      { status: statusFor(error) }
+      { status: statusFor(error), headers: NO_STORE }
     );
   }
 }

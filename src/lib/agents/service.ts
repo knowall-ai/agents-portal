@@ -173,7 +173,7 @@ export async function getSoul(ctx: UserContext, agent: AgentDetail): Promise<Age
 }
 
 /**
- * Microsoft licences on the agent's own Entra account (registry `teamsUpn`)
+ * Microsoft licences on the agent's own Entra account (`agent-teams-upn` tag or registry `teamsUpn`)
  * plus flat-fee subscriptions from the registry. Reading another user's
  * licences needs the User.Read.All delegated permission with admin consent;
  * without it the subscriptions still render and `licenseError` says why.
@@ -184,12 +184,12 @@ const DIRECTORY_ERROR_TTL = 60 * 1000;
 export async function getLicensing(ctx: UserContext, agent: AgentDetail): Promise<AgentLicensing> {
   const entry = getRegistryEntry(agent.id);
   const base: AgentLicensing = {
-    upn: entry?.teamsUpn,
+    upn: agent.teamsUpn,
     licenses: [],
     subscriptions: entry?.fixedCosts ?? [],
   };
-  if (!entry?.teamsUpn) return base;
-  const upn = entry.teamsUpn;
+  if (!agent.teamsUpn) return base;
+  const upn = agent.teamsUpn;
   return cached(
     `licensing:${scope(ctx)}:${agent.id}`,
     async () => {
@@ -240,9 +240,9 @@ export async function getPermissions(
       apps.set(r.botAppId.toLowerCase(), { appId: r.botAppId, label: `Bot Service ${r.name}` });
     }
   }
-  if (!entry?.teamsUpn && apps.size === 0) return { apps: [] };
+  if (!agent.teamsUpn && apps.size === 0) return { apps: [] };
 
-  const upn = entry?.teamsUpn;
+  const upn = agent.teamsUpn;
   const skeleton = (error: string): AgentPermissions => ({
     account: upn ? { upn, directoryRoles: [], groups: [], azureRoles: [] } : undefined,
     apps: [...apps.values()].map((a) => ({
@@ -251,6 +251,9 @@ export async function getPermissions(
       label: a.label,
       permissions: [],
       azureRoles: [],
+      // Without this the panel would read the empty lists as "No API
+      // permissions requested" instead of "could not be read".
+      error,
     })),
     error,
   });
@@ -281,11 +284,16 @@ export async function getPermissions(
             })
           : Promise.resolve([]);
 
+      // A failed lookup must not be cached for the full TTL as "no roles": an
+      // empty account is indistinguishable from an unprivileged one, so the
+      // failure is recorded and the TTL selector below picks the short TTL.
+      let accountError: string | undefined;
       const account = upn
         ? await getUserAccess(graph, upn)
             .then(async (access) => ({ upn, ...access, azureRoles: await roles(access.objectId) }))
             .catch((error) => {
               console.warn(`User access lookup failed for ${agent.id}:`, error);
+              accountError = error instanceof Error ? error.message : String(error);
               return { upn, directoryRoles: [], groups: [], azureRoles: [] };
             })
         : undefined;
@@ -307,7 +315,7 @@ export async function getPermissions(
             }))
         )
       );
-      return { account, apps: appAccess };
+      return { account, apps: appAccess, error: accountError };
     },
     (value) => (value.error ? DIRECTORY_ERROR_TTL : DIRECTORY_TTL)
   );
@@ -427,8 +435,17 @@ export async function setBoost(
   if (!base.supported) throw new Error('Boost is not configured for this agent');
   if (!on) return runBoost(ctx, agent, 'off');
   const requested = hours ?? base.defaultHours;
-  if (!Number.isFinite(requested) || requested <= 0 || requested > base.maxHours) {
-    throw new Error(`Hours must be between 0 and ${base.maxHours}`);
+  // `boost.sh on N` accepts quarter hours (the UI offers 30 min); anything
+  // finer would reach the VM verbatim, so pin the granularity here.
+  if (
+    !Number.isFinite(requested) ||
+    !Number.isInteger(requested * 4) ||
+    requested < 0.25 ||
+    requested > base.maxHours
+  ) {
+    throw new Error(
+      `Hours must be a multiple of 0.25 between 0.25 and ${base.maxHours}, got ${requested}`
+    );
   }
   return runBoost(ctx, agent, `on ${requested}`);
 }
