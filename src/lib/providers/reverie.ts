@@ -21,6 +21,8 @@ export async function fetchBrainSnapshot(
   const response = await fetch(`${baseUrl.replace(/\/$/, '')}/brain/graph?limit=${limit}`, {
     headers: headers(token),
     signal: AbortSignal.timeout(20_000),
+    // the token goes to the validated URL only: never follow it somewhere else
+    redirect: 'error',
   });
   if (!response.ok) throw new Error(`Reverie ${response.status} /brain/graph`);
   return response.json() as Promise<BrainSnapshot>;
@@ -46,6 +48,7 @@ export async function openBrainEvents(
     const response = await fetch(`${baseUrl.replace(/\/$/, '')}/brain/events?limit=${limit}`, {
       headers: { Authorization: `Bearer ${token}`, Accept: 'text/event-stream' },
       signal: connect.signal,
+      redirect: 'error',
     });
     if (!response.ok || !response.body) throw new Error(`Reverie ${response.status} /brain/events`);
     return response;

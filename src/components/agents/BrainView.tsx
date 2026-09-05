@@ -511,6 +511,7 @@ export default function BrainView({
       source.onerror = () => {
         setStreamStatus('offline');
         if (source.readyState === EventSource.CLOSED && !stopped) {
+          source.close(); // drop its listeners; a fresh instance replaces it
           clearTimeout(retry);
           retry = setTimeout(connect, delay);
           delay = Math.min(60_000, delay * 2);
@@ -1050,9 +1051,7 @@ export default function BrainView({
     setSelectedLinks(
       node
         ? linksRef.current
-            .filter(
-              (l) => (l.source as SimNode).id === node.id || (l.target as SimNode).id === node.id
-            )
+            .filter((l) => endpointId(l.source) === node.id || endpointId(l.target) === node.id)
             .slice(0, 12)
         : []
     );
