@@ -76,6 +76,12 @@ export interface AgentRegistryEntry {
   brainUrl?: string;
   /** Resource groups whose resources belong to this agent (case-insensitive) */
   resourceGroups?: string[];
+  /**
+   * Subscriptions the entry's resource groups live in. Required when the portal
+   * trusts more than one tenant, because a resource-group name is only unique
+   * inside a subscription; otherwise the registry's own tenant is the scope.
+   */
+  subscriptionIds?: string[];
   /** Agent not yet built or deployed — shown as "planned" */
   planned?: boolean;
   /** Profile image (absolute URL or path under /public) */
