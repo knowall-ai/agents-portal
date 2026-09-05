@@ -406,6 +406,10 @@ export async function runVmScript(
     throw new Error(`ARM ${start.status} runCommand: ${body.slice(0, 300)}`);
   }
   const poll = start.headers.get('azure-asyncoperation') ?? start.headers.get('location');
+  if (start.status === 202 && !poll) {
+    // Accepted but nowhere to poll: treating that as success would report an empty result
+    throw new Error('ARM 202 runCommand without an Azure-AsyncOperation or Location header');
+  }
   const deadline = Date.now() + timeoutMs;
   let result: RunCommandOperation = start.status === 200 ? await start.json() : {};
   while (poll && (!result.status || result.status === 'InProgress')) {
