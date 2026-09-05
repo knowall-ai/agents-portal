@@ -2,15 +2,40 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // DNS and the network are the only boundaries; the guard itself runs for real.
 const lookup = vi.hoisted(() => vi.fn());
+const request = vi.hoisted(() => vi.fn());
 vi.mock('dns/promises', () => ({ lookup }));
+vi.mock('https', () => ({ request }));
 
-import { isProbeableUrl, probeUrl } from './health';
+import { connectionPin, isProbeableUrl, probeUrl } from './health';
 
-const fetchMock = vi.fn();
+type RequestHandler = (response: { statusCode?: number; destroy: () => void }) => void;
+
+/** A stand-in https.ClientRequest that answers with `statusCode`. */
+function answersWith(statusCode: number) {
+  return (_url: string, _options: unknown, handler: RequestHandler) => {
+    queueMicrotask(() => handler({ statusCode, destroy: () => undefined }));
+    return { on: () => undefined, end: () => undefined, destroy: () => undefined };
+  };
+}
+
+/** A stand-in that fails the socket instead of answering. */
+function failsWith(error: Error) {
+  return () => {
+    const listeners: Record<string, (e: Error) => void> = {};
+    queueMicrotask(() => listeners.error?.(error));
+    return {
+      on: (event: string, listener: (e: Error) => void) => {
+        listeners[event] = listener;
+      },
+      end: () => undefined,
+      destroy: () => undefined,
+    };
+  };
+}
 
 beforeEach(() => {
-  vi.stubGlobal('fetch', fetchMock);
-  fetchMock.mockReset();
+  request.mockReset();
+  request.mockImplementation(answersWith(200));
   lookup.mockReset();
   // Public by default; the tests that care override it.
   lookup.mockResolvedValue([{ address: '93.184.216.34' }]);
@@ -114,11 +139,9 @@ describe('isProbeableUrl', () => {
 });
 
 describe('probeUrl', () => {
-  const body = { cancel: () => Promise.resolve() };
-
   it('reports a 2xx or a sign-in redirect as reachable', async () => {
     for (const status of [200, 302]) {
-      fetchMock.mockResolvedValue({ status, body } as unknown as Response);
+      request.mockImplementation(answersWith(status));
       await expect(probeUrl('https://agents.example.com')).resolves.toMatchObject({
         url: 'https://agents.example.com',
         reachable: true,
@@ -128,7 +151,7 @@ describe('probeUrl', () => {
   });
 
   it('reports a server error as unreachable but keeps the status', async () => {
-    fetchMock.mockResolvedValue({ status: 502, body } as unknown as Response);
+    request.mockImplementation(answersWith(502));
     await expect(probeUrl('https://agents.example.com')).resolves.toMatchObject({
       reachable: false,
       httpStatus: 502,
@@ -139,23 +162,59 @@ describe('probeUrl', () => {
     const result = await probeUrl('http://10.0.0.5/health');
     expect(result).toMatchObject({ url: 'http://10.0.0.5/health', reachable: false });
     expect(result.httpStatus).toBeUndefined();
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(request).not.toHaveBeenCalled();
   });
 
   it('reports a failed probe as unreachable rather than throwing', async () => {
-    fetchMock.mockRejectedValue(new Error('The operation was aborted due to timeout'));
+    request.mockImplementation(failsWith(new Error('ECONNREFUSED')));
     const result = await probeUrl('https://agents.example.com');
     expect(result.reachable).toBe(false);
     expect(result.httpStatus).toBeUndefined();
     expect(Date.parse(result.checkedAt)).not.toBeNaN();
   });
 
-  it('never reads the response body', async () => {
-    const cancel = vi.fn(() => Promise.resolve());
-    fetchMock.mockResolvedValue({ status: 200, body: { cancel } } as unknown as Response);
+  it('pins the connection to the address the guard validated (DNS rebinding)', async () => {
+    lookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
+
+    await probeUrl('https://agents.example.com/health');
+
+    const [url, options] = request.mock.calls[0];
+    // The URL is passed through untouched, so the Host header and the TLS
+    // certificate are still checked against the original hostname...
+    expect(url).toBe('https://agents.example.com/health');
+    // ...but the socket is handed the address the guard already validated, so a
+    // second DNS answer of 10.0.0.5 can never be connected to.
+    const resolved = vi.fn();
+    options.lookup('agents.example.com', {}, resolved);
+    expect(resolved).toHaveBeenCalledWith(null, '93.184.216.34', 4);
+    expect(options.timeout).toBe(6_000);
+  });
+
+  it('pins to the IPv6 address and family when that is what the host resolves to', async () => {
+    lookup.mockResolvedValue([{ address: '2606:2800:220:1::1', family: 6 }]);
+
     await probeUrl('https://agents.example.com');
-    expect(cancel).toHaveBeenCalled();
-    const [, init] = fetchMock.mock.calls[0];
-    expect(init.redirect).toBe('manual');
+
+    const resolved = vi.fn();
+    request.mock.calls[0][1].lookup('agents.example.com', {}, resolved);
+    expect(resolved).toHaveBeenCalledWith(null, '2606:2800:220:1::1', 6);
+  });
+
+  it('never reads the response body', async () => {
+    const destroy = vi.fn();
+    request.mockImplementation((_url: string, _options: unknown, handler: RequestHandler) => {
+      queueMicrotask(() => handler({ statusCode: 200, destroy }));
+      return { on: () => undefined, end: () => undefined, destroy: () => undefined };
+    });
+    await probeUrl('https://agents.example.com');
+    expect(destroy).toHaveBeenCalled();
+  });
+});
+
+describe('connectionPin', () => {
+  it('answers every hostname with the one address that was validated', () => {
+    const resolved = vi.fn();
+    connectionPin({ address: '93.184.216.34', family: 4 })('anything.example', {}, resolved);
+    expect(resolved).toHaveBeenCalledWith(null, '93.184.216.34', 4);
   });
 });
