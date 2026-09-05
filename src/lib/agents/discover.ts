@@ -2,8 +2,10 @@
 //
 // Discovery rules (first match wins):
 //   1. Resource tag `agent` (or any key in AGENT_TAG_KEYS) names the agent slug.
-//   2. A registry entry whose `resourceGroups` contains the resource's group claims it,
-//      but only inside the entry's `subscriptionIds` or the registry's own tenant.
+//   2. Otherwise a registry entry whose `resourceGroups` contains the resource's
+//      group claims it, but only inside the entry's `subscriptionIds` or the
+//      registry's own tenant; a shared resource group (e.g. ka-agents) can host
+//      several agents as long as the newer ones are tagged.
 //   3. Anything else is ignored.
 //
 // Registry metadata (name, customer, kind, URLs) overrides tag-derived values.
@@ -62,6 +64,7 @@ export function normaliseKind(value?: string): AgentKind | undefined {
   if (!value) return undefined;
   const v = value.toLowerCase();
   if (v === 'openclaw') return 'openclaw';
+  if (v === 'hermes') return 'hermes';
   if (/foundry|assistant/.test(v)) return 'foundry';
   if (/bot/.test(v)) return 'botframework';
   return 'unknown';
@@ -173,23 +176,27 @@ export function groupResources(
   };
 
   for (const resource of resources) {
-    const claimed = claiming.find((entry) => claimsResource(entry, resource));
-    if (claimed) {
-      bucketFor(claimed.id).resources.push(resource);
-      continue;
-    }
     let slug: string | undefined;
+    let tagged = false;
     for (const key of tagKeys) {
       const value = tag(resource.tags, key);
       if (value) {
+        tagged = true;
         slug = slugify(value);
-        break;
+        if (slug) break;
       }
     }
-    if (!slug) continue;
-    const bucket = bucketFor(slug);
-    bucket.resources.push(resource);
-    bucket.fromTags = true;
+    if (slug) {
+      const bucket = bucketFor(slug);
+      bucket.resources.push(resource);
+      bucket.fromTags = true;
+      continue;
+    }
+    // A tag that names nothing usable still marks the resource as somebody
+    // else's: it must not fall through to the resource-group claim
+    if (tagged) continue;
+    const claimed = claiming.find((entry) => claimsResource(entry, resource));
+    if (claimed) bucketFor(claimed.id).resources.push(resource);
   }
 
   // Registry-only agents (planned, or nothing deployed yet)
