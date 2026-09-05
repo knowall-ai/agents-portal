@@ -85,9 +85,16 @@ export default function AgentsView() {
     return true;
   });
 
-  /** The agents URL with one query parameter changed and every other filter kept. */
+  /** Query keys this view reads — anything else is dropped when rebuilding the URL. */
+  const FILTER_KEYS = ['q', 'status', 'kind', 'customer'] as const;
+
+  /** The agents URL with one query parameter changed and every other supported filter kept. */
   const hrefWith = (key: string, value: string) => {
-    const next = new URLSearchParams(params.toString());
+    const next = new URLSearchParams();
+    for (const filterKey of FILTER_KEYS) {
+      const current = params.get(filterKey);
+      if (current) next.set(filterKey, current);
+    }
     if (value) next.set(key, value);
     else next.delete(key);
     return `/${next.toString() ? `?${next}` : ''}`;
