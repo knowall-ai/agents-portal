@@ -1,10 +1,9 @@
 'use client';
 
-import { Suspense, use, useMemo } from 'react';
+import { Suspense, use, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { formatDistanceToNow } from 'date-fns';
 import {
   ArrowLeft,
   BadgeCheck,
@@ -53,6 +52,8 @@ import {
   SkillList,
   SoulPanel,
 } from '@/components/agents';
+import { Countdown } from '@/components/common';
+import { formatDistanceToNow } from 'date-fns';
 import { useApi } from '@/hooks';
 import { BACKDROPS, type Backdrop } from '@/components/agents/BrainView';
 import type {
@@ -104,6 +105,14 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
   const { data: session, status } = useSession();
   // Customers (Portal.Viewer) get a read-only subset; undefined while the session loads
   const isAdmin = session?.user.isAdmin ?? false;
+  const [boostOpen, setBoostOpen] = useState(false);
+  // Escape closes the panel wherever focus is (the trigger keeps focus when it opens)
+  useEffect(() => {
+    if (!boostOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setBoostOpen(false);
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [boostOpen]);
   const ready = status === 'authenticated';
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -282,6 +291,60 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                {isAdmin && boost.data?.boost.supported && (
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setBoostOpen((open) => !open)}
+                      className={[
+                        'btn-boost flex items-center gap-2 text-sm',
+                        boost.data.boost.active && 'is-active',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                      aria-expanded={boostOpen}
+                      aria-controls="boost-panel"
+                      title={
+                        boost.data.boost.active
+                          ? 'Boost is on: OpenAI Fast mode, metered API'
+                          : 'Boost: OpenAI Fast mode for a fixed time'
+                      }
+                    >
+                      <Zap size={14} />
+                      {boost.data.boost.active ? 'Boost on' : 'Boost'}
+                      {boost.data.boost.active && boost.data.boost.until && (
+                        <Countdown
+                          until={new Date(boost.data.boost.until).getTime()}
+                          className="text-xs opacity-90"
+                          onDone={() => boost.refetch()}
+                        />
+                      )}
+                    </button>
+                    {boostOpen && (
+                      <>
+                        <div
+                          className="fixed inset-0 z-10"
+                          aria-hidden
+                          onClick={() => setBoostOpen(false)}
+                        />
+                        <div
+                          id="boost-panel"
+                          role="dialog"
+                          aria-label="Boost"
+                          className="card absolute right-0 z-20 mt-2 w-[min(36rem,calc(100vw-2rem))] shadow-xl"
+                        >
+                          <BoostControl
+                            agentId={agent.id}
+                            boost={boost.data?.boost ?? null}
+                            isLoading={boost.isLoading}
+                            error={boost.error}
+                            onChanged={() => boost.refetch()}
+                          />
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
                 {agent.teamsChatUrl && (
                   <a
                     href={agent.teamsChatUrl}
@@ -430,24 +493,6 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
                         isLoading={activity.isLoading}
                       />
                     </section>
-                    {isAdmin && boost.data?.boost.supported && (
-                      <section className="card">
-                        <h2
-                          className="flex items-center gap-2 border-b p-4 text-lg font-semibold"
-                          style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-                        >
-                          <Zap size={18} style={{ color: 'var(--primary)' }} /> Boost
-                        </h2>
-                        <BoostControl
-                          agentId={agent.id}
-                          boost={boost.data?.boost ?? null}
-                          isLoading={boost.isLoading}
-                          error={boost.error}
-                          onChanged={() => boost.refetch()}
-                        />
-                      </section>
-                    )}
-
                     {agent.repo && (soul.isLoading || soul.error || soul.data) && (
                       <section className="card">
                         <h2
