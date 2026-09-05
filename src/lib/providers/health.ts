@@ -25,32 +25,46 @@ function isPrivateIpv4(ip: string): boolean {
 }
 
 /**
- * The IPv4 address an IPv4-mapped IPv6 literal wraps, or null. The URL parser
- * canonicalises these to the hex form (`::ffff:7f00:1`); a DNS lookup can hand
- * back the dotted one (`::ffff:127.0.0.1`). Such an address is exactly as
- * public as the IPv4 inside it, so it must not be refused wholesale.
+ * The eight 16-bit groups of an IPv6 address, or null if it is not one.
+ * Every spelling normalises to the same eight numbers, so classification never
+ * has to match text: `::ffff:7f00:1`, `::ffff:127.0.0.1` and the expanded
+ * `0:0:0:0:0:ffff:127.0.0.1` a resolver may hand back are all the same address.
  */
-function mappedIpv4(v6: string): string | null {
-  const dotted = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/.exec(v6);
-  if (dotted) return isIP(dotted[1]) === 4 ? dotted[1] : null;
-  const hex = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(v6);
-  if (!hex) return null;
-  const high = Number.parseInt(hex[1], 16);
-  const low = Number.parseInt(hex[2], 16);
-  return `${high >>> 8}.${high & 0xff}.${low >>> 8}.${low & 0xff}`;
+function ipv6Groups(ip: string): number[] | null {
+  if (isIP(ip) !== 6) return null;
+  let text = ip;
+  // A trailing dotted quad is the last two groups
+  const dotted = /\d{1,3}(?:\.\d{1,3}){3}$/.exec(text);
+  if (dotted) {
+    const [a, b, c, d] = dotted[0].split('.').map(Number);
+    const hex = (high: number, low: number) => ((high << 8) | low).toString(16);
+    text = `${text.slice(0, dotted.index)}${hex(a, b)}:${hex(c, d)}`;
+  }
+  const parts = text.split('::');
+  if (parts.length > 2) return null;
+  const parse = (part: string) => (part ? part.split(':').map((g) => Number.parseInt(g, 16)) : []);
+  const left = parse(parts[0]);
+  if (parts.length === 1) return left.length === 8 ? left : null;
+  const right = parse(parts[1]);
+  const gap = 8 - left.length - right.length;
+  if (gap < 0) return null;
+  return [...left, ...new Array<number>(gap).fill(0), ...right];
 }
 
 function isPrivateAddress(ip: string): boolean {
   if (isIP(ip) === 4) return isPrivateIpv4(ip);
-  const v6 = ip.toLowerCase();
-  const mapped = mappedIpv4(v6);
-  if (mapped) return isPrivateIpv4(mapped);
-  if (v6 === '::1' || v6 === '::') return true;
+  const groups = ipv6Groups(ip);
+  // An address we cannot read is refused rather than probed
+  if (!groups) return true;
+  // ::ffff:a.b.c.d (IPv4-mapped) and ::a.b.c.d (IPv4-compatible, which is also
+  // how :: and ::1 come out) are exactly as public as the IPv4 inside them.
+  if (groups.slice(0, 5).every((g) => g === 0) && (groups[5] === 0xffff || groups[5] === 0)) {
+    const [high, low] = groups.slice(6);
+    return isPrivateIpv4(`${high >>> 8}.${high & 0xff}.${low >>> 8}.${low & 0xff}`);
+  }
   // Link-local is fe80::/10 and unique-local fc00::/7 — ranges, not literal
   // prefixes, so fe90:: and febf:: are link-local too.
-  const first = Number.parseInt(v6.split(':')[0], 16);
-  // An address whose first group we cannot read is refused rather than probed.
-  if (!Number.isFinite(first)) return true;
+  const [first] = groups;
   return (first >= 0xfe80 && first <= 0xfebf) || (first >= 0xfc00 && first <= 0xfdff);
 }
 

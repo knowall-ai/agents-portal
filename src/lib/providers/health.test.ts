@@ -124,10 +124,31 @@ describe('isProbeableUrl', () => {
   });
 
   it('refuses a name resolving to a private address that DNS reports in mapped form', async () => {
-    lookup.mockResolvedValue([{ address: '::ffff:127.0.0.1' }]);
-    await expect(isProbeableUrl('https://agents.example.com')).resolves.toBe(false);
-    lookup.mockResolvedValue([{ address: '::ffff:93.184.216.34' }]);
-    await expect(isProbeableUrl('https://agents.example.com')).resolves.toBe(true);
+    // Every spelling of the same address, in every case: the URL parser
+    // canonicalises literals, but a resolver can hand back any of these.
+    for (const address of [
+      '::ffff:127.0.0.1',
+      '::ffff:7f00:1',
+      '0:0:0:0:0:ffff:127.0.0.1',
+      '0:0:0:0:0:ffff:7f00:1',
+      '0:0:0:0:0:FFFF:127.0.0.1',
+      '0:0:0:0:0:ffff:10.0.0.1',
+      '0:0:0:0:0:FFFF:0A00:1',
+      '0:0:0:0:0:0:0:1',
+    ]) {
+      lookup.mockResolvedValue([{ address }]);
+      await expect(isProbeableUrl('https://agents.example.com'), address).resolves.toBe(false);
+    }
+    for (const address of [
+      '::ffff:93.184.216.34',
+      '::ffff:5db8:d822',
+      '0:0:0:0:0:ffff:93.184.216.34',
+      '0:0:0:0:0:FFFF:5DB8:D822',
+      '2606:2800:220:1::1',
+    ]) {
+      lookup.mockResolvedValue([{ address }]);
+      await expect(isProbeableUrl('https://agents.example.com'), address).resolves.toBe(true);
+    }
   });
 
   it('refuses a name that does not resolve at all', async () => {
