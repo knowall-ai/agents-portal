@@ -61,6 +61,8 @@
           "planned": { "type": "boolean" },
           "avatarUrl": {
             "type": "string",
+            "format": "uri",
+            "pattern": "^https://",
             "description": "Override only: an https URL for the picture. Leave unset so it comes from the Bot Service icon or the Entra account photo."
           },
           "teamsUpn": {

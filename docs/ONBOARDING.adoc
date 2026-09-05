@@ -137,7 +137,7 @@ and set `healthUrl` to `https://<agent>.knowall.ai/health`.
 
 == 6. Profile image and Teams chat
 
-* *OpenClaw agents* usually have their own Entra user. Upload a photo to that account (`az rest --method put --url "https://graph.microsoft.com/v1.0/users/<upn>/photo/$value" --body @photo.jpg`) and tag a resource with `agent-teams-upn`; the portal reads the photo from there.
+* *OpenClaw agents* usually have their own Entra user. Upload a photo to that account (`az rest --method put --url 'https://graph.microsoft.com/v1.0/users/<upn>/photo/$value' --headers 'Content-Type=image/jpeg' --body @photo.jpg`; Graph requires the JPEG content type, and `az rest` does not set it for a non-JSON body) and tag a resource with `agent-teams-upn`; the portal reads the photo from there.
 * *Bot Service agents* get their picture from the bot's icon: Azure portal → the Bot Service resource → *Bot profile* → *Icon*.
 * *Bots* get a Teams link automatically from their Bot Service resource, provided the bot has the Teams channel enabled and the user has the app installed.
 
