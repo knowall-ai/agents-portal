@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Only the VM round trip is faked; the rest of the Azure helpers stay real.
 const runVmScript = vi.hoisted(() => vi.fn());
@@ -85,15 +85,20 @@ describe('setBoost', () => {
     type: 'microsoft.compute/virtualmachines',
     resourceGroup: 'ka-agents',
     subscriptionId: 'sub',
+    tenantId: 'tenant-1',
   } as unknown as AzureResource;
   // `sallie` is the registry entry with a boost script, so Boost is supported here
   const agent = { id: 'sallie', resources: [vm] } as unknown as AgentDetail;
   const ctx = { armToken: 'token' } as unknown as UserContext;
 
   beforeEach(() => {
+    // The registry only applies to resources in its own tenant
+    vi.stubEnv('AZURE_AD_TENANT_ID', 'tenant-1');
     runVmScript.mockReset();
     runVmScript.mockResolvedValue({ stdout: '{"active":true,"hours":0.5}', stderr: '' });
   });
+
+  afterEach(() => vi.unstubAllEnvs());
 
   it('rejects hours that are not quarter hours or are out of range', async () => {
     const message = /Hours must be a multiple of 0\.25 between 0\.25 and 8/;
