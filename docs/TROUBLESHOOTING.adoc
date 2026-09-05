@@ -41,8 +41,23 @@
 |**Licences card says User.Read.All is not consented**
 |Reading another user's licences needs the *User.Read.All* delegated Graph permission on the app registration with admin consent (see the README setup step). After granting it, sign out and in again so the refresh token carries the new scope.
 
+|**Permissions card says Directory.Read.All is not consented**
+|The *Directory.Read.All* delegated Graph permission (admin consent) is needed to read groups, directory roles, app registrations and consent grants. Grant it as in the README setup step, then sign out and in again.
+
 |**Licences card shows `Graph 403` for some viewers**
 |Reading another user's licence details also needs the *viewer* to hold an Entra role with `microsoft.directory/users/licenseDetails/read` (Global Reader, User Administrator, License Administrator, or a custom role). Assign the role and reload; failures are only cached for a minute.
+
+|**Brain tab missing or says no brain connected**
+|Set `brainUrl` in `config/agents.json` and `REVERIE_TOKEN` on the server. The URL must be `https` and route to the agent's `reverie serve` (a reverse proxy such as Caddy with a `/reverie/*` route is the usual way). `BRAIN_FIXTURE=1` shows a built-in graph for development.
+
+|**Brain shows "stream offline"**
+|The SSE proxy to `<brainUrl>/brain/events` dropped. Check `reverie-serve` on the VM and that the proxy does not buffer event streams.
+
+|**Boost button says Azure refused (403)**
+|Boost runs a command on the VM as *you*. You need *Virtual Machine Contributor* (or Owner/Contributor) on the agent's VM or resource group.
+
+|**Boost shows "State not checked yet"**
+|The portal only knows the Boost state from its last run-command; click *Check VM* (about 30 s) to read it from the VM. The VM's own timer switches the agent back regardless of the portal.
 
 |**No AI Foundry assistants shown**
 |The token exchange for `https://ai.azure.com/.default` failed — the app registration needs the *Azure Machine Learning Services / user_impersonation* delegated permission with admin consent, and the user needs *Azure AI User* on the AI Services account.

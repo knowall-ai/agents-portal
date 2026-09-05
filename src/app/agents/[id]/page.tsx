@@ -1,7 +1,8 @@
 'use client';
 
-import { use } from 'react';
+import { Suspense, use } from 'react';
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { formatDistanceToNow } from 'date-fns';
 import {
@@ -13,13 +14,17 @@ import {
   Github,
   Globe,
   Heart,
+  LayoutGrid,
   MessageSquare,
+  Phone,
   Receipt,
   RefreshCw,
   Share2,
+  ShieldCheck,
   Sparkles,
   Activity,
   Brain,
+  Zap,
 } from 'lucide-react';
 import { MainLayout } from '@/components/layout';
 import {
@@ -29,31 +34,84 @@ import {
   KindBadge,
   LoadingSpinner,
   StatusBadge,
+  Tabs,
+  type TabDef,
 } from '@/components/common';
 import {
   ActivityFeed,
+  BoostControl,
+  BrainView,
   CostBreakdown,
   FoundryAssistants,
   LicenseList,
+  PermissionsPanel,
   ResourceTable,
   SkillList,
   SoulPanel,
 } from '@/components/agents';
 import { useApi } from '@/hooks';
+import { BACKDROPS, type Backdrop } from '@/components/agents/BrainView';
 import type {
   ActivityEvent,
+  AgentBoost,
+  AgentBrain,
   AgentCosts,
   AgentDetail,
   AgentLicensing,
+  AgentPermissions,
   AgentSoul,
   FoundryAssistant,
   Skill,
 } from '@/types';
 
-export default function AgentPage({ params }: { params: Promise<{ id: string }> }) {
+const TAB_IDS = [
+  'overview',
+  'brain',
+  'costs',
+  'licences',
+  'permissions',
+  'skills',
+  'activity',
+] as const;
+type TabId = (typeof TAB_IDS)[number];
+const RECENT_ACTIVITY = 8;
+
+export default function AgentPage(props: { params: Promise<{ id: string }> }) {
+  // useSearchParams needs a Suspense boundary in the App Router
+  return (
+    <Suspense
+      fallback={
+        <MainLayout>
+          <LoadingSpinner className="py-12" message="Loading agent..." />
+        </MainLayout>
+      }
+    >
+      <AgentPageInner {...props} />
+    </Suspense>
+  );
+}
+
+function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { status } = useSession();
   const ready = status === 'authenticated';
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const requested = searchParams.get('tab');
+  const requestedTab: TabId | null = (TAB_IDS as readonly string[]).includes(requested ?? '')
+    ? (requested as TabId)
+    : null;
+  const requestedBg = searchParams.get('bg');
+  const backdrop: Backdrop = (BACKDROPS as readonly string[]).includes(requestedBg ?? '')
+    ? (requestedBg as Backdrop)
+    : 'bridge';
+  const setTab = (next: string) => {
+    const query = new URLSearchParams(searchParams.toString());
+    if (next === 'overview') query.delete('tab');
+    else query.set('tab', next);
+    const qs = query.toString();
+    router.replace(qs ? `?${qs}` : `/agents/${id}`, { scroll: false });
+  };
 
   const detail = useApi<{ agent: AgentDetail; assistants: FoundryAssistant[] }>(
     ready ? `/api/agents/${id}` : null,
@@ -71,8 +129,66 @@ export default function AgentPage({ params }: { params: Promise<{ id: string }> 
   const licensing = useApi<{ licensing: AgentLicensing }>(
     ready ? `/api/agents/${id}/licenses` : null
   );
+  const permissions = useApi<{ permissions: AgentPermissions }>(
+    ready ? `/api/agents/${id}/permissions` : null
+  );
+  const boost = useApi<{ boost: AgentBoost }>(ready ? `/api/agents/${id}/boost` : null, 60_000);
+  const brain = useApi<{ brain: AgentBrain }>(ready ? `/api/agents/${id}/brain` : null);
 
   const agent = detail.data?.agent;
+  const permissionCount = permissions.data
+    ? (permissions.data.permissions.account
+        ? permissions.data.permissions.account.directoryRoles.length +
+          permissions.data.permissions.account.groups.length +
+          permissions.data.permissions.account.azureRoles.length
+        : 0) +
+      permissions.data.permissions.apps.reduce(
+        (n, app) => n + app.permissions.length + app.azureRoles.length,
+        0
+      )
+    : undefined;
+  const tabs: TabDef[] = [
+    { id: 'overview', label: 'Overview', icon: <LayoutGrid size={14} /> },
+    ...(brain.data?.brain.available
+      ? [
+          {
+            id: 'brain',
+            label: 'Brain',
+            icon: <Brain size={14} />,
+            count: brain.data.brain.snapshot?.stats.nodeCount,
+          },
+        ]
+      : []),
+    { id: 'costs', label: 'Costs', icon: <Receipt size={14} /> },
+    {
+      id: 'licences',
+      label: 'Licences',
+      icon: <BadgeCheck size={14} />,
+      count: licensing.data?.licensing.licenses.length,
+    },
+    {
+      id: 'permissions',
+      label: 'Permissions',
+      icon: <ShieldCheck size={14} />,
+      count: permissionCount,
+    },
+    {
+      id: 'skills',
+      label: 'Skills',
+      icon: <Sparkles size={14} />,
+      count: skills.data?.skills.length,
+    },
+    {
+      id: 'activity',
+      label: 'Activity',
+      icon: <Activity size={14} />,
+      count: activity.data?.events.length,
+    },
+  ];
+  // only a tab that is actually rendered can be selected, so a shared ?tab=brain link
+  // on an agent without a brain falls back to Overview instead of a blank panel
+  const tab: TabId =
+    requestedTab && tabs.some((t) => t.id === requestedTab) ? requestedTab : 'overview';
 
   return (
     <MainLayout>
@@ -145,6 +261,17 @@ export default function AgentPage({ params }: { params: Promise<{ id: string }> 
                     <MessageSquare size={14} /> Chat in Teams
                   </a>
                 )}
+                {agent.teamsCallUrl && (
+                  <a
+                    href={agent.teamsCallUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn-primary flex items-center gap-2 text-sm"
+                    title="Start a Teams call with this agent"
+                  >
+                    <Phone size={14} /> Call in Teams
+                  </a>
+                )}
                 {agent.portalUrl && (
                   <a
                     href={agent.portalUrl}
@@ -173,6 +300,9 @@ export default function AgentPage({ params }: { params: Promise<{ id: string }> 
                     activity.refetch();
                     costs.refetch();
                     licensing.refetch();
+                    permissions.refetch();
+                    boost.refetch();
+                    brain.refetch();
                   }}
                   className="btn-secondary flex items-center gap-2 text-sm"
                 >
@@ -250,58 +380,132 @@ export default function AgentPage({ params }: { params: Promise<{ id: string }> 
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-              <div className="space-y-6 lg:col-span-2">
-                {agent.repo && (soul.isLoading || soul.error || soul.data) && (
-                  <section className="card">
+            <Tabs tabs={tabs} active={tab} onChange={setTab} idPrefix="agent" />
+
+            <div role="tabpanel" id={`agent-panel-${tab}`} aria-labelledby={`agent-${tab}`}>
+              {tab === 'overview' && (
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                  <div className="space-y-6 lg:col-span-2">
+                    {boost.data?.boost.supported && (
+                      <section className="card">
+                        <h2
+                          className="flex items-center gap-2 border-b p-4 text-lg font-semibold"
+                          style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                        >
+                          <Zap size={18} style={{ color: 'var(--primary)' }} /> Boost
+                        </h2>
+                        <BoostControl
+                          agentId={agent.id}
+                          boost={boost.data?.boost ?? null}
+                          isLoading={boost.isLoading}
+                          error={boost.error}
+                          onChanged={() => boost.refetch()}
+                        />
+                      </section>
+                    )}
+
+                    {agent.repo && (soul.isLoading || soul.error || soul.data) && (
+                      <section className="card">
+                        <h2
+                          className="flex items-center gap-2 border-b p-4 text-lg font-semibold"
+                          style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                        >
+                          <Heart size={18} style={{ color: 'var(--primary)' }} /> Soul
+                          {soul.data?.soul?.url && (
+                            <a
+                              href={soul.data.soul.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="ml-auto flex items-center gap-1 font-mono text-xs font-normal hover:underline"
+                              style={{ color: 'var(--text-muted)' }}
+                            >
+                              {soul.data.soul.path} <ExternalLink size={11} />
+                            </a>
+                          )}
+                        </h2>
+                        <SoulPanel
+                          soul={soul.data?.soul ?? null}
+                          configured={soul.data?.configured}
+                          isLoading={soul.isLoading}
+                          error={soul.error}
+                        />
+                      </section>
+                    )}
+
+                    <section className="card">
+                      <h2
+                        className="flex items-center gap-2 border-b p-4 text-lg font-semibold"
+                        style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                      >
+                        <Boxes size={18} style={{ color: 'var(--primary)' }} /> Azure resources
+                      </h2>
+                      <ResourceTable resources={agent.resources} />
+                    </section>
+
+                    {detail.data && detail.data.assistants.length > 0 && (
+                      <section className="card">
+                        <h2
+                          className="flex items-center gap-2 border-b p-4 text-lg font-semibold"
+                          style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                        >
+                          <Brain size={18} style={{ color: 'var(--primary)' }} /> AI Foundry
+                          assistants
+                        </h2>
+                        <FoundryAssistants assistants={detail.data.assistants} />
+                      </section>
+                    )}
+                  </div>
+
+                  <section className="card self-start">
                     <h2
                       className="flex items-center gap-2 border-b p-4 text-lg font-semibold"
                       style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                     >
-                      <Heart size={18} style={{ color: 'var(--primary)' }} /> Soul
-                      {soul.data?.soul?.url && (
-                        <a
-                          href={soul.data.soul.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="ml-auto flex items-center gap-1 font-mono text-xs font-normal hover:underline"
-                          style={{ color: 'var(--text-muted)' }}
-                        >
-                          {soul.data.soul.path} <ExternalLink size={11} />
-                        </a>
-                      )}
+                      <Activity size={18} style={{ color: 'var(--primary)' }} /> Recent activity
+                      <button
+                        type="button"
+                        onClick={() => setTab('activity')}
+                        className="ml-auto text-xs font-normal hover:underline"
+                        style={{ color: 'var(--text-muted)' }}
+                      >
+                        View all
+                      </button>
                     </h2>
-                    <SoulPanel
-                      soul={soul.data?.soul ?? null}
-                      configured={soul.data?.configured}
-                      isLoading={soul.isLoading}
-                      error={soul.error}
+                    <ActivityFeed
+                      events={activity.data?.events.slice(0, RECENT_ACTIVITY) ?? null}
+                      isLoading={activity.isLoading}
+                      error={activity.error}
                     />
                   </section>
-                )}
+                </div>
+              )}
 
-                <section className="card">
+              {tab === 'brain' && (
+                <section className="card overflow-hidden">
                   <h2
                     className="flex items-center gap-2 border-b p-4 text-lg font-semibold"
                     style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                   >
-                    <Boxes size={18} style={{ color: 'var(--primary)' }} /> Azure resources
+                    <Brain size={18} style={{ color: 'var(--primary)' }} /> Brain
+                    <span className="text-sm font-normal" style={{ color: 'var(--text-muted)' }}>
+                      Reverie graph memory, live
+                    </span>
                   </h2>
-                  <ResourceTable resources={agent.resources} />
+                  <BrainView
+                    agentId={agent.id}
+                    agentName={agent.name}
+                    agentStatus={agent.status}
+                    brain={brain.data?.brain ?? null}
+                    costs={costs.data}
+                    boost={boost.data?.boost ?? null}
+                    backdrop={backdrop}
+                    isLoading={brain.isLoading}
+                    error={brain.error}
+                  />
                 </section>
+              )}
 
-                {detail.data && detail.data.assistants.length > 0 && (
-                  <section className="card">
-                    <h2
-                      className="flex items-center gap-2 border-b p-4 text-lg font-semibold"
-                      style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-                    >
-                      <Brain size={18} style={{ color: 'var(--primary)' }} /> AI Foundry assistants
-                    </h2>
-                    <FoundryAssistants assistants={detail.data.assistants} />
-                  </section>
-                )}
-
+              {tab === 'costs' && (
                 <section className="card">
                   <h2
                     className="flex items-center gap-2 border-b p-4 text-lg font-semibold"
@@ -315,18 +519,15 @@ export default function AgentPage({ params }: { params: Promise<{ id: string }> 
                     error={costs.error}
                   />
                 </section>
+              )}
 
+              {tab === 'licences' && (
                 <section className="card">
                   <h2
                     className="flex items-center gap-2 border-b p-4 text-lg font-semibold"
                     style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                   >
                     <BadgeCheck size={18} style={{ color: 'var(--primary)' }} /> Licences
-                    {licensing.data && licensing.data.licensing.licenses.length > 0 && (
-                      <span className="text-sm font-normal" style={{ color: 'var(--text-muted)' }}>
-                        ({licensing.data.licensing.licenses.length})
-                      </span>
-                    )}
                   </h2>
                   <LicenseList
                     licensing={licensing.data?.licensing ?? null}
@@ -334,18 +535,31 @@ export default function AgentPage({ params }: { params: Promise<{ id: string }> 
                     error={licensing.error}
                   />
                 </section>
+              )}
 
+              {tab === 'permissions' && (
+                <section className="card">
+                  <h2
+                    className="flex items-center gap-2 border-b p-4 text-lg font-semibold"
+                    style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                  >
+                    <ShieldCheck size={18} style={{ color: 'var(--primary)' }} /> Permissions
+                  </h2>
+                  <PermissionsPanel
+                    permissions={permissions.data?.permissions ?? null}
+                    isLoading={permissions.isLoading}
+                    error={permissions.error}
+                  />
+                </section>
+              )}
+
+              {tab === 'skills' && (
                 <section className="card">
                   <h2
                     className="flex items-center gap-2 border-b p-4 text-lg font-semibold"
                     style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                   >
                     <Sparkles size={18} style={{ color: 'var(--primary)' }} /> Skills
-                    {skills.data && (
-                      <span className="text-sm font-normal" style={{ color: 'var(--text-muted)' }}>
-                        ({skills.data.skills.length})
-                      </span>
-                    )}
                   </h2>
                   <SkillList
                     skills={skills.data?.skills ?? null}
@@ -353,21 +567,23 @@ export default function AgentPage({ params }: { params: Promise<{ id: string }> 
                     error={skills.error}
                   />
                 </section>
-              </div>
+              )}
 
-              <section className="card self-start">
-                <h2
-                  className="flex items-center gap-2 border-b p-4 text-lg font-semibold"
-                  style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-                >
-                  <Activity size={18} style={{ color: 'var(--primary)' }} /> Recent activity
-                </h2>
-                <ActivityFeed
-                  events={activity.data?.events ?? null}
-                  isLoading={activity.isLoading}
-                  error={activity.error}
-                />
-              </section>
+              {tab === 'activity' && (
+                <section className="card">
+                  <h2
+                    className="flex items-center gap-2 border-b p-4 text-lg font-semibold"
+                    style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                  >
+                    <Activity size={18} style={{ color: 'var(--primary)' }} /> Activity
+                  </h2>
+                  <ActivityFeed
+                    events={activity.data?.events ?? null}
+                    isLoading={activity.isLoading}
+                    error={activity.error}
+                  />
+                </section>
+              )}
             </div>
           </>
         ) : null}

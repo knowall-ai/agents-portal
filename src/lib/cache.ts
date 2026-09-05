@@ -29,11 +29,27 @@ export async function cached<T>(
   if (hit && hit.expiresAt > now) {
     return hit.value;
   }
-  const value = await loader();
+  let value: T;
+  try {
+    value = await loader();
+  } catch (error) {
+    // Serve the last good value while the upstream is throttled or flaky, and
+    // hold off retrying for a short while so we do not make the throttle worse
+    if (hit) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`cache: serving stale ${key} after failure: ${message.slice(0, 160)}`);
+      store.set(key, { value: hit.value, expiresAt: now + STALE_RETRY_MS });
+      return hit.value;
+    }
+    throw error;
+  }
   const ttl = typeof ttlMs === 'function' ? ttlMs(value) : ttlMs;
   store.set(key, { value, expiresAt: now + ttl });
   return value;
 }
+
+/** How long a stale value is served before the loader is tried again. */
+const STALE_RETRY_MS = 30_000;
 
 export function invalidate(prefix: string): void {
   for (const key of store.keys()) {

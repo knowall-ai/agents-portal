@@ -219,11 +219,37 @@ export function teamsChatUrl(
   entry: AgentRegistryEntry | undefined,
   resources: AzureResource[]
 ): string | undefined {
-  const upn = entry?.teamsUpn;
+  const upn = agentUpn(entry, resources);
   if (upn) return `https://teams.microsoft.com/l/chat/0/0?users=${encodeURIComponent(upn)}`;
   const bot = resources.find((r) => r.type === 'microsoft.botservice/botservices' && r.botAppId);
   if (bot?.botAppId) return `https://teams.microsoft.com/l/chat/0/0?users=28:${bot.botAppId}`;
   return undefined;
+}
+
+/** Teams deep link that starts a call with the agent's own account (bots cannot be called this way). */
+export function teamsCallUrl(
+  entry: AgentRegistryEntry | undefined,
+  resources: AzureResource[]
+): string | undefined {
+  // A Bot Service agent is reachable in chat but has no callable account, even
+  // when a UPN is tagged or set in the registry.
+  if (resources.some((r) => r.type === 'microsoft.botservice/botservices')) return undefined;
+  const upn = agentUpn(entry, resources);
+  return upn
+    ? `https://teams.microsoft.com/l/call/0/0?users=${encodeURIComponent(upn)}`
+    : undefined;
+}
+
+/**
+ * The agent's own Entra account: the `agent-teams-upn` tag on any of its
+ * resources, or the registry's `teamsUpn` as an override. Keeping it in Azure
+ * means no address has to live in this public repo.
+ */
+export function agentUpn(
+  entry: AgentRegistryEntry | undefined,
+  resources: AzureResource[]
+): string | undefined {
+  return entry?.teamsUpn ?? firstTag(resources, 'agent-teams-upn');
 }
 
 function firstTag(resources: AzureResource[], key: string): string | undefined {
@@ -283,6 +309,8 @@ export function buildAgent(
     source: entry && bucket.fromTags ? 'both' : entry ? 'registry' : 'tags',
     avatarUrl: safeAvatarUrl(entry?.avatarUrl ?? firstTag(resources, 'agent-avatar')),
     teamsChatUrl: teamsChatUrl(entry, resources),
+    teamsCallUrl: teamsCallUrl(entry, resources),
+    teamsUpn: agentUpn(entry, resources),
     resources: [...resources].sort(
       (a, b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name)
     ),
@@ -311,6 +339,8 @@ export function toSummary(agent: AgentDetail): AgentSummary {
     source: agent.source,
     avatarUrl: agent.avatarUrl,
     teamsChatUrl: agent.teamsChatUrl,
+    teamsCallUrl: agent.teamsCallUrl,
+    teamsUpn: agent.teamsUpn,
   };
 }
 

@@ -68,6 +68,12 @@ export interface AgentRegistryEntry {
   skillSources?: SkillSource[];
   /** Path to the agent's SOUL.md. Defaults to workspace/SOUL.md, then SOUL.md. */
   soulPath?: string;
+  /** Entra app registrations the agent runs as (Graph/API access). Bot app IDs are added automatically. */
+  appRegistrations?: AppRegistrationRef[];
+  /** BOOST mode: run a script on the agent's VM to switch OpenAI Fast mode on/off */
+  boost?: BoostConfig;
+  /** Reverie brain API base URL (https://<agent-domain>/reverie); the portal's REVERIE_TOKEN is sent to it */
+  brainUrl?: string;
   /** Resource groups whose resources belong to this agent (case-insensitive) */
   resourceGroups?: string[];
   /** Agent not yet built or deployed — shown as "planned" */
@@ -82,6 +88,198 @@ export interface AgentRegistryEntry {
   anthropicWorkspaceId?: string;
   /** Flat monthly fees not visible in any API (e.g. ChatGPT subscription, ElevenLabs plan) */
   fixedCosts?: FixedCost[];
+}
+
+/** A node of the agent's graph memory (Reverie). */
+export interface BrainNode {
+  id: string;
+  label: string;
+  labels: string[];
+  name: string;
+  degree: number;
+  /** epoch seconds */
+  updatedAt: number;
+  /** epoch seconds */
+  createdAt: number;
+  props: Record<string, string | number | boolean | null | (string | number)[]>;
+}
+
+export interface BrainRel {
+  id: string;
+  type: string;
+  source: string;
+  target: string;
+  /** epoch seconds */
+  updatedAt: number;
+}
+
+export interface BrainStats {
+  nodeCount: number;
+  relCount: number;
+  labels: Record<string, number>;
+  relTypes: Record<string, number>;
+  shown: number;
+}
+
+/** Awake / dreaming signals from the agent's activation log and dream diary. */
+export interface BrainState {
+  dreaming: boolean;
+  /** epoch seconds, as are lastDreamAt and generatedAt */
+  lastActivityAt: number | null;
+  lastDreamAt: number | null;
+  lastDreamName: string | null;
+  recentReads: number;
+  recentWrites: number;
+  eventsAvailable: boolean;
+  /** Agent VM host stats, when the server can read them */
+  cpuPercent?: number | null;
+  load1?: number | null;
+  memPercent?: number | null;
+  memUsedGb?: number | null;
+  memTotalGb?: number | null;
+  /** usage-stats.json as defined by knowall-ai/agent-presence docs/HUD-CONTRACT.md */
+  usage?: PresenceUsage | null;
+  /** boost-state.json as defined by the same contract */
+  boost?: PresenceBoost | null;
+}
+
+/** OPENAI // USAGE figures the video feed shows (agent-presence HUD contract). */
+export interface PresenceUsage {
+  mode?: 'sub' | 'api';
+  sub?: { pct_left?: number | null; reset_at?: number | null; reset?: string | null };
+  api?: { usd_mtd?: number | null };
+  budget?: number | null;
+}
+
+/** BOOST chip state (agent-presence HUD contract); `until` is epoch milliseconds. */
+export interface PresenceBoost {
+  active?: boolean;
+  tier?: string;
+  until?: number | null;
+  since?: number | null;
+  minutes?: number | null;
+}
+
+export interface BrainSnapshot {
+  nodes: BrainNode[];
+  rels: BrainRel[];
+  stats: BrainStats;
+  state: BrainState;
+  generatedAt: number;
+}
+
+/** One line of the activation log: what the agent just read or wrote. */
+export interface BrainActivation {
+  /** epoch seconds */
+  ts: number;
+  kind: 'recall' | 'remember' | 'connect' | 'forget' | 'dream.start' | 'dream.end' | string;
+  ids?: string[];
+  names?: (string | null)[];
+  id?: string;
+  name?: string;
+  label?: string;
+  type?: string;
+  terms?: string[];
+}
+
+export interface BrainDiff {
+  nodesAdded: BrainNode[];
+  nodesUpdated: BrainNode[];
+  nodesRemoved: string[];
+  relsAdded: BrainRel[];
+  relsRemoved: string[];
+  stats?: BrainStats;
+}
+
+/** What the brain route returns: the snapshot when available, else why not. */
+export interface AgentBrain {
+  available: boolean;
+  /** true when served from the built-in fixture (BRAIN_FIXTURE=1) */
+  fixture?: boolean;
+  snapshot?: BrainSnapshot;
+  error?: string;
+}
+
+/** Registry config for BOOST mode (OpenAI Fast mode with auto-revert), run on the agent's VM. */
+export interface BoostConfig {
+  /** Absolute path of the boost script on the VM (on|off|status) */
+  script: string;
+  /** Hours Boost stays on before the VM switches the agent back (default 2) */
+  defaultHours?: number;
+  /** Upper bound the UI and API accept (default 8) */
+  maxHours?: number;
+}
+
+/** BOOST state as reported by the VM (or last known). */
+export interface AgentBoost {
+  supported: boolean;
+  active: boolean;
+  /** Model that Fast mode applies to */
+  model?: string;
+  since?: string;
+  until?: string;
+  hours?: number;
+  /** Where this state came from */
+  source: 'vm' | 'cache' | 'none';
+  checkedAt?: string;
+  defaultHours: number;
+  maxHours: number;
+  warning: string;
+  error?: string;
+}
+
+export interface AppRegistrationRef {
+  appId: string;
+  label?: string;
+}
+
+export type PermissionKind =
+  | 'delegated'
+  | 'application'
+  | 'directory-role'
+  | 'group'
+  | 'azure-role';
+
+/** One permission, role or membership, with an explanation for the expandable row. */
+export interface PermissionItem {
+  id: string;
+  name: string;
+  kind: PermissionKind;
+  /** Microsoft's own description where it publishes one */
+  description?: string;
+  /** API the permission is on (Microsoft Graph, …) or "Azure" for RBAC */
+  resource?: string;
+  /** App permissions: whether the tenant has consented / assigned it */
+  granted?: boolean;
+  /** Azure RBAC: the scope the role is assigned at */
+  scope?: string;
+}
+
+/** What the agent's own Entra account can do. */
+export interface AgentAccountAccess {
+  upn: string;
+  objectId?: string;
+  directoryRoles: PermissionItem[];
+  groups: PermissionItem[];
+  azureRoles: PermissionItem[];
+}
+
+/** What one of the agent's app registrations can do. */
+export interface AgentAppAccess {
+  appId: string;
+  displayName: string;
+  label?: string;
+  servicePrincipalId?: string;
+  permissions: PermissionItem[];
+  azureRoles: PermissionItem[];
+  error?: string;
+}
+
+export interface AgentPermissions {
+  account?: AgentAccountAccess;
+  apps: AgentAppAccess[];
+  /** Why directory data could not be read, when it could not */
+  error?: string;
 }
 
 /** A Microsoft licence (SKU) assigned to the agent's Entra account. */
@@ -137,6 +335,10 @@ export interface AgentSummary {
   avatarUrl?: string;
   /** Deep link that opens a Teams chat with the agent (user account or bot) */
   teamsChatUrl?: string;
+  /** Teams deep link that calls the agent's account; only when it has a teamsUpn */
+  teamsCallUrl?: string;
+  /** The agent's own Entra account, from the agent-teams-upn tag or the registry */
+  teamsUpn?: string;
 }
 
 export interface FoundryProject {

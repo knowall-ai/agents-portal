@@ -105,13 +105,15 @@ APP_ID=$(az ad app create \
   --query appId -o tsv)
 
 # 2. Delegated permissions:
-#    Microsoft Graph        User.Read, User.Read.All (agents' licences), openid, profile, email, offline_access
+#    Microsoft Graph        User.Read, User.Read.All (agents' licences), Directory.Read.All (agents' roles, groups,
+#                           app registrations and consent), openid, profile, email, offline_access
 #    Azure Service Mgmt     user_impersonation   (Resource Graph, Activity Log)
 #    Azure ML Services      user_impersonation   (AI Foundry Assistants API, https://ai.azure.com)
 az ad app permission add --id $APP_ID --api 00000003-0000-0000-c000-000000000000 \
   --api-permissions e1fe6dd8-ba31-4d61-89e7-88639da4683d=Scope 37f7f235-527c-4136-accd-4a02d197296e=Scope \
     14dad69e-099b-42c9-810b-d002981feec1=Scope 64a6cdd6-aab1-4aaf-94b8-3cc8405e90d0=Scope \
-    7427e0e9-2fba-42fe-b0c0-848c9e6a8182=Scope a154be20-db9c-4678-8ab7-66f6cc099a59=Scope
+    7427e0e9-2fba-42fe-b0c0-848c9e6a8182=Scope a154be20-db9c-4678-8ab7-66f6cc099a59=Scope \
+    06da0dbc-49e2-44d2-8312-53f166ab848a=Scope
 az ad app permission add --id $APP_ID --api 797f4846-ba00-4fd7-ba43-dac1f8f63013 \
   --api-permissions 41094075-9dad-400e-a0bd-54e686782033=Scope
 az ad app permission add --id $APP_ID --api 18a66f5f-dbdf-4c17-9dd7-1634712a9cbe \

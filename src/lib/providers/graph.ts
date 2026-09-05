@@ -1,5 +1,11 @@
 // Microsoft Graph: licences assigned to an agent's own Entra account.
-import type { AgentLicense, AgentLicensing } from '@/types';
+import type {
+  AgentAccountAccess,
+  AgentAppAccess,
+  AgentLicense,
+  AgentLicensing,
+  PermissionItem,
+} from '@/types';
 
 const GRAPH = 'https://graph.microsoft.com/v1.0';
 
@@ -97,12 +103,24 @@ export function summarisePlans(plans: RawPlan[]): { capabilities: string[]; othe
 }
 
 async function graphJson<T>(token: string, path: string): Promise<T> {
-  const response = await fetch(`${GRAPH}${path}`, {
+  const response = await fetch(path.startsWith('https://') ? path : `${GRAPH}${path}`, {
     headers: { Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(15_000),
   });
   if (!response.ok) throw new Error(`Graph ${response.status} ${path}`);
   return response.json() as Promise<T>;
+}
+
+/** Every page of a Graph collection, following `@odata.nextLink` until it runs out. */
+async function graphList<T>(token: string, path: string, maxPages = 20): Promise<T[]> {
+  const items: T[] = [];
+  let next: string | undefined = path;
+  for (let page = 0; next && page < maxPages; page++) {
+    const result: { value: T[]; '@odata.nextLink'?: string } = await graphJson(token, next);
+    items.push(...result.value);
+    next = result['@odata.nextLink'];
+  }
+  return items;
 }
 
 interface RawLicense {
@@ -137,5 +155,206 @@ export async function getUserLicensing(
     accountEnabled: account.accountEnabled,
     usageLocation: account.usageLocation,
     licenses,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Permissions: what the agent's account and app registrations can do
+// ---------------------------------------------------------------------------
+
+interface DirectoryObject {
+  '@odata.type': string;
+  id: string;
+  displayName?: string;
+  description?: string;
+}
+
+/** Directory roles and group memberships of the agent's own account. */
+export async function getUserAccess(
+  token: string,
+  upn: string
+): Promise<Pick<AgentAccountAccess, 'objectId' | 'directoryRoles' | 'groups'>> {
+  const user = encodeURIComponent(upn);
+  const [account, memberOf] = await Promise.all([
+    graphJson<{ id: string }>(token, `/users/${user}?$select=id`),
+    graphList<DirectoryObject>(
+      token,
+      `/users/${user}/memberOf?$select=id,displayName,description&$top=999`
+    ),
+  ]);
+  const toItem = (o: DirectoryObject, kind: PermissionItem['kind']): PermissionItem => ({
+    id: o.id,
+    name: o.displayName ?? o.id,
+    kind,
+    description: o.description || undefined,
+    resource: 'Microsoft Entra ID',
+  });
+  const byName = (a: PermissionItem, b: PermissionItem) => a.name.localeCompare(b.name);
+  return {
+    objectId: account.id,
+    directoryRoles: memberOf
+      .filter((o) => o['@odata.type'] === '#microsoft.graph.directoryRole')
+      .map((o) => toItem(o, 'directory-role'))
+      .sort(byName),
+    groups: memberOf
+      .filter((o) => o['@odata.type'] === '#microsoft.graph.group')
+      .map((o) => toItem(o, 'group'))
+      .sort(byName),
+  };
+}
+
+export interface RequiredResourceAccess {
+  resourceAppId: string;
+  resourceAccess: { id: string; type: 'Scope' | 'Role' }[];
+}
+
+export interface ResourceServicePrincipal {
+  id: string;
+  appId: string;
+  displayName: string;
+  oauth2PermissionScopes: {
+    id: string;
+    value: string;
+    adminConsentDisplayName?: string;
+    adminConsentDescription?: string;
+  }[];
+  appRoles: { id: string; value?: string; displayName?: string; description?: string }[];
+}
+
+export interface Oauth2Grant {
+  resourceId: string;
+  scope: string;
+}
+
+export interface AppRoleAssignment {
+  resourceId: string;
+  appRoleId: string;
+}
+
+/**
+ * Turn an app's required permissions into explained rows, marking each as
+ * granted when the tenant has consented (delegated) or assigned it (application).
+ * Pure; exported for unit tests.
+ */
+export function buildAppPermissionItems(
+  required: RequiredResourceAccess[],
+  resources: Map<string, ResourceServicePrincipal>,
+  grants: Oauth2Grant[],
+  assignments: AppRoleAssignment[]
+): PermissionItem[] {
+  const items: PermissionItem[] = [];
+  for (const block of required) {
+    const resource = resources.get(block.resourceAppId);
+    const resourceName = resource?.displayName ?? block.resourceAppId;
+    const consented = new Set(
+      grants
+        .filter((g) => resource && g.resourceId === resource.id)
+        .flatMap((g) => g.scope.split(' ').filter(Boolean))
+    );
+    for (const access of block.resourceAccess) {
+      if (access.type === 'Scope') {
+        const scope = resource?.oauth2PermissionScopes.find((s) => s.id === access.id);
+        items.push({
+          id: `${block.resourceAppId}:${access.id}`,
+          name: scope?.value ?? access.id,
+          kind: 'delegated',
+          description: scope?.adminConsentDescription || scope?.adminConsentDisplayName,
+          resource: resourceName,
+          granted: scope ? consented.has(scope.value) : false,
+        });
+      } else {
+        const role = resource?.appRoles.find((r) => r.id === access.id);
+        items.push({
+          id: `${block.resourceAppId}:${access.id}`,
+          name: role?.value ?? role?.displayName ?? access.id,
+          kind: 'application',
+          description: role?.description,
+          resource: resourceName,
+          granted: assignments.some(
+            (a) => a.appRoleId === access.id && (!resource || a.resourceId === resource.id)
+          ),
+        });
+      }
+    }
+  }
+  return items.sort(
+    (a, b) =>
+      (a.resource ?? '').localeCompare(b.resource ?? '') ||
+      a.kind.localeCompare(b.kind) ||
+      a.name.localeCompare(b.name)
+  );
+}
+
+const resourceSpCache = new Map<string, { value: ResourceServicePrincipal; expires: number }>();
+
+async function getResourceServicePrincipal(
+  token: string,
+  appId: string
+): Promise<ResourceServicePrincipal | undefined> {
+  const hit = resourceSpCache.get(appId);
+  if (hit && hit.expires > Date.now()) return hit.value;
+  const result = await graphJson<{ value: ResourceServicePrincipal[] }>(
+    token,
+    `/servicePrincipals?$filter=appId eq '${appId}'&$select=id,appId,displayName,oauth2PermissionScopes,appRoles`
+  );
+  const sp = result.value[0];
+  if (sp) resourceSpCache.set(appId, { value: sp, expires: Date.now() + 60 * 60 * 1000 });
+  return sp;
+}
+
+const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Required permissions of an app registration and whether each is granted in this tenant. */
+export async function getAppAccess(
+  token: string,
+  appId: string,
+  label?: string
+): Promise<Omit<AgentAppAccess, 'azureRoles'>> {
+  if (!GUID.test(appId)) throw new Error(`Invalid app id: ${appId}`);
+  const base = { appId, displayName: label ?? appId, label, permissions: [] as PermissionItem[] };
+  const [apps, sps] = await Promise.all([
+    graphJson<{
+      value: { displayName: string; requiredResourceAccess: RequiredResourceAccess[] }[];
+    }>(
+      token,
+      `/applications?$filter=appId eq '${appId}'&$select=displayName,requiredResourceAccess`
+    ),
+    graphJson<{ value: { id: string; displayName: string }[] }>(
+      token,
+      `/servicePrincipals?$filter=appId eq '${appId}'&$select=id,displayName`
+    ),
+  ]);
+  const app = apps.value[0];
+  const sp = sps.value[0];
+  if (!app && !sp) {
+    return { ...base, error: 'App registration not found in this tenant' };
+  }
+  const required = app?.requiredResourceAccess ?? [];
+  const [grants, assignments, resourceList] = await Promise.all([
+    sp
+      ? graphJson<{ value: Oauth2Grant[] }>(
+          token,
+          `/servicePrincipals/${sp.id}/oauth2PermissionGrants`
+        )
+      : Promise.resolve({ value: [] as Oauth2Grant[] }),
+    sp
+      ? graphJson<{ value: AppRoleAssignment[] }>(
+          token,
+          `/servicePrincipals/${sp.id}/appRoleAssignments`
+        )
+      : Promise.resolve({ value: [] as AppRoleAssignment[] }),
+    Promise.all(
+      [...new Set(required.map((r) => r.resourceAppId))].map((id) =>
+        getResourceServicePrincipal(token, id)
+      )
+    ),
+  ]);
+  const resources = new Map<string, ResourceServicePrincipal>();
+  for (const r of resourceList) if (r) resources.set(r.appId, r);
+  return {
+    ...base,
+    displayName: app?.displayName ?? sp?.displayName ?? base.displayName,
+    servicePrincipalId: sp?.id,
+    permissions: buildAppPermissionItems(required, resources, grants.value, assignments.value),
   };
 }
