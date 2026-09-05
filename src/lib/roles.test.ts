@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ADMIN_ROLE, VIEWER_ROLE, isPortalAdmin, rolesFromIdToken } from './roles';
+import { ADMIN_ROLE, VIEWER_ROLE, isPortalAdmin, rolesFromIdToken, rolesRequired } from './roles';
 
 function idToken(claims: Record<string, unknown>): string {
   const b64 = (s: string) => Buffer.from(s).toString('base64url');
@@ -19,6 +19,17 @@ describe('isPortalAdmin', () => {
     expect(isPortalAdmin([], false)).toBe(true);
     expect(isPortalAdmin(undefined, true)).toBe(false);
     expect(isPortalAdmin([], true)).toBe(false);
+  });
+});
+
+describe('rolesRequired', () => {
+  it('fails closed in production and open in development unless the flag says otherwise', () => {
+    expect(rolesRequired({ NODE_ENV: 'production' })).toBe(true);
+    expect(rolesRequired({ NODE_ENV: 'development' })).toBe(false);
+    expect(rolesRequired({})).toBe(false);
+    expect(rolesRequired({ NODE_ENV: 'production', PORTAL_REQUIRE_ROLES: '0' })).toBe(false);
+    expect(rolesRequired({ NODE_ENV: 'development', PORTAL_REQUIRE_ROLES: '1' })).toBe(true);
+    expect(rolesRequired({ NODE_ENV: 'production', PORTAL_REQUIRE_ROLES: 'yes' })).toBe(true);
   });
 });
 

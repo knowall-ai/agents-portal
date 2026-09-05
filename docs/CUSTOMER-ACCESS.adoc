@@ -35,18 +35,21 @@ In *Entra admin centre → App registrations → Agents Portal → App roles*, a
 | Portal Viewer | `Portal.Viewer` | Customers: read-only view of their own agents
 |===
 
-Then in *Enterprise applications → Agents Portal → Users and groups*, assign `Portal.Admin` to the KnowAll staff group. Finally set `PORTAL_REQUIRE_ROLES=1` on the App Service so a token without a role is a viewer.
+Then in *Enterprise applications → Agents Portal → Users and groups*, assign `Portal.Admin` to the KnowAll staff group. Do this before the first deployment that carries roles: in production a token without a role is a viewer (`PORTAL_REQUIRE_ROLES` defaults to `1` there), so staff who have not been assigned `Portal.Admin` lose Costs, Licences, Permissions and Boost until they are.
 
 === 2. Invite the customer as a guest
 
 [source,bash]
 ----
-# Invite with their work address; they accept once and sign in with their own account thereafter
+# Invite with their work address; they accept once and sign in with their own account thereafter.
+# The response carries the guest object's id in the KnowAll tenant (invitedUser.id): keep it,
+# a guest's UPN is rewritten (name_domain#EXT#@...) and its mail attribute is not always set.
 az rest --method POST --url https://graph.microsoft.com/v1.0/invitations \
-  --body '{"invitedUserEmailAddress":"<customer-upn>","inviteRedirectUrl":"https://agents.knowall.ai","sendInvitationMessage":true}'
+  --body '{"invitedUserEmailAddress":"<customer-upn>","inviteRedirectUrl":"https://agents.knowall.ai","sendInvitationMessage":true}' \
+  --query invitedUser.id -o tsv
 
-# Their object id in the KnowAll tenant (the guest, not their home identity)
-az ad user list --filter "mail eq '<customer-upn>'" --query "[0].id" -o tsv
+# For a guest invited earlier, look the id up by the invited address instead
+az ad user list --filter "userType eq 'Guest'" --query "[?contains(userPrincipalName, '<customer-upn-with-@-as-_>')].id" -o tsv
 ----
 
 === 3. Grant Reader on their agent's resource group
@@ -57,7 +60,7 @@ az role assignment create --assignee-object-id <guest-object-id> --assignee-prin
   --role Reader --scope /subscriptions/<sub-id>/resourceGroups/rg-winnie-dev
 ----
 
-For a Foundry agent the assistants list also needs `Azure AI User` on the Foundry project so the `https://ai.azure.com` token exchange succeeds; VM-hosted agents need nothing more.
+For a Foundry agent the agents list also needs `Azure AI User` on the Foundry project: the `https://ai.azure.com` token exchange succeeds regardless, and that role is what authorises the project calls the token is then used for. VM-hosted agents need nothing more.
 
 === 4. Assign the Viewer role
 

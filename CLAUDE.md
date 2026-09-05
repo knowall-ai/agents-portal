@@ -132,7 +132,7 @@ bun run lint:fix       # Auto-fix lint
 | `AZURE_AD_CLIENT_SECRET` | Entra app registration client secret                                | Yes                           |
 | `AZURE_AD_TENANT_ID`     | Default sign-in tenant (`common` for multi-tenant)                  | No (default: `common`)        |
 | `GITHUB_TOKEN`           | Token with Contents: read on agent + skill-pack repos               | For private repos             |
-| `PORTAL_REQUIRE_ROLES`   | `1` once app roles are assigned: no `roles` claim then means viewer | No (default: everyone admin)  |
+| `PORTAL_REQUIRE_ROLES`   | `1`: a token with no `roles` claim is a viewer; `0`: it is an admin | No (default: `1` in production, `0` in dev) |
 | `REVERIE_TOKEN`          | Bearer token for each agent's `reverie serve` (Brain tab)           | For the Brain tab             |
 | `BRAIN_FIXTURE`          | `1` serves a built-in graph instead of Reverie (dev only)           | No                            |
 | `OPENAI_ADMIN_KEY`       | OpenAI organisation admin key (cost report)                         | For OpenAI API spend          |

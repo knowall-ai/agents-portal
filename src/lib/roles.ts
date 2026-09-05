@@ -11,13 +11,23 @@ export const ADMIN_ROLE = 'Portal.Admin';
 export const VIEWER_ROLE = 'Portal.Viewer';
 
 /**
- * Until app roles are assigned, a token carries no `roles` claim and everyone
- * is treated as an admin, which is today's behaviour. Once roles are in place,
- * set PORTAL_REQUIRE_ROLES=1 so a missing claim means viewer, not admin.
+ * Whether a token must carry an app role to be an admin. Production fails
+ * closed: a missing `roles` claim means viewer unless PORTAL_REQUIRE_ROLES=0
+ * says otherwise. Development is open until PORTAL_REQUIRE_ROLES=1, so a
+ * local app registration without roles still shows every tab.
  */
+export function rolesRequired(
+  env: Partial<Record<'NODE_ENV' | 'PORTAL_REQUIRE_ROLES', string>> = process.env
+): boolean {
+  const flag = env.PORTAL_REQUIRE_ROLES;
+  if (flag === '1') return true;
+  if (flag === '0') return false;
+  return env.NODE_ENV === 'production';
+}
+
 export function isPortalAdmin(
   roles: readonly string[] | undefined,
-  requireRoles = process.env.PORTAL_REQUIRE_ROLES === '1'
+  requireRoles = rolesRequired()
 ): boolean {
   if (roles?.includes(ADMIN_ROLE)) return true;
   if (requireRoles) return false;
