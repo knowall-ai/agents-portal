@@ -40,8 +40,12 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
 function sameOrigin(req: NextRequest): boolean {
   if (req.headers.get('sec-fetch-site') === 'cross-site') return false;
   const origin = req.headers.get('origin');
+  // Fail closed: without a canonical origin there is nothing to compare against
   const self = process.env.NEXTAUTH_URL ? new URL(process.env.NEXTAUTH_URL).origin : null;
-  return !origin || !self || origin === self;
+  if (!self) return false;
+  if (origin && origin !== self) return false;
+  // A browser form post cannot carry this; our pages always send JSON
+  return (req.headers.get('content-type') ?? '').toLowerCase().startsWith('application/json');
 }
 
 /**

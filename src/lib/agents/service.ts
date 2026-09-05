@@ -669,9 +669,13 @@ export async function getActivity(ctx: UserContext, agent: AgentDetail): Promise
       });
     });
 
-    const github = agent.repo
-      ? listRepoCommits(agent.repo, who, 1000, 365).catch((error) => {
-          console.warn(`GitHub commits failed for ${agent.repo}:`, error);
+    // The server's GitHub token is spent only on a repo the trusted registry
+    // entry names; a repo taken from a tag is read anonymously (public repos)
+    const trustedRepo = getRegistryEntry(agent)?.repo;
+    const repo = trustedRepo ?? agent.repo;
+    const github = repo
+      ? listRepoCommits(repo, who, 1000, 365, { anonymous: !trustedRepo }).catch((error) => {
+          console.warn(`GitHub commits failed for ${repo}:`, error);
           return [] as ActivityEvent[];
         })
       : Promise.resolve([] as ActivityEvent[]);

@@ -9,6 +9,7 @@ vi.mock('@/lib/providers/azure', async (importOriginal) => ({
 
 import { parseBoostOutput, parseBoostRequest, setBoost } from './service';
 import { findVm, parseRunCommandMessage } from '@/lib/providers/azure';
+import { getRegistryEntry as lookupRegistryEntry } from '@/lib/registry';
 import type { UserContext } from '@/lib/tokens';
 import type { AgentDetail, AzureResource } from '@/types';
 
@@ -84,7 +85,8 @@ describe('setBoost', () => {
     name: 'ka-sallie-vm',
     type: 'microsoft.compute/virtualmachines',
     resourceGroup: 'ka-agents',
-    subscriptionId: 'sub',
+    // the fixture VM must sit in the subscription the registry pins
+    subscriptionId: lookupRegistryEntry('sallie')?.subscriptionIds?.[0] ?? 'sub',
     tenantId: 'tenant-1',
   } as unknown as AzureResource;
   // `sallie` is the registry entry with a boost script, so Boost is supported here

@@ -38,7 +38,8 @@
         "defaultHours": 2,
         "maxHours": 8
       },
-      "brainUrl": "https://sallie.knowall.ai/reverie"
+      "brainUrl": "https://sallie.knowall.ai/reverie",
+      "subscriptionIds": ["a54d50b7-7824-47c2-a115-3cef52d0ab04"]
     },
     {
       "id": "zaplie",
@@ -50,7 +51,8 @@
       "portalUrl": "https://zaplie-prod-webapp.azurewebsites.net",
       "repo": "knowall-ai/zaplie-bot",
       "resourceGroups": ["ka-zaplie-prod"],
-      "healthUrl": "https://zaplie-prod-webapp.azurewebsites.net"
+      "healthUrl": "https://zaplie-prod-webapp.azurewebsites.net",
+      "subscriptionIds": ["a54d50b7-7824-47c2-a115-3cef52d0ab04"]
     },
     {
       "id": "zaplie-test",
@@ -61,7 +63,8 @@
       "description": "Test deployment of the Zaplie Teams bot with its Azure AI Foundry agents.",
       "repo": "knowall-ai/zaplie-bot",
       "resourceGroups": ["ka-zaplie-test"],
-      "portalUrl": "https://zaplie-test-webapp.azurewebsites.net"
+      "portalUrl": "https://zaplie-test-webapp.azurewebsites.net",
+      "subscriptionIds": ["a54d50b7-7824-47c2-a115-3cef52d0ab04"]
     },
     {
       "id": "winnie",
@@ -71,7 +74,8 @@
       "environment": "dev",
       "description": "Irish FA ticketing assistant — drafts replies to ticket enquiries for human review. In development on the KnowAll tenant.",
       "resourceGroups": ["rg-winnie-dev"],
-      "avatarUrl": "/agents/winnie.png"
+      "avatarUrl": "/agents/winnie.png",
+      "subscriptionIds": ["a54d50b7-7824-47c2-a115-3cef52d0ab04"]
     },
     {
       "id": "pennie",
@@ -81,7 +85,8 @@
       "environment": "prod",
       "description": "AI business analyst that joins Microsoft Teams meetings as a real-time participant (T-Minus-15).",
       "repo": "knowall-ai/preppie-bot",
-      "resourceGroups": ["tminus15agents"]
+      "resourceGroups": ["tminus15agents"],
+      "subscriptionIds": ["a54d50b7-7824-47c2-a115-3cef52d0ab04"]
     },
     {
       "id": "pennie-test",
@@ -91,14 +96,17 @@
       "environment": "test",
       "description": "Test deployment of Pennie on a spot VM.",
       "repo": "knowall-ai/preppie-bot",
-      "resourceGroups": ["tminus15agents-test"]
+      "resourceGroups": ["tminus15agents-test"],
+      "subscriptionIds": ["a54d50b7-7824-47c2-a115-3cef52d0ab04"]
     },
     {
       "id": "poppie",
       "name": "Poppie",
       "customer": "KnowAll AI",
       "environment": "prod",
-      "brainUrl": "https://poppie.knowall.ai/reverie"
+      "brainUrl": "https://poppie.knowall.ai/reverie",
+      "resourceGroups": ["ka-agents"],
+      "subscriptionIds": ["a54d50b7-7824-47c2-a115-3cef52d0ab04"]
     }
   ]
 }

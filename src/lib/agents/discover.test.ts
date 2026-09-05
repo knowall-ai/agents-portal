@@ -258,6 +258,27 @@ describe('helpers', () => {
   });
 });
 
+describe('claimsResource', () => {
+  it('refuses a privileged entry that does not pin its subscriptions', () => {
+    const env = { AZURE_AD_TENANT_ID: 'tenant-a' };
+    const r = { resourceGroup: 'ka-agents', subscriptionId: 'sub', tenantId: 'tenant-a' };
+    // metadata-only entries may still claim by group within the tenant
+    expect(claimsResource({ id: 'a', name: 'A', resourceGroups: ['ka-agents'] }, r, env)).toBe(
+      true
+    );
+    // anything that spends a server token needs explicit subscriptions
+    const privileged = {
+      id: 'a',
+      name: 'A',
+      resourceGroups: ['ka-agents'],
+      brainUrl: 'https://a.example/reverie',
+    };
+    expect(claimsResource(privileged, r, env)).toBe(false);
+    expect(claimsResource({ ...privileged, subscriptionIds: ['sub'] }, r, env)).toBe(true);
+    expect(claimsResource({ ...privileged, subscriptionIds: ['other'] }, r, env)).toBe(false);
+  });
+});
+
 describe('provider ids from tags', () => {
   it('reads well-formed OpenAI project and Anthropic workspace ids, and ignores junk', () => {
     const good = groupResources(
@@ -282,6 +303,81 @@ describe('provider ids from tags', () => {
       ['agent']
     );
     expect(buildAgent(junk[0], [], 't').openaiProjectId).toBeUndefined();
+  });
+
+  it('gives a registry-only agent no repo or portal URL, so server tokens are never spent for it', () => {
+    vi.stubEnv('AZURE_AD_TENANT_ID', 't');
+    try {
+      const entry = {
+        id: 'sallie',
+        name: 'Sallie',
+        resourceGroups: ['ka-agents'],
+        subscriptionIds: ['sub'],
+        repo: 'knowall-ai/sallie-openclaw',
+        portalUrl: 'https://sallie.example.com',
+      };
+      const unseen = buildAgent(
+        { id: 'sallie', registry: entry, resources: [], fromTags: false },
+        [],
+        't'
+      );
+      expect(unseen.repo).toBeUndefined();
+      expect(unseen.portalUrl).toBeUndefined();
+      const seen = buildAgent(
+        {
+          id: 'sallie',
+          registry: entry,
+          resources: [resource({ resourceGroup: 'ka-agents', tenantId: 't' })],
+          fromTags: false,
+        },
+        [],
+        't'
+      );
+      expect(seen.repo).toBe('knowall-ai/sallie-openclaw');
+      expect(seen.portalUrl).toBe('https://sallie.example.com/');
+      // tags still work without any registry entry: they sit on a visible resource
+      const tagged = buildAgent(
+        {
+          id: 'poppie',
+          registry: undefined,
+          resources: [
+            resource({
+              tags: {
+                agent: 'poppie',
+                'agent-url': 'https://poppie.example.com',
+                'agent-repo': 'knowall-ai/poppie-hermes',
+              },
+            }),
+          ],
+          fromTags: true,
+        },
+        [],
+        't'
+      );
+      expect(tagged.repo).toBe('knowall-ai/poppie-hermes');
+      expect(tagged.portalUrl).toBe('https://poppie.example.com/');
+      // a trusted entry that says nothing about repo or URL defers to the tags
+      const bare = buildAgent(
+        {
+          id: 'sallie',
+          registry: { id: 'sallie', name: 'Sallie', resourceGroups: ['ka-agents'] },
+          resources: [
+            resource({
+              resourceGroup: 'ka-agents',
+              tenantId: 't',
+              tags: { 'agent-url': 'https://sallie.example.com', 'agent-repo': 'knowall-ai/x' },
+            }),
+          ],
+          fromTags: false,
+        },
+        [],
+        't'
+      );
+      expect(bare.repo).toBe('knowall-ai/x');
+      expect(bare.portalUrl).toBe('https://sallie.example.com/');
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it('takes a registry id only when the caller can see a resource the entry claims', () => {

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import type { AgentDetail } from '@/types';
 import type { UserContext } from '@/lib/tokens';
@@ -49,11 +49,17 @@ function post(body: unknown, headers: Record<string, string> = {}): NextRequest 
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // The same-origin check fails closed without a canonical origin
+  vi.stubEnv('NEXTAUTH_URL', 'https://agents.example.org');
   vi.mocked(getUserContext).mockResolvedValue(context(true));
   vi.mocked(agentExists).mockResolvedValue(true);
   vi.mocked(getAgent).mockResolvedValue(agent);
   vi.mocked(getBoost).mockResolvedValue(boost as never);
   vi.mocked(setBoost).mockResolvedValue(boost as never);
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 describe('POST /api/agents/[id]/boost — access', () => {
@@ -87,18 +93,23 @@ describe('POST /api/agents/[id]/boost — access', () => {
   });
 
   it('refuses a POST from a foreign origin', async () => {
-    vi.stubEnv('NEXTAUTH_URL', 'https://agents.example.org');
-    try {
-      const foreign = await POST(post({ action: 'on' }, { origin: 'https://evil.example' }), route);
-      expect(foreign.status).toBe(403);
-      const own = await POST(
-        post({ action: 'on' }, { origin: 'https://agents.example.org' }),
-        route
-      );
-      expect(own.status).toBe(200);
-    } finally {
-      vi.unstubAllEnvs();
-    }
+    const foreign = await POST(post({ action: 'on' }, { origin: 'https://evil.example' }), route);
+    expect(foreign.status).toBe(403);
+    const own = await POST(post({ action: 'on' }, { origin: 'https://agents.example.org' }), route);
+    expect(own.status).toBe(200);
+  });
+
+  it('fails closed when the deployment has no canonical origin', async () => {
+    vi.stubEnv('NEXTAUTH_URL', '');
+    const response = await POST(post({ action: 'on' }), route);
+    expect(response.status).toBe(403);
+    expect(setBoost).not.toHaveBeenCalled();
+  });
+
+  it('refuses a body that a browser form could have sent', async () => {
+    const response = await POST(post({ action: 'on' }, { 'content-type': 'text/plain' }), route);
+    expect(response.status).toBe(403);
+    expect(setBoost).not.toHaveBeenCalled();
   });
 });
 
