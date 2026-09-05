@@ -337,6 +337,10 @@ export function buildAgent(
   sessionTenantId: string
 ): AgentDetail {
   const { registry: entry, resources } = bucket;
+  // Registry values that steer spend attribution apply only when the caller can
+  // see a resource the entry claims, the same rule the service applies to
+  // server-token features
+  const trusted = entry && resources.some((r) => claimsResource(entry, r)) ? entry : undefined;
   const subscriptionId = resources[0]?.subscriptionId;
   const subscription = subscriptions.find((s) => s.subscriptionId === subscriptionId);
   const tenantId = resources[0]?.tenantId ?? subscription?.tenantId;
@@ -385,13 +389,13 @@ export function buildAgent(
     teamsCallUrl: teamsCallUrl(entry, resources),
     teamsUpn: agentUpn(entry, resources),
     openaiProjectId: providerId(
-      entry?.openaiProjectId,
+      trusted?.openaiProjectId,
       resources,
       'agent-openai-project',
       OPENAI_PROJECT_ID
     ),
     anthropicWorkspaceId: providerId(
-      entry?.anthropicWorkspaceId,
+      trusted?.anthropicWorkspaceId,
       resources,
       'agent-anthropic-workspace',
       ANTHROPIC_WORKSPACE_ID
