@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { parseBoostOutput } from './service';
+import { parseBoostOutput, setBoost } from './service';
 import { findVm, parseRunCommandMessage } from '@/lib/providers/azure';
-import type { AzureResource } from '@/types';
+import type { UserContext } from '@/lib/tokens';
+import type { AgentDetail, AzureResource } from '@/types';
 
 describe('parseRunCommandMessage', () => {
   it('splits the Azure run-command message into stdout and stderr', () => {
@@ -40,5 +41,27 @@ describe('findVm', () => {
       name: 'ka-sallie-vm',
     });
     expect(findVm([web])).toBeUndefined();
+  });
+});
+
+describe('setBoost', () => {
+  const vm = {
+    id: '1',
+    name: 'ka-sallie-vm',
+    type: 'microsoft.compute/virtualmachines',
+    resourceGroup: 'ka-agents',
+    subscriptionId: 'sub',
+  } as unknown as AzureResource;
+  // `sallie` is the registry entry with a boost script, so Boost is supported here
+  const agent = { id: 'sallie', resources: [vm] } as unknown as AgentDetail;
+  const ctx = { armToken: 'token' } as unknown as UserContext;
+
+  it('rejects hours that are not whole numbers or are out of range', async () => {
+    await expect(setBoost(ctx, agent, true, 1.5)).rejects.toThrow(/whole number between 1 and 8/);
+    await expect(setBoost(ctx, agent, true, 0)).rejects.toThrow(/whole number between 1 and 8/);
+    await expect(setBoost(ctx, agent, true, 9)).rejects.toThrow(/whole number between 1 and 8/);
+    await expect(setBoost(ctx, agent, true, Number.NaN)).rejects.toThrow(
+      /whole number between 1 and 8/
+    );
   });
 });

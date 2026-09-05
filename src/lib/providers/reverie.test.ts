@@ -52,6 +52,27 @@ describe('openBrainEvents', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  it('gives up at once on a signal that is already aborted', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        (_url: string, init?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            if (init?.signal?.aborted) reject(init.signal.reason as Error);
+            init?.signal?.addEventListener('abort', () => reject(init.signal?.reason as Error));
+          })
+      )
+    );
+    const controller = new AbortController();
+    controller.abort(new Error('client gone'));
+    // No listener ever fires on an aborted signal, so this must not wait for the
+    // connect timeout, and it must leave no listener behind
+    await expect(
+      openBrainEvents('https://sallie.example.com/reverie', 'token', 400, controller.signal)
+    ).rejects.toThrow('client gone');
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it('honours the caller signal', async () => {
     vi.stubGlobal(
       'fetch',

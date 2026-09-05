@@ -164,7 +164,10 @@ export function HudSparkline({ values, height = 20 }: { values: number[]; height
           strokeWidth="2"
           vectorEffect="non-scaling-stroke"
           points={pts
-            .map((v, i) => `${(i / 59) * 100},${height - (Math.min(v, 100) / 100) * height}`)
+            .map(
+              (v, i) =>
+                `${(i / (pts.length - 1)) * 100},${height - (Math.min(v, 100) / 100) * height}`
+            )
             .join(' ')}
         />
       )}

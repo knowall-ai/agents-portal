@@ -4,6 +4,9 @@ import { getAgent, getBoost, setBoost } from '@/lib/agents/service';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
+/** Boost state is per-user and changes on demand: never let a cache hold on to it. */
+const NO_STORE = { 'Cache-Control': 'no-store, private' } as const;
+
 function statusFor(error: unknown): number {
   const message = error instanceof Error ? error.message : '';
   if (/^ARM 403/.test(message)) return 403;
@@ -13,20 +16,21 @@ function statusFor(error: unknown): number {
 
 export async function GET(req: NextRequest, { params }: RouteContext) {
   const ctx = await getUserContext(req);
-  if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE });
 
   const { id } = await params;
   const refresh = req.nextUrl.searchParams.get('refresh') === '1';
   try {
     const agent = await getAgent(ctx, id);
-    if (!agent) return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
-    return NextResponse.json({ boost: await getBoost(ctx, agent, refresh) });
+    if (!agent)
+      return NextResponse.json({ error: 'Agent not found' }, { status: 404, headers: NO_STORE });
+    return NextResponse.json({ boost: await getBoost(ctx, agent, refresh) }, { headers: NO_STORE });
   } catch (error) {
     console.error(`Failed to read boost for ${id}:`, error);
     const message = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
       { error: 'Failed to read Boost state', details: message },
-      { status: statusFor(error) }
+      { status: statusFor(error), headers: NO_STORE }
     );
   }
 }

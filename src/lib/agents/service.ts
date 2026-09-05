@@ -271,11 +271,16 @@ export async function getPermissions(
             })
           : Promise.resolve([]);
 
+      // A failed lookup must not be cached for the full TTL as "no roles": an
+      // empty account is indistinguishable from an unprivileged one, so the
+      // failure is recorded and the TTL selector below picks the short TTL.
+      let accountError: string | undefined;
       const account = upn
         ? await getUserAccess(graph, upn)
             .then(async (access) => ({ upn, ...access, azureRoles: await roles(access.objectId) }))
             .catch((error) => {
               console.warn(`User access lookup failed for ${agent.id}:`, error);
+              accountError = error instanceof Error ? error.message : String(error);
               return { upn, directoryRoles: [], groups: [], azureRoles: [] };
             })
         : undefined;
@@ -297,7 +302,7 @@ export async function getPermissions(
             }))
         )
       );
-      return { account, apps: appAccess };
+      return { account, apps: appAccess, error: accountError };
     },
     (value) => (value.error ? DIRECTORY_ERROR_TTL : DIRECTORY_TTL)
   );
@@ -417,8 +422,9 @@ export async function setBoost(
   if (!base.supported) throw new Error('Boost is not configured for this agent');
   if (!on) return runBoost(ctx, agent, 'off');
   const requested = hours ?? base.defaultHours;
-  if (!Number.isFinite(requested) || requested <= 0 || requested > base.maxHours) {
-    throw new Error(`Hours must be between 0 and ${base.maxHours}`);
+  // `boost.sh on N` takes whole hours: a fraction would reach the VM verbatim
+  if (!Number.isInteger(requested) || requested <= 0 || requested > base.maxHours) {
+    throw new Error(`Hours must be a whole number between 1 and ${base.maxHours}`);
   }
   return runBoost(ctx, agent, `on ${requested}`);
 }

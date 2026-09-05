@@ -149,6 +149,11 @@ export default function PermissionsPanel({ permissions, isLoading, error }: Perm
   if (error && !permissions) {
     return <EmptyState title="Could not load permissions" description={error} />;
   }
+  if (permissions?.error && !permissions.account && permissions.apps.length === 0) {
+    // Nothing came back *because* the directory read failed: say so, do not
+    // pass it off as an agent with nothing configured.
+    return <EmptyState title="Could not load permissions" description={permissions.error} />;
+  }
   if (!permissions || (!permissions.account && permissions.apps.length === 0)) {
     return (
       <EmptyState
