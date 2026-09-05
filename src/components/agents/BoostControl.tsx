@@ -146,7 +146,7 @@ export default function BoostControl({
           <button
             onClick={() => call('on')}
             disabled={busy !== null}
-            className="btn-primary flex items-center gap-2 text-sm"
+            className="btn-boost flex items-center gap-2 text-sm"
           >
             <Zap size={14} />{' '}
             {busy === 'on' ? 'Turning on…' : `Yes, boost for ${hoursLabel(hours)}`}
@@ -178,7 +178,7 @@ export default function BoostControl({
           <button
             onClick={() => setConfirming(true)}
             disabled={busy !== null}
-            className="btn-primary flex items-center gap-2 text-sm"
+            className="btn-boost flex items-center gap-2 text-sm"
           >
             <Zap size={14} /> Turn on Boost
           </button>
