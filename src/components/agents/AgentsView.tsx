@@ -85,12 +85,14 @@ export default function AgentsView() {
     return true;
   });
 
-  const setParam = (key: string, value: string) => {
+  /** The agents URL with one query parameter changed and every other filter kept. */
+  const hrefWith = (key: string, value: string) => {
     const next = new URLSearchParams(params.toString());
     if (value) next.set(key, value);
     else next.delete(key);
-    router.replace(`/${next.toString() ? `?${next}` : ''}`);
+    return `/${next.toString() ? `?${next}` : ''}`;
   };
+  const setParam = (key: string, value: string) => router.replace(hrefWith(key, value));
 
   const byCustomer = filtered.reduce<Record<string, AgentSummary[]>>((acc, agent) => {
     (acc[agent.customer] ??= []).push(agent);
@@ -188,8 +190,8 @@ export default function AgentsView() {
           return (
             <Link
               key={kpi.title}
-              // a second click on the active card clears the filter
-              href={kpi.status && !active ? `/?status=${kpi.status}` : '/'}
+              // a second click on the active card clears the status filter only
+              href={hrefWith('status', kpi.status && !active ? kpi.status : '')}
               className="card p-4 transition-colors hover:bg-[var(--surface-hover)]"
               style={active ? { borderColor: kpi.color } : undefined}
               aria-pressed={active}
