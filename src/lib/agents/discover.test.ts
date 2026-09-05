@@ -38,6 +38,23 @@ const registry: AgentRegistryEntry[] = [
 ];
 
 describe('groupResources', () => {
+  it('never hands a tagged resource to the resource-group claimant, even when the tag is junk', () => {
+    const buckets = groupResources(
+      [
+        resource({
+          name: 'stray-vm',
+          type: 'microsoft.compute/virtualmachines',
+          resourceGroup: 'ka-agents',
+          tags: { agent: '!!!' },
+        }),
+      ],
+      registry,
+      ['agent']
+    );
+    expect(buckets.find((b) => b.id === 'sallie')?.resources).toEqual([]);
+    expect(buckets.flatMap((b) => b.resources)).toEqual([]);
+  });
+
   it('claims untagged resources by registry resource group', () => {
     const buckets = groupResources(
       [

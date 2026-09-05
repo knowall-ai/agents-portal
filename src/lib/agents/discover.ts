@@ -155,11 +155,13 @@ export function groupResources(
 
   for (const resource of resources) {
     let slug: string | undefined;
+    let tagged = false;
     for (const key of tagKeys) {
       const value = tag(resource.tags, key);
       if (value) {
+        tagged = true;
         slug = slugify(value);
-        break;
+        if (slug) break;
       }
     }
     if (slug) {
@@ -168,6 +170,9 @@ export function groupResources(
       bucket.fromTags = true;
       continue;
     }
+    // A tag that names nothing usable still marks the resource as somebody
+    // else's: it must not fall through to the resource-group claim
+    if (tagged) continue;
     const claimed = byGroup.get(resource.resourceGroup.toLowerCase());
     if (claimed) bucketFor(claimed.id).resources.push(resource);
   }
