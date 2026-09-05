@@ -69,24 +69,40 @@ describe('isProbeableUrl', () => {
       '[::1]',
       '[::]',
       '[fe80::1]',
+      // Link-local is fe80::/10, not just the literal fe80 prefix
+      '[fe90::1]',
+      '[febf::1]',
       '[fd00::1]',
       '[fc00::1]',
+      '[fdff::1]',
+      // IPv4-mapped: as private as the address inside it
       '[::ffff:127.0.0.1]',
+      '[::ffff:10.0.0.5]',
+      '[0:0:0:0:0:ffff:192.168.1.1]',
     ]) {
       await expect(isProbeableUrl(`https://${host}/health`), host).resolves.toBe(false);
     }
     expect(lookup).not.toHaveBeenCalled();
   });
 
-  it('allows a literal public address', async () => {
+  it('allows a literal public address, including an IPv4-mapped one', async () => {
     await expect(isProbeableUrl('https://93.184.216.34/health')).resolves.toBe(true);
     await expect(isProbeableUrl('https://[2606:2800:220:1::1]/health')).resolves.toBe(true);
+    // ::ffff:93.184.216.34 wraps a public address, so refusing it would be wrong
+    await expect(isProbeableUrl('https://[::ffff:93.184.216.34]/health')).resolves.toBe(true);
     expect(lookup).not.toHaveBeenCalled();
   });
 
   it('refuses a name that resolves into a private range (DNS rebinding)', async () => {
     lookup.mockResolvedValue([{ address: '93.184.216.34' }, { address: '10.0.0.5' }]);
     await expect(isProbeableUrl('https://agents.example.com')).resolves.toBe(false);
+  });
+
+  it('refuses a name resolving to a private address that DNS reports in mapped form', async () => {
+    lookup.mockResolvedValue([{ address: '::ffff:127.0.0.1' }]);
+    await expect(isProbeableUrl('https://agents.example.com')).resolves.toBe(false);
+    lookup.mockResolvedValue([{ address: '::ffff:93.184.216.34' }]);
+    await expect(isProbeableUrl('https://agents.example.com')).resolves.toBe(true);
   });
 
   it('refuses a name that does not resolve at all', async () => {
