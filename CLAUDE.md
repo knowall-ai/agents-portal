@@ -110,11 +110,16 @@ src/
 ## Testing
 
 ```bash
-bun run test:unit    # Vitest — discovery and status logic
-bun run test         # Playwright — login page, landing page, API auth guards
+bun run test:unit     # Vitest — discovery and status logic
+bun run test:coverage # Vitest with coverage, against the thresholds CI enforces
+bun run test          # Playwright — login page, landing page, API auth guards
 ```
 
 When adding Playwright tests, extend the existing spec files rather than creating new ones per feature, avoid hard-coded timeouts, and take screenshots at key points.
+
+### Coverage ratchet
+
+Coverage is measured over `src/lib/**` and `src/app/api/**` only (istanbul, because the v8 provider crashes under Bun) and CI's Unit Tests job fails if it drops below the thresholds in `vitest.config.mts`. Those thresholds are a ratchet: `autoUpdate: true` means a coverage run rewrites them upwards when coverage rises, so commit the raised numbers along with the tests that earned them. Never lower a threshold by hand — if a change would drop coverage, add the tests instead.
 
 ## Code Quality & CI/CD
 
