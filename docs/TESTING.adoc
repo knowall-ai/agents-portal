@@ -12,6 +12,17 @@ bun run test:unit
 bun run test:unit:watch
 ----
 
+== Coverage (the ratchet)
+
+[source,bash]
+----
+bun run test:coverage
+----
+
+Coverage is measured with the istanbul provider (the v8 provider crashes under Bun) over `src/lib/**` and `src/app/api/**` only — pages, components and the demo brain fixture are not measured. The thresholds live in `vitest.config.mts` and CI's Unit Tests job fails below them.
+
+They are a ratchet: `coverage.thresholds.autoUpdate` rewrites them upwards when coverage rises, so commit the raised numbers along with the tests that earned them. Never lower a threshold by hand — add tests instead.
+
 == End-to-end tests (Playwright)
 
 Tests in `tests/` run against the dev server on port 3103 (started automatically). They cover the unauthenticated surface: landing page, login page, metadata, the `/agents` redirect and API auth guards. They do not need Azure credentials.
@@ -39,4 +50,4 @@ Screenshots are written to `test-results/` and console errors fail the login-pag
 
 == CI
 
-Every pull request to `main` runs Lint, Format, Type Check, Unit Tests and Build (`.github/workflows/ci.yml`) plus the PR title/body lint. All six are required checks, together with one approving review. The production deploy workflow repeats the checks before building.
+Every pull request to `main` runs Lint, Format, Type Check, Unit Tests (with coverage, against the thresholds above) and Build (`.github/workflows/ci.yml`) plus the PR title/body lint. All six are required checks, together with one approving review. The production deploy workflow repeats the checks before building.
