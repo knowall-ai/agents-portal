@@ -54,7 +54,9 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
       - run: bun install --frozen-lockfile
-      - run: bun run test:unit
+      # Prints the coverage summary and fails below the thresholds in
+      # vitest.config.mts (the ratchet).
+      - run: bun run test:coverage
 
   build:
     name: Build

@@ -17,6 +17,7 @@
     "test": "playwright test",
     "test:ui": "playwright test --ui",
     "test:unit": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:unit:watch": "vitest",
     "generate-icons": "node scripts/generate-icons.mjs",
     "smoke": "bun run scripts/smoke-discovery.ts"
@@ -40,6 +41,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitest/coverage-istanbul": "^4",
     "eslint": "^9",
     "eslint-config-next": "16.1.1",
     "prettier": "3.7.4",

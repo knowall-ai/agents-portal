@@ -674,15 +674,20 @@ export async function getActivity(ctx: UserContext, agent: AgentDetail): Promise
         })
       : Promise.resolve([] as ActivityEvent[]);
 
+    // The whole Foundry sequence is isolated, not just the runs call: the token
+    // exchange and the assistants lookup can fail too, and neither should blank
+    // the Azure and GitHub events.
     const foundry = (async () => {
       if (agent.foundryProjects.length === 0) return [] as ActivityEvent[];
-      const token = await getResourceToken(ctx, FOUNDRY_SCOPE);
-      if (!token) return [] as ActivityEvent[];
-      const assistants = await getAssistants(ctx, agent);
-      return listRecentRuns(token, agent.foundryProjects, assistants, who).catch((error) => {
+      try {
+        const token = await getResourceToken(ctx, FOUNDRY_SCOPE);
+        if (!token) return [] as ActivityEvent[];
+        const assistants = await getAssistants(ctx, agent);
+        return await listRecentRuns(token, agent.foundryProjects, assistants, who);
+      } catch (error) {
         console.warn(`Foundry runs failed for ${agent.id}:`, error);
         return [] as ActivityEvent[];
-      });
+      }
     })();
 
     const results = await Promise.all([...azure, github, foundry]);

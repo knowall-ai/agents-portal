@@ -200,6 +200,7 @@ The following checks run on every pull request via GitHub Actions:
 ```bash
 bun run check          # format:check + lint + typecheck + build
 bun run test:unit      # Vitest unit tests (discovery / status logic)
+bun run test:coverage  # Vitest with coverage, against the thresholds CI enforces
 bun run test           # Playwright end-to-end tests
 ```
 
