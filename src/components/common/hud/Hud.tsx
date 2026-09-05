@@ -225,3 +225,61 @@ export function HudBoostChip({ minutesLeft }: { minutesLeft: number }) {
     </div>
   );
 }
+
+/**
+ * A small switch in the HUD's own idiom: label, then a track with a knob that
+ * sits right and lights amber when on. Disabled when there is nothing to
+ * switch to, but still shows its state.
+ */
+export function HudToggle({
+  label,
+  on,
+  onChange,
+  disabled = false,
+  title,
+}: {
+  label: string;
+  on: boolean;
+  onChange?: (on: boolean) => void;
+  disabled?: boolean;
+  title?: string;
+}) {
+  const colour = on ? HUD.amber : HUD.dim;
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      disabled={disabled}
+      title={title}
+      onClick={() => onChange?.(!on)}
+      className="pointer-events-auto inline-flex items-center gap-1.5 disabled:cursor-not-allowed"
+      style={{ color: colour, fontFamily: HUD.font, opacity: disabled ? 0.7 : 1 }}
+    >
+      {label}
+      <span
+        aria-hidden
+        className="relative inline-block rounded-full transition-colors"
+        style={{
+          width: 26,
+          height: 12,
+          border: `1px solid ${colour}`,
+          backgroundColor: on ? 'rgba(250, 204, 21, 0.25)' : 'transparent',
+        }}
+      >
+        <span
+          className="absolute top-[1px] rounded-full transition-all"
+          style={{
+            width: 8,
+            height: 8,
+            left: on ? 15 : 2,
+            backgroundColor: colour,
+            boxShadow: on ? `0 0 6px ${HUD.amber}` : 'none',
+          }}
+        />
+      </span>
+      <span className="sr-only">{on ? 'on' : 'off'}</span>
+    </button>
+  );
+}

@@ -24,6 +24,7 @@ import {
   HudPanel,
   HudRow,
   HudSparkline,
+  HudToggle,
 } from '@/components/common/hud/Hud';
 import { formatTotals } from '@/lib/format';
 import type {
@@ -1366,36 +1367,23 @@ export default function BrainView({
                     : '○ STREAM OFFLINE'}
               </span>
 
-              {!brain.fixture && onDemoChange && (
-                <button
-                  type="button"
-                  className="pointer-events-auto underline-offset-2 hover:underline"
-                  style={{ color: HUD.dim }}
-                  title="Show the built-in demo graph instead of this agent's memory"
-                  onClick={() => onDemoChange(true)}
-                >
-                  DEMO
-                </button>
+              {/* Demo is a switch: on shows the built-in graph, off the live brain.
+                  With no live brain to return to it stays on and disabled. */}
+              {(onDemoChange || brain.fixture) && (
+                <HudToggle
+                  label="DEMO"
+                  on={Boolean(brain.fixture)}
+                  disabled={!onDemoChange || (Boolean(brain.fixture) && !brain.liveAvailable)}
+                  onChange={(on) => onDemoChange?.(on)}
+                  title={
+                    brain.fixture
+                      ? brain.liveAvailable
+                        ? "Built-in sample graph, not this agent's memory. Switch off for the live brain."
+                        : 'Built-in sample graph; this agent has no live brain to switch to'
+                      : "Switch on to show the built-in sample graph instead of this agent's memory"
+                  }
+                />
               )}
-              {brain.fixture &&
-                (brain.liveAvailable && onDemoChange ? (
-                  <button
-                    type="button"
-                    className="pointer-events-auto underline-offset-2 hover:underline"
-                    style={{ color: HUD.amber }}
-                    title="Built-in sample graph, not this agent's memory. Click to switch to the live brain."
-                    onClick={() => onDemoChange(false)}
-                  >
-                    DEMO DATA · SWITCH TO LIVE
-                  </button>
-                ) : (
-                  <span
-                    style={{ color: HUD.amber }}
-                    title="Built-in sample graph, not this agent's memory"
-                  >
-                    DEMO DATA
-                  </span>
-                ))}
             </div>
             <div className="pointer-events-auto relative">
               <input
