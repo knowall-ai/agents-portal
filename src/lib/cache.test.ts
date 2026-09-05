@@ -6,6 +6,26 @@ afterEach(() => {
 });
 
 describe('cached', () => {
+  it('runs one loader per key for concurrent callers, so an older run cannot overwrite a newer one', async () => {
+    const key = `test:single-flight:${Math.random()}`;
+    let resolveFirst: (value: string) => void = () => undefined;
+    const loader = vi.fn(
+      () =>
+        new Promise<string>((resolve) => {
+          resolveFirst = resolve;
+        })
+    );
+    const first = cached(key, loader, 60_000);
+    const second = cached(key, loader, 60_000);
+    expect(loader).toHaveBeenCalledTimes(1);
+    resolveFirst('fresh');
+    await expect(first).resolves.toBe('fresh');
+    await expect(second).resolves.toBe('fresh');
+    // Settled: the next call after expiry loads again exactly once
+    await expect(cached(key, loader, 60_000)).resolves.toBe('fresh');
+    expect(loader).toHaveBeenCalledTimes(1);
+  });
+
   it('holds off retrying for 30 s measured from the failure, not from the call', async () => {
     vi.useFakeTimers();
     const key = `test:${Math.random()}`;

@@ -11,6 +11,8 @@ interface Entry<T> {
 }
 
 const store = new Map<string, Entry<unknown>>();
+/** Loads in progress, so concurrent callers share one loader run per key. */
+const inflight = new Map<string, Promise<unknown>>();
 
 export function getCacheTtlMs(): number {
   const seconds = Number(process.env.CACHE_TTL_SECONDS ?? '60');
@@ -31,6 +33,23 @@ export async function cached<T>(
   if (hit && hit.expiresAt > now) {
     return hit.value;
   }
+  // One loader run per key at a time: a second expired caller waits for the
+  // first, so an older run can never overwrite a newer result
+  const running = inflight.get(key) as Promise<T> | undefined;
+  if (running) return running;
+  const run = load(key, hit, loader, ttlMs).finally(() => {
+    if (inflight.get(key) === run) inflight.delete(key);
+  });
+  inflight.set(key, run);
+  return run;
+}
+
+async function load<T>(
+  key: string,
+  hit: Entry<T> | undefined,
+  loader: () => Promise<T>,
+  ttlMs: number | ((value: T) => number)
+): Promise<T> {
   let value: T;
   try {
     value = await loader();
@@ -40,10 +59,6 @@ export async function cached<T>(
     // The loader may have taken longer than the hold-off, so time the retry
     // from the failure, not from when the loader started.
     const failedAt = Date.now();
-    // A concurrent refresh may have stored a newer entry while this loader ran;
-    // never replace or delete that one because of an older failure
-    const current = store.get(key) as Entry<T> | undefined;
-    if (current && current !== hit) return current.value;
     const staleUntil = hit?.staleUntil ?? failedAt + STALE_MAX_MS;
     if (hit && failedAt < staleUntil) {
       const message = error instanceof Error ? error.message : String(error);
@@ -67,5 +82,8 @@ const STALE_MAX_MS = 5 * 60_000;
 export function invalidate(prefix: string): void {
   for (const key of store.keys()) {
     if (key.startsWith(prefix)) store.delete(key);
+  }
+  for (const key of inflight.keys()) {
+    if (key.startsWith(prefix)) inflight.delete(key);
   }
 }
