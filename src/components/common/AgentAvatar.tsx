@@ -32,7 +32,11 @@ const RETRY_MS = 8_000;
 /** Cache-bust each retry, so the browser really asks again. */
 function attemptUrl(image: string, attempt: number): string {
   if (attempt === 0) return image;
-  return `${image}${image.includes('?') ? '&' : '?'}retry=${attempt}`;
+  // The query goes before any #fragment, or it is not sent with the request.
+  const hash = image.indexOf('#');
+  const target = hash === -1 ? image : image.slice(0, hash);
+  const fragment = hash === -1 ? '' : image.slice(hash);
+  return `${target}${target.includes('?') ? '&' : '?'}retry=${attempt}${fragment}`;
 }
 
 /** Agent profile picture with initials fallback and an optional status dot. */
@@ -59,6 +63,9 @@ export default function AgentAvatar({
     return () => clearTimeout(timer);
   }, [tries.failed, tries.attempt]);
 
+  // Initials mean "there is no picture", so they wait for the last attempt:
+  // between retries the circle is simply blank rather than flipping to letters.
+  const retrying = tries.failed && tries.attempt + 1 < MAX_ATTEMPTS;
   const initials = name
     .replace(/\(.*?\)/g, '')
     .trim()
@@ -89,7 +96,7 @@ export default function AgentAvatar({
           }}
           aria-label={name}
         >
-          {initials}
+          {retrying ? '' : initials}
         </span>
       )}
       {status && (
