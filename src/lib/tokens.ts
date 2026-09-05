@@ -68,6 +68,7 @@ export async function getResourceToken(ctx: UserContext, scope: string): Promise
       }
       return data.access_token as string;
     },
-    5 * 60 * 1000
+    // a null (failed exchange) must not be remembered for the full window
+    (value) => (value ? 5 * 60 * 1000 : 15 * 1000)
   );
 }

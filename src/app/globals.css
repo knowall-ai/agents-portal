@@ -87,6 +87,23 @@ body {
   background: var(--text-muted);
 }
 
+@layer base {
+  /* Tailwind 4 defaults: borders take currentColor (so every bare `border-b`
+     and `divide-y` paints a bright line) and buttons keep the arrow cursor.
+     Restore Tailwind 3's muted default border and the pointer on clickables. */
+  *,
+  ::before,
+  ::after {
+    border-color: var(--border);
+  }
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  [role='tab'],
+  summary {
+    cursor: pointer;
+  }
+}
+
 @layer components {
   /* Status badge styles */
   .status-badge {
