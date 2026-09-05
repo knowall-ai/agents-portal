@@ -228,6 +228,8 @@ export function teamsCallUrl(
   return upn
     ? `https://teams.microsoft.com/l/call/0/0?users=${encodeURIComponent(upn)}`
     : undefined;
+}
+
 /**
  * The agent's own Entra account: the `agent-teams-upn` tag on any of its
  * resources, or the registry's `teamsUpn` as an override. Keeping it in Azure
