@@ -11,8 +11,11 @@ export async function POST(req: NextRequest) {
   // requests instead, or any origin that is not our own
   const site = req.headers.get('sec-fetch-site');
   const origin = req.headers.get('origin');
+  // Fail closed: without a canonical origin there is nothing to compare against,
+  // and a browser form post cannot send JSON, so the content type is part of the check
   const self = process.env.NEXTAUTH_URL ? new URL(process.env.NEXTAUTH_URL).origin : null;
-  if (site === 'cross-site' || (origin && self && origin !== self)) {
+  const json = (req.headers.get('content-type') ?? '').toLowerCase().startsWith('application/json');
+  if (site === 'cross-site' || !self || (origin && origin !== self) || !json) {
     return NextResponse.json({ error: 'Cross-site request refused' }, { status: 403 });
   }
   let raw: unknown;

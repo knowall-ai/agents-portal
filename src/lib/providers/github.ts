@@ -3,13 +3,14 @@ import type { ActivityEvent, AgentSoul, Skill } from '@/types';
 
 const API = 'https://api.github.com';
 
-function headers(): HeadersInit {
+function headers(anonymous = false): HeadersInit {
   const h: Record<string, string> = {
     Accept: 'application/vnd.github+json',
     'X-GitHub-Api-Version': '2022-11-28',
     'User-Agent': 'knowall-agents-portal',
   };
-  if (process.env.GITHUB_TOKEN) h.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+  if (!anonymous && process.env.GITHUB_TOKEN)
+    h.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
   return h;
 }
 
@@ -20,9 +21,9 @@ export function isValidRepo(repo: string): boolean {
   return REPO_SLUG.test(repo) && !repo.includes('..');
 }
 
-async function ghJson<T>(path: string): Promise<T> {
+async function ghJson<T>(path: string, anonymous = false): Promise<T> {
   const response = await fetch(`${API}${path}`, {
-    headers: headers(),
+    headers: headers(anonymous),
     signal: AbortSignal.timeout(15_000),
   });
   if (!response.ok) {
@@ -165,7 +166,8 @@ export async function listRepoCommits(
   repo: string,
   agent: { id: string; name: string },
   limit = 15,
-  sinceDays = 90
+  sinceDays = 90,
+  options: { anonymous?: boolean } = {}
 ): Promise<ActivityEvent[]> {
   if (!isValidRepo(repo)) throw new Error(`Invalid repo slug: ${repo}`);
   if (!Number.isInteger(limit) || limit < 1 || limit > 5000)
@@ -178,7 +180,8 @@ export async function listRepoCommits(
     for (let page = 1; commits.length < limit; page++) {
       const perPage = Math.min(100, limit - commits.length);
       const batch = await ghJson<RawCommit[]>(
-        `/repos/${repo}/commits?per_page=${perPage}&page=${page}&since=${since}`
+        `/repos/${repo}/commits?per_page=${perPage}&page=${page}&since=${since}`,
+        options.anonymous === true
       );
       commits.push(...batch);
       if (batch.length < perPage) break;

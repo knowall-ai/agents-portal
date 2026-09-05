@@ -137,12 +137,27 @@ interface Bucket {
  * same-named resource group in their own subscription would inherit the entry's
  * brain URL, repo and boost script, which are read with server-held tokens.
  */
+/** Whether an entry carries anything that spends a server-held token or runs code. */
+export function entryIsPrivileged(entry: AgentRegistryEntry): boolean {
+  return Boolean(
+    entry.brainUrl ||
+    entry.repo ||
+    entry.boost ||
+    entry.soulPath ||
+    (entry.skillSources && entry.skillSources.length > 0)
+  );
+}
+
 export function claimsResource(
   entry: AgentRegistryEntry,
   resource: Pick<AzureResource, 'resourceGroup' | 'subscriptionId' | 'tenantId'>,
   env: Record<string, string | undefined> = process.env
 ): boolean {
   const subscriptions = (entry.subscriptionIds ?? []).map((s) => s.toLowerCase());
+  // An entry that spends server-held tokens or runs a script must say which
+  // subscriptions it lives in: a resource-group name alone can be recreated by
+  // anyone with a subscription in the same tenant
+  if (subscriptions.length === 0 && entryIsPrivileged(entry)) return false;
   const inScope =
     subscriptions.length > 0
       ? subscriptions.includes(resource.subscriptionId.toLowerCase())
@@ -376,8 +391,11 @@ export function buildAgent(
     subscriptionName: subscription?.name,
     resourceGroups,
     delegated: Boolean(tenantId && sessionTenantId && tenantId !== sessionTenantId),
-    portalUrl: safeHttpsUrl(entry?.portalUrl ?? firstTag(resources, 'agent-url')),
-    repo: [entry?.repo ?? firstTag(resources, 'agent-repo')].find((r): r is string =>
+    // The portal URL is probed and the repo is read with the server's GitHub
+    // token, so both take the registry value only from a trusted entry; a tag
+    // can only be read off a resource the caller already sees
+    portalUrl: safeHttpsUrl(trusted?.portalUrl ?? firstTag(resources, 'agent-url')),
+    repo: [trusted?.repo ?? firstTag(resources, 'agent-repo')].find((r): r is string =>
       Boolean(r && /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(r))
     ),
     resourceCount: resources.length,

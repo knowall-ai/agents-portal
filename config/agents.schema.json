@@ -59,6 +59,7 @@
           },
           "resourceGroups": { "type": "array", "items": { "type": "string" } },
           "subscriptionIds": {
+            "description": "Azure subscription ids the entry applies to. Required for an entry that carries brainUrl, repo, boost, soulPath or skillSources: a resource-group name alone can be recreated by anyone with a subscription in the tenant",
             "type": "array",
             "items": { "type": "string", "format": "uuid" },
             "description": "Subscriptions the resourceGroups live in. Required when the portal trusts more than one tenant, since resource-group names are only unique inside a subscription"

@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
   return new NextResponse(await response.arrayBuffer(), {
     headers: {
       'Content-Type': response.headers.get('Content-Type') ?? 'image/jpeg',
-      'Cache-Control': 'private, max-age=3600',
+      'Cache-Control': 'private, no-store',
     },
   });
 }
