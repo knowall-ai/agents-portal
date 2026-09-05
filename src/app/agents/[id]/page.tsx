@@ -120,6 +120,7 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
   const requestedTab: TabId | null = (TAB_IDS as readonly string[]).includes(requested ?? '')
     ? (requested as TabId)
     : null;
+  const demo = searchParams.get('demo') === '1';
   const requestedBg = searchParams.get('bg');
   const backdrop: Backdrop = (BACKDROPS as readonly string[]).includes(requestedBg ?? '')
     ? (requestedBg as Backdrop)
@@ -157,7 +158,16 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
     admin ? `/api/agents/${id}/permissions` : null
   );
   const boost = useApi<{ boost: AgentBoost }>(admin ? `/api/agents/${id}/boost` : null, 60_000);
-  const brain = useApi<{ brain: AgentBrain }>(ready ? `/api/agents/${id}/brain` : null);
+  const brain = useApi<{ brain: AgentBrain }>(
+    ready ? `/api/agents/${id}/brain${demo ? '?demo=1' : ''}` : null
+  );
+  const setDemo = (on: boolean) => {
+    const next = new URLSearchParams(searchParams.toString());
+    if (on) next.set('demo', '1');
+    else next.delete('demo');
+    next.set('tab', 'brain');
+    router.replace(`/agents/${id}?${next.toString()}`);
+  };
 
   const agent = detail.data?.agent;
   const permissionCount = permissions.data
@@ -185,16 +195,12 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
   }, [metrics.data]);
   const tabs: TabDef[] = [
     { id: 'overview', label: 'Overview', icon: <LayoutGrid size={14} /> },
-    ...(brain.data?.brain.available
-      ? [
-          {
-            id: 'brain',
-            label: 'Brain',
-            icon: <Brain size={14} />,
-            count: brain.data.brain.snapshot?.stats.nodeCount,
-          },
-        ]
-      : []),
+    {
+      id: 'brain',
+      label: 'Brain',
+      icon: <Brain size={14} />,
+      count: brain.data?.brain.snapshot?.stats.nodeCount,
+    },
     ...(isAdmin ? [{ id: 'costs', label: 'Costs', icon: <Receipt size={14} /> }] : []),
     ...(isAdmin
       ? [
@@ -590,6 +596,8 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
                     backdrop={backdrop}
                     isLoading={brain.isLoading}
                     error={brain.error}
+                    demo={demo}
+                    onDemoChange={setDemo}
                   />
                 </section>
               )}

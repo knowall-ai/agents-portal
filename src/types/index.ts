@@ -200,8 +200,10 @@ export interface BrainDiff {
 /** What the brain route returns: the snapshot when available, else why not. */
 export interface AgentBrain {
   available: boolean;
-  /** true when served from the built-in fixture (BRAIN_FIXTURE=1) */
+  /** true when served from the built-in demo graph (BRAIN_FIXTURE=1 or ?demo=1) */
   fixture?: boolean;
+  /** true when a live Reverie source is configured for this agent (so demo can be switched off) */
+  liveAvailable?: boolean;
   snapshot?: BrainSnapshot;
   error?: string;
 }
