@@ -4,7 +4,6 @@ import { Suspense, use, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { formatDistanceToNow } from 'date-fns';
 import {
   ArrowLeft,
   BadgeCheck,
@@ -48,6 +47,8 @@ import {
   SkillList,
   SoulPanel,
 } from '@/components/agents';
+import { Countdown } from '@/components/common';
+import { formatDistanceToNow } from 'date-fns';
 import { useApi } from '@/hooks';
 import { BACKDROPS, type Backdrop } from '@/components/agents/BrainView';
 import type {
@@ -270,9 +271,10 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
                       <Zap size={14} />
                       {boost.data.boost.active ? 'Boost on' : 'Boost'}
                       {boost.data.boost.active && boost.data.boost.until && (
-                        <span className="text-xs opacity-80">
-                          · {formatDistanceToNow(new Date(boost.data.boost.until))} left
-                        </span>
+                        <Countdown
+                          until={new Date(boost.data.boost.until).getTime()}
+                          className="text-xs opacity-90"
+                        />
                       )}
                     </button>
                     {boostOpen && (
