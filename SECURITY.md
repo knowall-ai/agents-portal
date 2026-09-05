@@ -2,7 +2,39 @@
 
 ## Reporting a vulnerability
 
-Please email security@knowall.ai with a description of the issue and steps to reproduce. Do not open a public GitHub issue for security problems. We aim to acknowledge reports within two working days.
+We take the security of the Agents Portal seriously. It signs in with customers' Microsoft accounts, reads their Azure estate and Entra directory with delegated tokens, and holds one write action (Boost) that runs a script on an agent's VM, so a report is treated as a priority.
+
+**Please do not open a public GitHub issue for a security vulnerability.**
+
+Report it privately instead:
+
+| Channel | Details                                                                                                                                          |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Email   | [security@knowall.ai](mailto:security@knowall.ai)                                                                                                |
+| GitHub  | [Report a vulnerability](https://github.com/knowall-ai/agents-portal/security/advisories/new) (private advisory, once enabled on the repository) |
+
+When reporting, please include:
+
+- A description of the vulnerability and its potential impact
+- Steps to reproduce; proof-of-concept requests are welcome
+- The component affected (sign-in and session, an `/api` route, the Brain stream, Boost, the Azure or Graph providers, or a deployment setting)
+- Any suggested remediation, if you have one
+
+## What to expect
+
+- **Acknowledgement** within two working days of your report.
+- **Assessment and triage**: we confirm the issue, assess severity, and keep you informed of progress.
+- **Fix and disclosure**: we aim to remediate confirmed vulnerabilities promptly, publish a GitHub security advisory for anything that affects other deployments, and credit reporters (with permission) once a fix is released. We ask for up to 90 days from acknowledgement before public disclosure.
+
+We ask that you practise responsible disclosure: give us reasonable time to fix the issue before any public disclosure, test only against your own tenant, deployment or agents, and do not access, modify or exfiltrate data beyond what is necessary to demonstrate the vulnerability.
+
+## Of particular interest
+
+- Signing in from a tenant that is not allowed, or seeing an agent, cost, licence or permission that Azure RBAC does not grant the signed-in user
+- Any way to reach a server-held token (`REVERIE_TOKEN`, `GITHUB_TOKEN`, the app client secret) or to have it sent somewhere other than its intended host
+- Reaching Boost, or any other run-command on a VM, without the Azure role that permits it, or without the request appearing in the Activity Log under the caller's identity
+- Server-side request forgery through resource tags, registry values or the health probe
+- Cross-site requests that change state (Boost, tenant selection) or leak data
 
 ## Scope and design
 
