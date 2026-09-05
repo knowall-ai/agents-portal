@@ -241,6 +241,9 @@ export async function getPermissions(
       label: a.label,
       permissions: [],
       azureRoles: [],
+      // Without this the panel would read the empty lists as "No API
+      // permissions requested" instead of "could not be read".
+      error,
     })),
     error,
   });
