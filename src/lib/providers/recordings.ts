@@ -37,6 +37,10 @@ async function getJson(baseUrl: string, token: string, path: string): Promise<un
     // the token goes to the validated URL only: never follow it somewhere else
     redirect: 'error',
   });
+  if (response.status === 404 && !path.startsWith('/'))
+    throw new Error(
+      'The bridge answered 404 for /recordings: it is not running a version with call recording yet'
+    );
   if (!response.ok) throw new Error(`Recordings ${response.status} ${path.split('?')[0] || '/'}`);
   return response.json();
 }
