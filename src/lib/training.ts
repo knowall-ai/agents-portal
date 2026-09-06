@@ -92,6 +92,21 @@ function parseQuestions(value: unknown): TrainingQuestion[] {
   return questions;
 }
 
+/**
+ * The harness leaves each question's lag null and publishes the reply times
+ * as `totals.latencies_s`, one per question in order; use those when a
+ * question has no lag of its own.
+ */
+function withLatencies(questions: TrainingQuestion[], totals: unknown): TrainingQuestion[] {
+  const latencies = isRecord(totals) && Array.isArray(totals.latencies_s) ? totals.latencies_s : [];
+  return questions.map((question, index) => {
+    const latency = num(latencies[index]);
+    return question.lag === undefined && latency !== undefined
+      ? { ...question, lag: latency }
+      : question;
+  });
+}
+
 function parseTotals(value: unknown): Record<string, number> | undefined {
   if (!isRecord(value)) return undefined;
   const totals: Record<string, number> = {};
@@ -158,7 +173,7 @@ export function parseTrainingRun(json: unknown, path: string): TrainingRun | nul
     breaches: strList(value.breaches),
     limitations: strList(value.limitations),
     changeRequests: strList(value.change_requests ?? value.changeRequests),
-    questions: parseQuestions(value.questions),
+    questions: withLatencies(parseQuestions(value.questions), value.totals),
     git: parseGit(value.git),
     artefacts: parseArtefacts(value.artefacts),
   };

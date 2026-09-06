@@ -337,6 +337,18 @@ describe('parseCurriculum', () => {
     });
   });
 
+  it('takes per-question lag from totals.latencies_s when the question has none', () => {
+    const parsed = parseTrainingRun(
+      JSON.stringify({
+        result: 'pass',
+        totals: { latencies_s: [2.34, 1.58], checks_run: 3 },
+        questions: [{ q: 'a', lag_s: null }, { q: 'b', lag: 9 }, { q: 'c' }],
+      }),
+      'runs/poppie/x.json'
+    );
+    expect(parsed?.questions.map((q) => q.lag)).toEqual([2.34, 9, undefined]);
+  });
+
   it('accepts the daily and on-demand cadences the harness publishes', () => {
     const yaml = [
       'scenarios:',
