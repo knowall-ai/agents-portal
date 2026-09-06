@@ -310,12 +310,14 @@ export async function getTraining(ctx: UserContext, agent: AgentDetail): Promise
           curriculum,
           outstanding: outstandingFor(agent.id, sorted, curriculum),
           configured: true,
+          repo,
         };
       } catch (error) {
         console.warn(`Training lookup failed for ${agent.id} (${repo}):`, error);
         return {
           ...empty,
           configured: true,
+          repo,
           error: error instanceof Error ? error.message : 'Unknown error',
         };
       }

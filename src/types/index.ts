@@ -489,6 +489,8 @@ export interface AgentTraining {
   outstanding: OutstandingScenario[];
   /** False when the agent has no trusted registry entry, so nothing was read */
   configured: boolean;
+  /** The repo the records were read from, for resolving repo-relative artefact paths */
+  repo?: string;
   /** Set when the training repo could not be read */
   error?: string;
 }

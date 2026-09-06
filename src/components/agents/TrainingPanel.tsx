@@ -52,20 +52,26 @@ function ResultBadge({ result }: { result?: 'pass' | 'fail' }) {
   );
 }
 
-/** An artefact link, shown only when the harness published one. */
+/**
+ * An artefact link, shown only when the harness published one. Artefacts are
+ * either absolute https URLs or paths inside the training repo, which are only
+ * resolvable once we know which repo the records came from.
+ */
 function ArtefactLink({
   href,
+  repo,
   label,
   icon,
 }: {
   href?: string;
+  repo?: string;
   label: string;
   icon: React.ReactNode;
 }) {
   if (!href) return null;
-  const url = /^https?:\/\//.test(href)
-    ? href
-    : `https://github.com/knowall-ai/agent-training/blob/main/${href.replace(/^\/+/, '')}`;
+  const absolute = /^https?:\/\//.test(href);
+  if (!absolute && !repo) return null;
+  const url = absolute ? href : `https://github.com/${repo}/blob/main/${href.replace(/^\/+/, '')}`;
   return (
     <a
       href={url}
@@ -213,6 +219,7 @@ export default function TrainingPanel({ training, isLoading, error }: TrainingPa
                   <ExpandableRow
                     key={run.path}
                     run={run}
+                    repo={training.repo}
                     open={open}
                     hasNotes={notes > 0}
                     onToggle={() => toggle(run.path)}
@@ -231,6 +238,7 @@ export default function TrainingPanel({ training, isLoading, error }: TrainingPa
 
 interface ExpandableRowProps {
   run: TrainingRun;
+  repo?: string;
   open: boolean;
   hasNotes: boolean;
   onToggle: () => void;
@@ -240,6 +248,7 @@ interface ExpandableRowProps {
 
 function ExpandableRow({
   run,
+  repo,
   open,
   hasNotes,
   onToggle,
@@ -306,11 +315,13 @@ function ExpandableRow({
           <span className="flex items-center gap-2">
             <ArtefactLink
               href={run.artefacts?.reportMd}
+              repo={repo}
               label="Report"
               icon={<FileText size={14} />}
             />
             <ArtefactLink
               href={run.artefacts?.recording}
+              repo={repo}
               label="Recording"
               icon={<Video size={14} />}
             />
