@@ -57,6 +57,7 @@ import { Countdown } from '@/components/common';
 import { formatDistanceToNow } from 'date-fns';
 import { useApi } from '@/hooks';
 import { presenceLabel } from '@/lib/presence';
+import { ALL_SOURCES } from '@/lib/skills-filter';
 import { BACKDROPS, type Backdrop } from '@/components/agents/BrainView';
 import type {
   ActivityDay,
@@ -132,8 +133,28 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
     const query = new URLSearchParams(searchParams.toString());
     if (next === 'overview') query.delete('tab');
     else query.set('tab', next);
+    // the Skills filters belong to that tab only; leaving it drops them
+    if (next !== 'skills') {
+      query.delete('q');
+      query.delete('source');
+    }
     const qs = query.toString();
     router.replace(qs ? `?${qs}` : `/agents/${id}`, { scroll: false });
+  };
+
+  // Skills tab filters live in the URL so a filtered view can be linked
+  const skillQuery = searchParams.get('q') ?? '';
+  const skillSource = searchParams.get('source') ?? ALL_SOURCES;
+  // One navigation for however many filters change at once, so two updates
+  // made from the same snapshot cannot overwrite each other
+  const setSkillParams = (changes: { q?: string; source?: string }) => {
+    const query = new URLSearchParams(searchParams.toString());
+    for (const [key, value] of Object.entries(changes)) {
+      if (!value || (key === 'source' && value === ALL_SOURCES)) query.delete(key);
+      else query.set(key, value);
+    }
+    query.set('tab', 'skills');
+    router.replace(`?${query.toString()}`, { scroll: false });
   };
 
   const detail = useApi<{ agent: AgentDetail; assistants: FoundryAssistant[] }>(
@@ -687,6 +708,12 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
                     skills={skills.data?.skills ?? null}
                     isLoading={skills.isLoading}
                     error={skills.error}
+                    query={skillQuery}
+                    source={skillSource}
+                    primaryLabel={agent?.repo}
+                    onQueryChange={(q) => setSkillParams({ q })}
+                    onSourceChange={(next) => setSkillParams({ source: next })}
+                    onClear={() => setSkillParams({ q: '', source: ALL_SOURCES })}
                   />
                 </section>
               )}
