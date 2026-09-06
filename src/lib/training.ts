@@ -17,15 +17,24 @@ import type {
   TrainingSummary,
 } from '@/types';
 
-const CADENCES: readonly TrainingCadence[] = ['once', 'weekly', 'monthly', 'on-change'];
+const CADENCES: readonly TrainingCadence[] = [
+  'once',
+  'daily',
+  'weekly',
+  'monthly',
+  'on-change',
+  'on-demand',
+];
 
 /** How long a passing run keeps a scenario satisfied, by cadence. */
 const DAY_MS = 24 * 60 * 60 * 1000;
 const CADENCE_WINDOW_MS: Record<TrainingCadence, number | null> = {
-  // `once` and `on-change` are satisfied by any pass: the portal cannot see the
-  // change that would make an `on-change` scenario due again.
+  // `once`, `on-change` and `on-demand` are satisfied by any pass: the portal
+  // cannot see the change or the request that would make them due again.
   once: null,
   'on-change': null,
+  'on-demand': null,
+  daily: DAY_MS,
   weekly: 7 * DAY_MS,
   monthly: 30 * DAY_MS,
 };

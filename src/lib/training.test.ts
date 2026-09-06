@@ -262,6 +262,17 @@ describe('parseCurriculum', () => {
     ]);
   });
 
+  it('accepts the daily and on-demand cadences the harness publishes', () => {
+    const yaml = [
+      'scenarios:',
+      '  - id: a',
+      '    cadence: daily',
+      '  - id: b',
+      '    cadence: on-demand',
+    ].join('\n');
+    expect(parseCurriculum(yaml).map((s) => s.cadence)).toEqual(['daily', 'on-demand']);
+  });
+
   it('skips an item with no id and defaults an absent or unknown cadence to once', () => {
     const yaml = [
       'scenarios:',
@@ -411,6 +422,24 @@ describe('outstandingFor', () => {
         lastPassAt: '2026-08-20T09:00:00Z',
       },
     ]);
+  });
+
+  it('gives a daily scenario one day', () => {
+    const daily = scenario({ cadence: 'daily' });
+    expect(
+      outstandingFor('sallie', [at('2026-09-04T06:00:00Z', { result: 'pass' })], [daily], now)
+    ).toEqual([]);
+    expect(
+      outstandingFor('sallie', [at('2026-09-02T09:00:00Z', { result: 'pass' })], [daily], now)
+    ).toHaveLength(1);
+  });
+
+  it('never nags an on-demand scenario once it has passed', () => {
+    const onDemand = scenario({ cadence: 'on-demand' });
+    expect(
+      outstandingFor('sallie', [at('2026-01-01T09:00:00Z', { result: 'pass' })], [onDemand], now)
+    ).toEqual([]);
+    expect(outstandingFor('sallie', [], [onDemand], now)).toHaveLength(1);
   });
 
   it('gives a monthly scenario thirty days', () => {

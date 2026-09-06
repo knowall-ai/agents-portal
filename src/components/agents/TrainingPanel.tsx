@@ -33,6 +33,8 @@ const CADENCE_LABELS: Record<string, string> = {
   weekly: 'weekly',
   monthly: 'monthly',
   'on-change': 'on change',
+  'on-demand': 'on demand',
+  daily: 'daily',
 };
 
 /** A date as `12 Aug 2026, 14:03`, or an em dash when it is missing or unreadable. */
