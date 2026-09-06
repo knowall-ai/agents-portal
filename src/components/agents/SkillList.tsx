@@ -18,6 +18,8 @@ interface SkillListProps {
   primaryLabel?: string;
   onQueryChange?: (q: string) => void;
   onSourceChange?: (source: string) => void;
+  /** Clears search and source together in one URL update */
+  onClear?: () => void;
 }
 
 export default function SkillList({
@@ -29,6 +31,7 @@ export default function SkillList({
   primaryLabel,
   onQueryChange,
   onSourceChange,
+  onClear,
 }: SkillListProps) {
   // The input is driven locally so typing never waits on the URL round-trip;
   // the prop wins whenever the URL changes from elsewhere (a shared link, the
@@ -66,8 +69,12 @@ export default function SkillList({
     onQueryChange?.(next);
   };
   const clearAll = () => {
-    setQuery('');
-    onSourceChange?.(ALL_SOURCES);
+    setText('');
+    if (onClear) onClear();
+    else {
+      onQueryChange?.('');
+      onSourceChange?.(ALL_SOURCES);
+    }
   };
   const filtering = text.trim() !== '' || (source !== ALL_SOURCES && source !== '');
 

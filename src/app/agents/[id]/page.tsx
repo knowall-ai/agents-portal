@@ -145,10 +145,14 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
   // Skills tab filters live in the URL so a filtered view can be linked
   const skillQuery = searchParams.get('q') ?? '';
   const skillSource = searchParams.get('source') ?? ALL_SOURCES;
-  const setSkillParam = (key: 'q' | 'source', value: string) => {
+  // One navigation for however many filters change at once, so two updates
+  // made from the same snapshot cannot overwrite each other
+  const setSkillParams = (changes: { q?: string; source?: string }) => {
     const query = new URLSearchParams(searchParams.toString());
-    if (!value || (key === 'source' && value === ALL_SOURCES)) query.delete(key);
-    else query.set(key, value);
+    for (const [key, value] of Object.entries(changes)) {
+      if (!value || (key === 'source' && value === ALL_SOURCES)) query.delete(key);
+      else query.set(key, value);
+    }
     query.set('tab', 'skills');
     router.replace(`?${query.toString()}`, { scroll: false });
   };
@@ -707,8 +711,9 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
                     query={skillQuery}
                     source={skillSource}
                     primaryLabel={agent?.repo}
-                    onQueryChange={(q) => setSkillParam('q', q)}
-                    onSourceChange={(next) => setSkillParam('source', next)}
+                    onQueryChange={(q) => setSkillParams({ q })}
+                    onSourceChange={(next) => setSkillParams({ source: next })}
+                    onClear={() => setSkillParams({ q: '', source: ALL_SOURCES })}
                   />
                 </section>
               )}
