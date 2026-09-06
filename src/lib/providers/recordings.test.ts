@@ -8,7 +8,7 @@ import {
   resolveVideo,
 } from './recordings';
 
-const BASE = 'https://sallie.example/recordings/';
+const BASE = 'https://sallie.example/recordings';
 const item = { id: 'rec_1', started_at: '2026-09-04T09:30:12Z', status: 'ready' };
 
 const ok = (body: unknown) => ({ ok: true, status: 200, json: async () => body });
@@ -38,7 +38,7 @@ describe('listRecordings', () => {
     const runs = await listRecordings(BASE, 'tok', 'sallie', { limit: 10, before: 'rec_0' });
     expect(runs.map((r) => r.id)).toEqual(['rec_1']);
     const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe('https://sallie.example/recordings/recordings?limit=10&before=rec_0');
+    expect(url).toBe('https://sallie.example/recordings?limit=10&before=rec_0');
     expect(init.headers.Authorization).toBe('Bearer tok');
     expect(init.redirect).toBe('error');
   });
@@ -52,18 +52,18 @@ describe('listRecordings', () => {
 
   it('reports a failing bridge by status', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(status(503)));
-    await expect(listRecordings(BASE, 'tok', 'sallie')).rejects.toThrow(
-      'Recordings 503 /recordings'
-    );
+    await expect(listRecordings(BASE, 'tok', 'sallie')).rejects.toThrow('Recordings 503 /');
   });
 });
 
 describe('getRecordingsStatus', () => {
-  it('reads the status endpoint', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok({ active: true, id: 'rec_9' })));
-    const result = await getRecordingsStatus(BASE, 'tok');
+  it('reads the status endpoint relative to the configured URL', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(ok({ active: true, id: 'rec_9' }));
+    vi.stubGlobal('fetch', fetchMock);
+    const result = await getRecordingsStatus(`${BASE}/`, 'tok');
     expect(result.active).toBe(true);
     expect(result.id).toBe('rec_9');
+    expect(fetchMock.mock.calls[0][0]).toBe('https://sallie.example/recordings/status');
   });
 });
 
@@ -78,6 +78,7 @@ describe('getRecording', () => {
     );
     const detail = await getRecording(BASE, 'tok', 'sallie', 'rec_1');
     expect(detail?.turns).toEqual([{ t: 1, speaker: null, text: 'hi' }]);
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe('https://sallie.example/recordings/rec_1');
     expect(await getRecording(BASE, 'tok', 'sallie', 'rec_2')).toBeNull();
   });
 
@@ -103,6 +104,7 @@ describe('resolveVideo', () => {
       url: 'https://cdn.example/video.mp4?sig=1',
     });
     expect(fetchMock.mock.calls[0][1].redirect).toBe('manual');
+    expect(fetchMock.mock.calls[0][0]).toBe('https://sallie.example/recordings/rec_1/video');
   });
 
   it('reports not-ready with the bridge status, missing for 404, and refuses non-https locations', async () => {
@@ -133,6 +135,9 @@ describe('getTranscriptVtt', () => {
         .mockResolvedValueOnce(status(404))
     );
     expect(await getTranscriptVtt(BASE, 'tok', 'rec_1')).toBe('WEBVTT\n');
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe(
+      'https://sallie.example/recordings/rec_1/transcript.vtt'
+    );
     expect(await getTranscriptVtt(BASE, 'tok', 'rec_1')).toBeNull();
   });
 });

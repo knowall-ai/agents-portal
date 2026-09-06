@@ -22,6 +22,10 @@ function headers(token: string, accept = 'application/json'): HeadersInit {
   return { Authorization: `Bearer ${token}`, Accept: accept };
 }
 
+/**
+ * `baseUrl` is the recordings endpoint itself (`https://<agent>/recordings`),
+ * so every path here is relative to it: `` (the list), `/status`, `/{id}`…
+ */
 function endpoint(baseUrl: string, path: string): string {
   return `${baseUrl.replace(/\/$/, '')}${path}`;
 }
@@ -33,7 +37,7 @@ async function getJson(baseUrl: string, token: string, path: string): Promise<un
     // the token goes to the validated URL only: never follow it somewhere else
     redirect: 'error',
   });
-  if (!response.ok) throw new Error(`Recordings ${response.status} ${path.split('?')[0]}`);
+  if (!response.ok) throw new Error(`Recordings ${response.status} ${path.split('?')[0] || '/'}`);
   return response.json();
 }
 
@@ -55,7 +59,7 @@ export async function listRecordings(
     if (!isValidRecordingId(options.before)) throw new Error('Invalid recording id');
     query.set('before', options.before);
   }
-  return parseRecordingList(await getJson(baseUrl, token, `/recordings?${query}`), agentId);
+  return parseRecordingList(await getJson(baseUrl, token, `?${query}`), agentId);
 }
 
 /** `GET /recordings/status`: is the agent recording right now. */
@@ -63,7 +67,7 @@ export async function getRecordingsStatus(
   baseUrl: string,
   token: string
 ): Promise<RecordingsStatus> {
-  const body = await getJson(baseUrl, token, '/recordings/status');
+  const body = await getJson(baseUrl, token, '/status');
   return parseRecordingsStatus(body, new Date().toISOString());
 }
 
@@ -76,7 +80,7 @@ export async function getRecording(
 ): Promise<RecordingDetail | null> {
   if (!isValidRecordingId(id)) throw new Error('Invalid recording id');
   try {
-    return parseRecordingDetail(await getJson(baseUrl, token, `/recordings/${id}`), agentId);
+    return parseRecordingDetail(await getJson(baseUrl, token, `/${id}`), agentId);
   } catch (error) {
     if (error instanceof Error && error.message.startsWith('Recordings 404 ')) return null;
     throw error;
@@ -100,7 +104,7 @@ export async function resolveVideo(
   id: string
 ): Promise<VideoLocation> {
   if (!isValidRecordingId(id)) throw new Error('Invalid recording id');
-  const response = await fetch(endpoint(baseUrl, `/recordings/${id}/video`), {
+  const response = await fetch(endpoint(baseUrl, `/${id}/video`), {
     headers: headers(token, '*/*'),
     signal: AbortSignal.timeout(TIMEOUT_MS),
     redirect: 'manual',
@@ -121,7 +125,7 @@ export async function resolveVideo(
   ) {
     return { kind: 'redirect', url: location };
   }
-  throw new Error(`Recordings ${response.status} /recordings/{id}/video`);
+  throw new Error(`Recordings ${response.status} /{id}/video`);
 }
 
 /** `GET /recordings/{id}/transcript.vtt`: Teams' own transcript, or null when there is none. */
@@ -131,13 +135,12 @@ export async function getTranscriptVtt(
   id: string
 ): Promise<string | null> {
   if (!isValidRecordingId(id)) throw new Error('Invalid recording id');
-  const response = await fetch(endpoint(baseUrl, `/recordings/${id}/transcript.vtt`), {
+  const response = await fetch(endpoint(baseUrl, `/${id}/transcript.vtt`), {
     headers: headers(token, 'text/vtt'),
     signal: AbortSignal.timeout(TIMEOUT_MS),
     redirect: 'error',
   });
   if (response.status === 404) return null;
-  if (!response.ok)
-    throw new Error(`Recordings ${response.status} /recordings/{id}/transcript.vtt`);
+  if (!response.ok) throw new Error(`Recordings ${response.status} /{id}/transcript.vtt`);
   return response.text();
 }

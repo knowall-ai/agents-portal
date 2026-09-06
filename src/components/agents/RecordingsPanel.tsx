@@ -19,6 +19,11 @@ interface RecordingsPanelProps {
   demo?: boolean;
 }
 
+/** How often an open recording that is still being produced is re-read. */
+const UNFINISHED_POLL_MS = 15_000;
+/** The API's page size: a full page means there may be older recordings. */
+const PAGE_SIZE = 50;
+
 const STATUS_LABELS: Record<RecordingStatus, { label: string; className: string }> = {
   recording: { label: 'Recording', className: 'status-online' },
   processing: { label: 'Processing', className: 'status-planned' },
@@ -47,14 +52,69 @@ function title(recording: Recording): string {
   return recording.meeting.subject ?? recording.room ?? recording.id;
 }
 
-/** The list: one row per recording, newest first. */
+interface OlderPage {
+  /** The id this page was fetched below; it is only valid while that id is still the item above it */
+  after: string;
+  items: Recording[];
+  exhausted: boolean;
+}
+
+/** The list: one row per recording, newest first, with older pages on demand. */
 function RecordingList({
-  items,
+  agentId,
+  items: firstPage,
   onSelect,
+  demo,
 }: {
+  agentId: string;
   items: Recording[];
   onSelect: (id: string) => void;
+  demo?: boolean;
 }) {
+  const [older, setOlder] = useState<OlderPage[]>([]);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [olderError, setOlderError] = useState<string | null>(null);
+  // The parent refreshes the first page; pages fetched below it stay valid
+  // only while they still follow the item they were fetched after
+  const chain: OlderPage[] = [];
+  let tail = firstPage.at(-1)?.id;
+  for (const page of older) {
+    if (page.after !== tail) break;
+    chain.push(page);
+    tail = page.items.at(-1)?.id ?? tail;
+  }
+  const items = [firstPage, ...chain.map((page) => page.items)].flat();
+  const lastPage = chain.at(-1);
+  const mayHaveOlder =
+    !demo &&
+    tail !== undefined &&
+    !lastPage?.exhausted &&
+    (lastPage?.items.length ?? firstPage.length) >= PAGE_SIZE;
+
+  const loadOlder = async () => {
+    if (!tail) return;
+    const after = tail;
+    setLoadingOlder(true);
+    setOlderError(null);
+    try {
+      const response = await fetch(`/api/agents/${agentId}/recordings?before=${after}`);
+      const body = (await response.json().catch(() => ({}))) as {
+        recordings?: { items?: Recording[]; error?: string };
+        details?: string;
+        error?: string;
+      };
+      if (!response.ok)
+        throw new Error(body.details || body.error || `Request failed (${response.status})`);
+      if (body.recordings?.error) throw new Error(body.recordings.error);
+      const page = body.recordings?.items ?? [];
+      setOlder([...chain, { after, items: page, exhausted: page.length < PAGE_SIZE }]);
+    } catch (error) {
+      setOlderError(error instanceof Error ? error.message : 'Unknown error');
+    } finally {
+      setLoadingOlder(false);
+    }
+  };
+
   return (
     <ul className="divide-y" style={{ borderColor: 'var(--border)' }}>
       {items.map((recording) => (
@@ -87,6 +147,24 @@ function RecordingList({
           </button>
         </li>
       ))}
+      {(mayHaveOlder || olderError) && (
+        <li className="px-4 py-3 text-center">
+          {olderError && (
+            <p className="mb-2 text-xs" style={{ color: 'var(--status-offline)' }}>
+              {olderError}
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={loadOlder}
+            disabled={loadingOlder}
+            className="rounded px-3 py-1.5 text-xs hover:bg-[var(--surface-hover)] disabled:opacity-60"
+            style={{ color: 'var(--primary)' }}
+          >
+            {loadingOlder ? 'Loading…' : 'Load older recordings'}
+          </button>
+        </li>
+      )}
     </ul>
   );
 }
@@ -103,14 +181,20 @@ function RecordingView({
   onBack: () => void;
   demo?: boolean;
 }) {
+  const [unfinished, setUnfinished] = useState(false);
+  // A recording still being made or processed is polled until the video and
+  // transcript exist, so the view fills in without leaving and coming back
   const detail = useApi<{ recording: RecordingDetail }>(
-    `/api/agents/${agentId}/recordings/${id}${demo ? '?demo=1' : ''}`
+    `/api/agents/${agentId}/recordings/${id}${demo ? '?demo=1' : ''}`,
+    unfinished && !demo ? UNFINISHED_POLL_MS : 0
   );
   const video = useRef<HTMLVideoElement>(null);
   const [position, setPosition] = useState(0);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   const recording = detail.data?.recording;
   const playable = recording?.status === 'ready' && !demo;
+  const nowUnfinished = recording?.status === 'recording' || recording?.status === 'processing';
+  if (recording && nowUnfinished !== unfinished) setUnfinished(nowUnfinished);
 
   const seek = (seconds: number) => {
     const element = video.current;
@@ -326,5 +410,7 @@ export default function RecordingsPanel({
         description="Recordings appear here once the agent records a Teams call."
       />
     );
-  return <RecordingList items={recordings.items} onSelect={onSelect} />;
+  return (
+    <RecordingList agentId={agentId} items={recordings.items} onSelect={onSelect} demo={demo} />
+  );
 }
