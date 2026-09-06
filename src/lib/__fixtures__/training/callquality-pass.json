@@ -1,0 +1,41 @@
+{
+  "result": "pass",
+  "agent": "sallie",
+  "scenario": "smoke",
+  "room": "training-room-1",
+  "mode": "live",
+  "started_at": "2026-09-01T09:15:00Z",
+  "source": "callquality",
+  "run_id": "20260901-091500-smoke",
+  "operator": "Ben (KnowAll)",
+  "job": "callquality",
+  "totals": { "checks_run": 4, "actions_verified": 2, "notes": "n/a" },
+  "thresholds": { "max_lag": 4.0 },
+  "questions": [
+    {
+      "id": "greeting",
+      "prompt": "Does she greet by name?",
+      "check": { "status": "pass", "lag": 1.2 }
+    },
+    {
+      "id": "handover",
+      "prompt": "Does she offer handover?",
+      "check": { "status": "pass", "lag": 2.4 }
+    },
+    {
+      "id": "close",
+      "prompt": "Does she close politely?",
+      "check": { "status": "pass", "lag": 1.8 }
+    },
+    { "id": "voiceprint", "prompt": "Is the voiceprint matched?", "check": { "status": "skipped" } }
+  ],
+  "breaches": [],
+  "limitations": ["Voiceprint check skipped: no enrolled sample"],
+  "change_requests": [],
+  "git": { "agent_training": "a1b2c3d", "agent_presence": "e4f5a6b", "agent_repo": "9c8d7e6" },
+  "artefacts": {
+    "report_md": "reports/sallie/2026-09-01-smoke.md",
+    "recording": "https://example.invalid/recordings/2026-09-01-smoke.mp4",
+    "transcript": "transcripts/sallie/2026-09-01-smoke.txt"
+  }
+}

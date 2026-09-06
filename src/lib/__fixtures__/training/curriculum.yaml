@@ -1,0 +1,19 @@
+# Curriculum for the agent-training harness (knowall-ai/agent-training#14)
+scenarios:
+  - id: smoke
+    title: Smoke test
+    agents: [sallie, poppie]
+    cadence: weekly
+  - id: lag-repro
+    title: 'Lag reproduction'
+    agents:
+      - sallie
+    cadence: monthly # re-run monthly
+  - id: induction-quiz
+    title: Induction quiz
+    agents: [sallie]
+    cadence: once
+  - id: meeting-prep
+    title: Meeting prep
+    agents: [poppie]
+    cadence: on-change

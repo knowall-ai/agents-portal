@@ -19,15 +19,21 @@ export default defineConfig({
       provider: 'istanbul',
       // Server logic only: pages, components and the demo fixture are not measured.
       include: ['src/lib/**', 'src/app/api/**'],
-      exclude: ['src/lib/brain-fixture.ts', '**/*.test.ts', '**/*.d.ts'],
+      exclude: [
+        'src/lib/brain-fixture.ts',
+        // Test data (JSON/YAML samples of what upstream publishes), not source
+        'src/lib/__fixtures__/**',
+        '**/*.test.ts',
+        '**/*.d.ts',
+      ],
       reporter: ['text-summary', 'text'],
       thresholds: {
         // Ratchet: raised automatically as coverage rises, never lowered by hand.
         autoUpdate: true,
-        lines: 44.53,
-        statements: 45.17,
-        functions: 48.7,
-        branches: 44.06,
+        lines: 49.97,
+        statements: 50.67,
+        functions: 53.22,
+        branches: 50.63,
       },
     },
   },

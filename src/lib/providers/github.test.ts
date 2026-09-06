@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { listRepoCommits, parseSkillFrontmatter } from './github';
+import { getCurriculum, listRepoCommits, listTrainingRuns, parseSkillFrontmatter } from './github';
 
 function rawCommit(sha: string) {
   return {
@@ -60,5 +60,141 @@ describe('listRepoCommits', () => {
     expect(events).toHaveLength(100);
     expect(events.map((e) => e.id)).toEqual(firstPage.map((c) => `github:a:${c.sha}`));
     expect(warn).toHaveBeenCalledTimes(1);
+  });
+});
+
+/** A GitHub contents response for one file, base64 as the API returns it. */
+function contentsFile(path: string, body: string) {
+  return {
+    name: path.split('/').pop(),
+    path,
+    type: 'file',
+    encoding: 'base64',
+    content: Buffer.from(body, 'utf8').toString('base64'),
+    html_url: `https://github.com/knowall-ai/agent-training/blob/main/${path}`,
+  };
+}
+
+function listingEntry(path: string) {
+  return { name: path.split('/').pop(), path, type: 'file' };
+}
+
+const runBody = (scenario: string, result: 'pass' | 'fail') =>
+  JSON.stringify({ result, scenario, started_at: '2026-09-01T09:00:00Z' });
+
+describe('listTrainingRuns', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  const ok = (body: unknown) => ({ ok: true, json: async () => body });
+  const notFound = (path: string) => ({ ok: false, status: 404, url: path });
+
+  it('lists the directory newest first and reads each run', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.endsWith('/contents/runs/sallie'))
+        return ok([
+          listingEntry('runs/sallie/2026-08-24T16-40-00-lag-repro.json'),
+          listingEntry('runs/sallie/2026-09-01T09-15-00-smoke.json'),
+          { name: 'README.md', path: 'runs/sallie/README.md', type: 'file' },
+          { name: 'old', path: 'runs/sallie/old', type: 'dir' },
+        ]);
+      if (url.includes('2026-09-01'))
+        return ok(
+          contentsFile('runs/sallie/2026-09-01T09-15-00-smoke.json', runBody('smoke', 'pass'))
+        );
+      return ok(
+        contentsFile('runs/sallie/2026-08-24T16-40-00-lag-repro.json', runBody('lag-repro', 'fail'))
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const runs = await listTrainingRuns('knowall-ai/agent-training', 'sallie');
+    expect(runs.map((r) => r.scenario)).toEqual(['smoke', 'lag-repro']);
+    expect(runs[0].url).toContain('2026-09-01');
+    // the listing plus one fetch per JSON file — README.md and the directory are skipped
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('treats a missing runs directory as no runs', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(notFound('/contents/runs/sallie')));
+    await expect(listTrainingRuns('knowall-ai/agent-training', 'sallie')).resolves.toEqual([]);
+  });
+
+  it('propagates a failure that is not a 404', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 403 }));
+    await expect(listTrainingRuns('knowall-ai/agent-training', 'sallie')).rejects.toThrow(
+      'GitHub 403'
+    );
+  });
+
+  it('returns nothing when the path is a file rather than a directory', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok({ name: 'sallie', type: 'file' })));
+    await expect(listTrainingRuns('knowall-ai/agent-training', 'sallie')).resolves.toEqual([]);
+  });
+
+  it('warns past a run that cannot be read, and skips one that is not a plain file', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.endsWith('/contents/runs/sallie'))
+        return ok([
+          listingEntry('runs/sallie/c.json'),
+          listingEntry('runs/sallie/b.json'),
+          listingEntry('runs/sallie/a.json'),
+        ]);
+      if (url.includes('c.json')) return { ok: false, status: 500 };
+      if (url.includes('b.json'))
+        return ok({ name: 'b.json', path: 'runs/sallie/b.json', type: 'submodule' });
+      return ok(contentsFile('runs/sallie/a.json', runBody('smoke', 'pass')));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const runs = await listTrainingRuns('knowall-ai/agent-training', 'sallie');
+    expect(runs.map((r) => r.path)).toEqual(['runs/sallie/a.json']);
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a bad repo slug or an agent id with path tricks', async () => {
+    await expect(listTrainingRuns('not-a-slug', 'sallie')).rejects.toThrow('Invalid repo slug');
+    await expect(listTrainingRuns('knowall-ai/agent-training', '../secrets')).rejects.toThrow(
+      'Invalid agent id'
+    );
+  });
+});
+
+describe('getCurriculum', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('parses curriculum.yaml from the repo root', async () => {
+    const yaml = 'scenarios:\n  - id: smoke\n    agents: [sallie]\n    cadence: weekly\n';
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue({ ok: true, json: async () => contentsFile('curriculum.yaml', yaml) })
+    );
+    await expect(getCurriculum('knowall-ai/agent-training')).resolves.toEqual([
+      { id: 'smoke', title: undefined, agents: ['sallie'], cadence: 'weekly' },
+    ]);
+  });
+
+  it('treats a repo with no curriculum as having none', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 404 }));
+    await expect(getCurriculum('knowall-ai/agent-training')).resolves.toEqual([]);
+  });
+
+  it('returns nothing when the entry is a directory', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => [] }));
+    await expect(getCurriculum('knowall-ai/agent-training')).resolves.toEqual([]);
+  });
+
+  it('propagates a failure that is not a 404, and refuses a bad slug', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+    await expect(getCurriculum('knowall-ai/agent-training')).rejects.toThrow('GitHub 500');
+    await expect(getCurriculum('../../etc')).rejects.toThrow('Invalid repo slug');
   });
 });
