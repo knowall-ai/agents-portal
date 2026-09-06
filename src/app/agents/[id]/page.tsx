@@ -16,7 +16,7 @@ import {
   Heart,
   LayoutGrid,
   MessageSquare,
-  Phone,
+  Video,
   Receipt,
   RefreshCw,
   Share2,
@@ -423,9 +423,9 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
                     target="_blank"
                     rel="noopener noreferrer"
                     className="btn-primary flex items-center gap-2 text-sm"
-                    title="Start a Teams call with this agent"
+                    title="Start a Teams video call with this agent"
                   >
-                    <Phone size={14} /> Call in Teams
+                    <Video size={14} /> Video call in Teams
                   </a>
                 )}
                 {agent.portalUrl && (
