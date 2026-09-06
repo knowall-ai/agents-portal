@@ -312,7 +312,7 @@ export function teamsChatUrl(
   return undefined;
 }
 
-/** Teams deep link that starts a call with the agent's own account (bots cannot be called this way). */
+/** Teams deep link that starts a video call with the agent's own account (bots cannot be called this way). */
 export function teamsCallUrl(
   entry: AgentRegistryEntry | undefined,
   resources: AzureResource[]
@@ -322,7 +322,7 @@ export function teamsCallUrl(
   if (resources.some((r) => r.type === 'microsoft.botservice/botservices')) return undefined;
   const upn = agentUpn(entry, resources);
   return upn
-    ? `https://teams.microsoft.com/l/call/0/0?users=${encodeURIComponent(upn)}`
+    ? `https://teams.microsoft.com/l/call/0/0?users=${encodeURIComponent(upn)}&withVideo=true`
     : undefined;
 }
 
