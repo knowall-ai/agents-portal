@@ -1,6 +1,6 @@
 {
   "name": "agents-portal",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "description": "Monitor KnowAll AI and customer AI agents across Azure tenants — status, skills and recent activity.",
   "private": true,
   "license": "MIT",
