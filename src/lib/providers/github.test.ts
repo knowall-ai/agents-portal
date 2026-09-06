@@ -99,7 +99,7 @@ describe('listTrainingRuns', () => {
 
   it('lists the directory newest first and reads each run', async () => {
     const fetchMock = vi.fn(async (url: string) => {
-      if (url.endsWith('/contents/runs/sallie'))
+      if (url.endsWith('/contents/runs/sallie?ref=runs%2Fsallie'))
         return ok([
           listingEntry('runs/sallie/2026-08-24T16-40-00-lag-repro.json'),
           listingEntry('runs/sallie/2026-09-01T09-15-00-smoke.json'),
@@ -121,6 +121,27 @@ describe('listTrainingRuns', () => {
     expect(runs[0].url).toContain('2026-09-01');
     // the listing plus one fetch per JSON file — README.md and the directory are skipped
     expect(fetchMock).toHaveBeenCalledTimes(3);
+    // every read names the agent's runs branch
+    for (const [url] of fetchMock.mock.calls) expect(url).toContain('?ref=runs%2Fsallie');
+  });
+
+  it('falls back to the default branch when the agent has no runs branch', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('?ref=')) return notFound(url);
+      if (url.endsWith('/contents/runs/sallie'))
+        return ok([listingEntry('runs/sallie/2026-09-01T09-15-00-smoke.json')]);
+      return ok(
+        contentsFile('runs/sallie/2026-09-01T09-15-00-smoke.json', runBody('smoke', 'pass'))
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const runs = await listTrainingRuns('knowall-ai/agent-training', 'sallie');
+    expect(runs.map((r) => r.scenario)).toEqual(['smoke']);
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
+      expect.stringContaining('/contents/runs/sallie?ref=runs%2Fsallie'),
+      expect.stringMatching(/\/contents\/runs\/sallie$/),
+      expect.stringMatching(/smoke\.json$/),
+    ]);
   });
 
   it('treats a missing runs directory in a readable repo as no runs', async () => {
@@ -131,7 +152,8 @@ describe('listTrainingRuns', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
     await expect(listTrainingRuns('knowall-ai/agent-training', 'sallie')).resolves.toEqual([]);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    // the runs branch, then the default branch, then the repo itself
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
   it('reports a repo the token cannot read instead of pretending it is empty', async () => {
@@ -150,8 +172,8 @@ describe('listTrainingRuns', () => {
       ),
     ];
     const fetchMock = vi.fn(async (url: string) => {
-      if (url.endsWith('/contents/runs/sallie')) return ok(listing);
-      const path = url.slice(url.indexOf('runs/'));
+      if (url.includes('/contents/runs/sallie?ref=')) return ok(listing);
+      const path = url.slice(url.indexOf('runs/'), url.indexOf('?'));
       const scenario = path.includes('induction') ? 'induction-quiz' : 'smoke';
       return ok(contentsFile(path, runBody(scenario, 'pass')));
     });
@@ -178,7 +200,7 @@ describe('listTrainingRuns', () => {
   it('warns past a run that cannot be read, and skips one that is not a plain file', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const fetchMock = vi.fn(async (url: string) => {
-      if (url.endsWith('/contents/runs/sallie'))
+      if (url.endsWith('/contents/runs/sallie?ref=runs%2Fsallie'))
         return ok([
           listingEntry('runs/sallie/c.json'),
           listingEntry('runs/sallie/b.json'),

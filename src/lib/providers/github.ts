@@ -218,14 +218,18 @@ const MAX_TRAINING_RUNS = 50;
  * surfaces as an error instead of an empty Training tab.
  */
 async function absentOrInaccessible(repo: string, error: unknown): Promise<void> {
-  if (!(error instanceof Error && error.message.startsWith('GitHub 404 '))) throw error;
+  if (!isNotFound(error)) throw error;
   try {
     await ghJson<unknown>(`/repos/${repo}`);
   } catch (repoError) {
-    if (repoError instanceof Error && repoError.message.startsWith('GitHub 404 '))
+    if (isNotFound(repoError))
       throw new Error(`GitHub repo ${repo} not found or not readable with GITHUB_TOKEN`);
     throw repoError;
   }
+}
+
+function isNotFound(error: unknown): boolean {
+  return error instanceof Error && error.message.startsWith('GitHub 404 ');
 }
 
 /**
@@ -278,9 +282,13 @@ function fileText(file: ContentItem | ContentItem[]): string | null {
 }
 
 /**
- * Training runs published under `runs/<agentId>/` in the training repo, newest
- * first and capped at 50 files plus the latest file of every scenario in
- * `keepScenarios` (see `selectRunFiles`). Run file names begin with the ISO
+ * Training runs published under `runs/<agentId>/` in the training repo. The
+ * harness commits each agent's runs to its own branch, `runs/<agentId>`, so
+ * the code history on the default branch stays clean; that branch is read
+ * first and the default branch is the fallback for a repo that has not
+ * adopted the convention (or an agent whose branch does not exist yet).
+ * Newest first and capped at 50 files plus the latest file of every scenario
+ * in `keepScenarios` (see `selectRunFiles`). Run file names begin with the ISO
  * start time, so the listing sorts by name before anything is fetched. A
  * missing directory in a readable repo means the agent has no runs yet, not a
  * failure; a file that cannot be read or parsed is warned about and skipped so
@@ -294,12 +302,20 @@ export async function listTrainingRuns(
   if (!isValidRepo(repo)) throw new Error(`Invalid repo slug: ${repo}`);
   if (!isSafeSegment(agentId)) throw new Error(`Invalid agent id: ${agentId}`);
 
+  const dir = `/repos/${repo}/contents/runs/${agentId}`;
+  let ref = `?ref=${encodeURIComponent(`runs/${agentId}`)}`;
   let listing: ContentItem | ContentItem[];
   try {
-    listing = await ghJson<ContentItem | ContentItem[]>(`/repos/${repo}/contents/runs/${agentId}`);
+    listing = await ghJson<ContentItem | ContentItem[]>(`${dir}${ref}`);
   } catch (error) {
-    await absentOrInaccessible(repo, error);
-    return [];
+    if (!isNotFound(error)) throw error;
+    ref = '';
+    try {
+      listing = await ghJson<ContentItem | ContentItem[]>(dir);
+    } catch (fallbackError) {
+      await absentOrInaccessible(repo, fallbackError);
+      return [];
+    }
   }
   if (!Array.isArray(listing)) return [];
 
@@ -311,7 +327,7 @@ export async function listTrainingRuns(
 
   const runs = await mapWithConcurrency(files, 6, async (item): Promise<TrainingRun | null> => {
     try {
-      const file = await ghJson<ContentItem>(`/repos/${repo}/contents/${item.path}`);
+      const file = await ghJson<ContentItem>(`/repos/${repo}/contents/${item.path}${ref}`);
       const text = fileText(file);
       if (text === null) return null;
       const run = parseTrainingRun(text, item.path);

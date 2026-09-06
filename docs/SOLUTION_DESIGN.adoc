@@ -257,7 +257,11 @@ about and skipped rather than failing the read.
 
 `listTrainingRuns` and `getCurriculum` in `src/lib/providers/github.ts` list
 `runs/<agent-id>` and fetch each file (newest first by file name, per-file
-failures warned and skipped). The cap is the newest 50 files plus the latest
+failures warned and skipped). The harness commits each agent's runs to its own
+`runs/<agent-id>` branch so the code history on the default branch stays clean
+and several VMs never race on it; the portal reads that branch first and falls
+back to the default branch when it does not exist, while `curriculum.yaml` is
+always read from the default branch. The cap is the newest 50 files plus the latest
 file of each curriculum scenario that applies to the agent (`selectRunFiles`),
 so a one-off induction pass buried under weeks of smoke tests still counts.
 GitHub answers 404 both for a missing path and for a private repo the token
