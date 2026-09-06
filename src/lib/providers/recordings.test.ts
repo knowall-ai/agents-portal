@@ -50,6 +50,29 @@ describe('listRecordings', () => {
     );
   });
 
+  it('explains a refused redirect, a timeout and a connection failure', async () => {
+    const failure = (cause: Error) => Object.assign(new TypeError('fetch failed'), { cause });
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockRejectedValueOnce(failure(new Error('unexpected redirect')))
+        .mockRejectedValueOnce(
+          Object.assign(new Error('The operation was aborted'), { name: 'TimeoutError' })
+        )
+        .mockRejectedValueOnce(failure(new Error('getaddrinfo ENOTFOUND sallie.example')))
+    );
+    await expect(listRecordings(BASE, 'tok', 'sallie')).rejects.toThrow(
+      'redirected instead of answering'
+    );
+    await expect(listRecordings(BASE, 'tok', 'sallie')).rejects.toThrow(
+      'did not answer within 20 s'
+    );
+    await expect(listRecordings(BASE, 'tok', 'sallie')).rejects.toThrow(
+      'unreachable: getaddrinfo ENOTFOUND sallie.example'
+    );
+  });
+
   it('reports a failing bridge by status', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(status(503)));
     await expect(listRecordings(BASE, 'tok', 'sallie')).rejects.toThrow('Recordings 503 /');
