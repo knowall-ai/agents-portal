@@ -403,9 +403,11 @@ export interface AgentSoul {
 
 /**
  * One training run published by the harness to `knowall-ai/agent-training` as
- * `runs/<agent-id>/<started_at>-<scenario>[-<run-id>].json`. Every field is
- * optional: the harness owns the file and may add fields or omit them, so the
- * portal renders what it is given and never assumes a shape.
+ * `runs/<agent-id>/<started_at>-<scenario>[-<run-id>].json`. Every field the
+ * harness writes is optional — it owns the file and may add or omit fields —
+ * so the portal renders what it is given and never assumes a shape. What is
+ * required here the portal itself supplies: `path`, and the list fields, which
+ * are normalised to empty arrays so callers need not guard each one.
  */
 export interface TrainingRun {
   /** Repo path of the file this run was read from — unique, so it keys the list */
