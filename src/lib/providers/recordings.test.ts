@@ -73,6 +73,13 @@ describe('listRecordings', () => {
     );
   });
 
+  it('explains a bridge without the recordings API', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(status(404)));
+    await expect(listRecordings(BASE, 'tok', 'sallie')).rejects.toThrow(
+      'not running a version with call recording yet'
+    );
+  });
+
   it('reports a failing bridge by status', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(status(503)));
     await expect(listRecordings(BASE, 'tok', 'sallie')).rejects.toThrow('Recordings 503 /');
