@@ -4,6 +4,9 @@ scenarios:
     title: Smoke test
     agents: [sallie, poppie]
     cadence: weekly
+    note: >-
+      Six short questions, about two minutes. The one to run after every
+      deploy of the agent or the bridge.
   - id: lag-repro
     title: 'Lag reproduction'
     agents:
@@ -13,6 +16,11 @@ scenarios:
     title: Induction quiz
     agents: [sallie]
     cadence: once
+    requires: enrolled voice profiles
+    note: |
+      The full induction: 23 asks.
+      # not a comment
+      About ten minutes.
   - id: meeting-prep
     title: Meeting prep
     agents: [poppie]

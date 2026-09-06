@@ -247,7 +247,7 @@ Runs are one JSON file each, at `runs/<agent-id>/<started_at>-<scenario>[-<run-i
 
 The curriculum is `curriculum.yaml` at the repo root: a `scenarios` list of
 `id`, `title`, `agents` (the agent ids it is required for) and `cadence`
-(`once`, `daily`, `weekly`, `monthly`, `on-change` or `on-demand`).
+(`once`, `daily`, `weekly`, `monthly`, `on-change` or `on-demand`), plus an optional `note` (what happens in the scenario, shown on the tab as "What each test does") and `requires` (what must be in place first); both may be folded or literal block scalars.
 
 Every field is optional and unknown fields are ignored, so the harness can add to
 the shape without breaking the tab. A run file that is not valid JSON is warned

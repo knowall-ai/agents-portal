@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import {
   AlertTriangle,
+  BookOpen,
   ChevronDown,
   ChevronRight,
   CircleCheck,
@@ -13,10 +14,17 @@ import {
   Video,
 } from 'lucide-react';
 import { EmptyState, LoadingSpinner } from '@/components/common';
-import { summariseRun } from '@/lib/training';
-import type { AgentTraining, OutstandingReason, TrainingRun } from '@/types';
+import { scenarioAppliesTo, summariseRun } from '@/lib/training';
+import type {
+  AgentTraining,
+  CurriculumScenario,
+  OutstandingReason,
+  TrainingQuestion,
+  TrainingRun,
+} from '@/types';
 
 interface TrainingPanelProps {
+  agentId: string;
   training: AgentTraining | null;
   isLoading: boolean;
   error?: string | null;
@@ -89,6 +97,183 @@ function ArtefactLink({
   );
 }
 
+/**
+ * What each scenario does, in the curriculum's own words, with the agent's
+ * latest result for it. This is the "what happens in these tests" the tab
+ * would otherwise leave to the reader's imagination.
+ */
+function CurriculumList({
+  scenarios,
+  runs,
+}: {
+  scenarios: CurriculumScenario[];
+  runs: TrainingRun[];
+}) {
+  const [open, setOpen] = useState(true);
+  if (scenarios.length === 0) return null;
+  const latest = (id: string): TrainingRun | undefined =>
+    runs.find((run) => run.scenario?.toLowerCase() === id.toLowerCase());
+  return (
+    <div className="border-b p-4" style={{ borderColor: 'var(--border)' }}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="mb-2 flex items-center gap-2 text-xs font-medium uppercase"
+        style={{ color: 'var(--text-muted)' }}
+      >
+        {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        <BookOpen size={14} /> What each test does
+      </button>
+      {open && (
+        <ul className="grid gap-2 md:grid-cols-2">
+          {scenarios.map((scenario) => {
+            const run = latest(scenario.id);
+            return (
+              <li
+                key={scenario.id}
+                className="rounded-md border px-3 py-2"
+                style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                    {scenario.title || scenario.id}
+                    <span
+                      className="ml-2 text-xs font-normal"
+                      style={{ color: 'var(--text-muted)' }}
+                    >
+                      {CADENCE_LABELS[scenario.cadence] ?? scenario.cadence}
+                    </span>
+                  </span>
+                  {run ? (
+                    <span
+                      className="flex shrink-0 items-center gap-1.5 text-xs"
+                      style={{ color: 'var(--text-muted)' }}
+                      title={`Latest run ${when(run.startedAt)}`}
+                    >
+                      {when(run.startedAt)} <ResultBadge result={run.result} />
+                    </span>
+                  ) : (
+                    <span className="status-badge status-unknown shrink-0">Never run</span>
+                  )}
+                </div>
+                {scenario.note && (
+                  <p className="mt-1 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                    {scenario.note}
+                  </p>
+                )}
+                {scenario.requires && (
+                  <p className="mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+                    Requires: {scenario.requires}
+                  </p>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** The harness's headline numbers, labelled; unknown counters are left out rather than guessed at. */
+const MEASUREMENTS: [key: string, label: string, unit?: string][] = [
+  ['questions', 'Questions'],
+  ['answered', 'Answered'],
+  ['latency_p50_s', 'Reply time (median)', 's'],
+  ['latency_p90_s', 'Reply time (p90)', 's'],
+  ['latency_max_s', 'Reply time (worst)', 's'],
+  ['glitches', 'Glitches'],
+  ['chop_index', 'Chop (gaps per 10 s)'],
+  ['cut_offs', 'Cut-offs'],
+  ['inaudible', 'Inaudible replies'],
+  ['missed', 'Missed questions'],
+  ['wrong_answers', 'Wrong answers'],
+  ['failed_actions', 'Failed actions'],
+  ['actions_verified', 'Actions verified'],
+  ['longest_dead_air_s', 'Longest silence', 's'],
+];
+
+function Measurements({ totals, mode }: { totals?: Record<string, number>; mode?: string }) {
+  const rows = MEASUREMENTS.filter(([key]) => totals?.[key] !== undefined);
+  if (rows.length === 0 && !mode) return null;
+  return (
+    <div>
+      <p className="mb-1 text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+        Measurements{mode ? ` · ${mode}` : ''}
+      </p>
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs md:grid-cols-4">
+        {rows.map(([key, label, unit]) => (
+          <div key={key} className="flex justify-between gap-2">
+            <dt style={{ color: 'var(--text-muted)' }}>{label}</dt>
+            <dd className="font-mono" style={{ color: 'var(--text-primary)' }}>
+              {Number.isInteger(totals![key]) ? totals![key] : totals![key].toFixed(2)}
+              {unit ?? ''}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
+/** Every exchange in the run: what was asked, whether the check passed, and what it saw. */
+function QuestionTable({ questions }: { questions: TrainingQuestion[] }) {
+  if (questions.length === 0) return null;
+  return (
+    <div>
+      <p className="mb-1 text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+        What was asked
+      </p>
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="text-left uppercase" style={{ color: 'var(--text-muted)' }}>
+            <th className="py-1 pr-3 font-medium">#</th>
+            <th className="py-1 pr-3 font-medium">Question</th>
+            <th className="py-1 pr-3 font-medium">Result</th>
+            <th className="py-1 pr-3 font-medium">Lag</th>
+            <th className="py-1 font-medium">What the check saw</th>
+          </tr>
+        </thead>
+        <tbody>
+          {questions.map((question, index) => (
+            <tr
+              key={question.id ?? index}
+              className="border-t align-top"
+              style={{ borderColor: 'var(--border)' }}
+            >
+              <td className="py-1 pr-3 font-mono" style={{ color: 'var(--text-muted)' }}>
+                {index + 1}
+              </td>
+              <td className="py-1 pr-3" style={{ color: 'var(--text-primary)' }}>
+                {question.prompt ?? question.id ?? '—'}
+              </td>
+              <td className="py-1 pr-3">
+                {question.status === 'skipped' ? (
+                  <span className="status-badge status-unknown">Skipped</span>
+                ) : (
+                  <ResultBadge result={question.status} />
+                )}
+              </td>
+              <td className="py-1 pr-3 font-mono" style={{ color: 'var(--text-secondary)' }}>
+                {question.lag !== undefined ? `${question.lag.toFixed(1)}s` : '—'}
+              </td>
+              <td className="py-1" style={{ color: 'var(--text-secondary)' }}>
+                {question.detail ?? ''}
+                {question.notes?.map((note, i) => (
+                  <span key={i} className="block" style={{ color: 'var(--text-muted)' }}>
+                    {note}
+                  </span>
+                ))}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 /** Breaches, limitations and change requests as one labelled list each. */
 function DetailList({ title, items }: { title: string; items: string[] }) {
   if (items.length === 0) return null;
@@ -106,7 +291,7 @@ function DetailList({ title, items }: { title: string; items: string[] }) {
   );
 }
 
-export default function TrainingPanel({ training, isLoading, error }: TrainingPanelProps) {
+export default function TrainingPanel({ agentId, training, isLoading, error }: TrainingPanelProps) {
   const [expanded, setExpanded] = useState<string[]>([]);
   const titles = useMemo(() => {
     const map = new Map<string, string>();
@@ -178,11 +363,27 @@ export default function TrainingPanel({ training, isLoading, error }: TrainingPa
                     {CADENCE_LABELS[scenario.cadence] ?? scenario.cadence}
                     {reason === 'overdue' && lastPassAt ? ` · last pass ${when(lastPassAt)}` : ''}
                   </span>
+                  {scenario.note && (
+                    <p
+                      className="mt-1 line-clamp-2 max-w-xs text-xs"
+                      style={{ color: 'var(--text-muted)' }}
+                      title={scenario.note}
+                    >
+                      {scenario.note}
+                    </p>
+                  )}
                 </li>
               ))}
             </ul>
           )}
         </div>
+      )}
+
+      {training.curriculum.length > 0 && (
+        <CurriculumList
+          scenarios={training.curriculum.filter((s) => scenarioAppliesTo(s, agentId))}
+          runs={training.runs}
+        />
       )}
 
       {training.runs.length === 0 ? (
@@ -337,9 +538,11 @@ function ExpandableRow({
               className="space-y-3 rounded-md border p-3"
               style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}
             >
+              <Measurements totals={run.totals} mode={run.mode} />
               <DetailList title="Breaches" items={run.breaches} />
               <DetailList title="Limitations" items={run.limitations} />
               <DetailList title="Change requests" items={run.changeRequests} />
+              <QuestionTable questions={run.questions} />
             </div>
           </td>
         </tr>
