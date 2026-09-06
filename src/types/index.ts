@@ -462,7 +462,7 @@ export interface TrainingArtefacts {
 }
 
 /** How often a curriculum scenario must be re-run to stay satisfied. */
-export type TrainingCadence = 'once' | 'weekly' | 'monthly' | 'on-change';
+export type TrainingCadence = 'once' | 'daily' | 'weekly' | 'monthly' | 'on-change' | 'on-demand';
 
 /** One entry of `curriculum.yaml` at the root of the agent-training repo. */
 export interface CurriculumScenario {

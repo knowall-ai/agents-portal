@@ -247,7 +247,7 @@ Runs are one JSON file each, at `runs/<agent-id>/<started_at>-<scenario>[-<run-i
 
 The curriculum is `curriculum.yaml` at the repo root: a `scenarios` list of
 `id`, `title`, `agents` (the agent ids it is required for) and `cadence`
-(`once`, `weekly`, `monthly` or `on-change`).
+(`once`, `daily`, `weekly`, `monthly`, `on-change` or `on-demand`).
 
 Every field is optional and unknown fields are ignored, so the harness can add to
 the shape without breaking the tab. A run file that is not valid JSON is warned
@@ -275,7 +275,7 @@ when the repo read fails, so the tab explains itself instead of going blank.
 
 `outstandingFor` marks a scenario outstanding when it has never been run, when
 its most recent run failed, or when its last pass is older than the cadence
-allows (7 days for `weekly`, 30 for `monthly`; `once` and `on-change` are
+allows (1 day for `daily`, 7 for `weekly`, 30 for `monthly`; `once`, `on-change` and `on-demand` are
 satisfied by any pass, because the portal cannot observe the change that would
 make an `on-change` scenario due again).
 
