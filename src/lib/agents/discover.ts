@@ -4,7 +4,7 @@
 //   1. Resource tag `agent` (or any key in AGENT_TAG_KEYS) names the agent slug.
 //   2. Otherwise a registry entry whose `resourceGroups` contains the resource's
 //      group claims it, but only inside the entry's `subscriptionIds` or the
-//      registry's own tenant; a shared resource group (e.g. ka-agents) can host
+//      registry's own tenant; a shared resource group (e.g. a network group) can host
 //      several agents as long as the newer ones are tagged.
 //   3. Anything else is ignored.
 //
@@ -312,7 +312,7 @@ export function teamsChatUrl(
   return undefined;
 }
 
-/** Teams deep link that starts a call with the agent's own account (bots cannot be called this way). */
+/** Teams deep link that starts a video call with the agent's own account (bots cannot be called this way). */
 export function teamsCallUrl(
   entry: AgentRegistryEntry | undefined,
   resources: AzureResource[]
@@ -322,7 +322,7 @@ export function teamsCallUrl(
   if (resources.some((r) => r.type === 'microsoft.botservice/botservices')) return undefined;
   const upn = agentUpn(entry, resources);
   return upn
-    ? `https://teams.microsoft.com/l/call/0/0?users=${encodeURIComponent(upn)}`
+    ? `https://teams.microsoft.com/l/call/0/0?users=${encodeURIComponent(upn)}&withVideo=true`
     : undefined;
 }
 

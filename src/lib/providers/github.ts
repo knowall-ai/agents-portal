@@ -1,5 +1,7 @@
-// GitHub: skills (SKILL.md folders), SOUL.md and recent commits for an agent's repo.
-import type { ActivityEvent, AgentSoul, Skill } from '@/types';
+// GitHub: skills (SKILL.md folders), SOUL.md, training runs and recent commits
+// for an agent's repo.
+import { parseCurriculum, parseTrainingRun } from '@/lib/training';
+import type { ActivityEvent, AgentSoul, CurriculumScenario, Skill, TrainingRun } from '@/types';
 
 const API = 'https://api.github.com';
 
@@ -201,4 +203,141 @@ export async function listRepoCommits(
     level: 'info',
     url: c.html_url,
   }));
+}
+
+/** Default repo holding the training harness's published runs and curriculum. */
+export const DEFAULT_TRAINING_REPO = 'knowall-ai/agent-training';
+
+/** At most this many run files are fetched per agent, newest first. */
+const MAX_TRAINING_RUNS = 50;
+
+/**
+ * GitHub answers 404 for a private repo the token cannot read as well as for a
+ * path that does not exist. Before treating a 404 as an absent optional file,
+ * confirm the repo itself is readable so a wrong `GITHUB_TOKEN` or repo name
+ * surfaces as an error instead of an empty Training tab.
+ */
+async function absentOrInaccessible(repo: string, error: unknown): Promise<void> {
+  if (!(error instanceof Error && error.message.startsWith('GitHub 404 '))) throw error;
+  try {
+    await ghJson<unknown>(`/repos/${repo}`);
+  } catch (repoError) {
+    if (repoError instanceof Error && repoError.message.startsWith('GitHub 404 '))
+      throw new Error(`GitHub repo ${repo} not found or not readable with GITHUB_TOKEN`);
+    throw repoError;
+  }
+}
+
+/**
+ * The run files to read: the newest `limit` overall, plus the newest file for
+ * each scenario in `keepScenarios` that the cap would otherwise drop, so the
+ * compliance check always sees each scenario's latest result. Run files are
+ * named `<started_at>-<scenario>[-<run-id>].json`; a file belongs to the
+ * longest scenario id its name after the timestamp equals or continues with a
+ * dash, so `lag-repro` files are never mistaken for `lag` runs with a run id.
+ */
+export function selectRunFiles<T extends { name: string }>(
+  files: T[],
+  limit: number,
+  keepScenarios: string[]
+): T[] {
+  const newest = [...files].sort((a, b) => b.name.localeCompare(a.name));
+  const chosen = newest.slice(0, limit);
+  const rest = newest.slice(limit);
+  const ids = [...keepScenarios].map((id) => id.toLowerCase()).sort((a, b) => b.length - a.length);
+  const scenarioOf = (name: string): string | undefined => {
+    const tail = name
+      .replace(/\.json$/i, '')
+      .replace(TIMESTAMP_PREFIX, '')
+      .toLowerCase();
+    return ids.find((id) => tail === id || tail.startsWith(`${id}-`));
+  };
+  const covered = new Set(chosen.map((f) => scenarioOf(f.name)));
+  for (const file of rest) {
+    const id = scenarioOf(file.name);
+    if (id === undefined || covered.has(id)) continue;
+    covered.add(id);
+    chosen.push(file);
+  }
+  return chosen;
+}
+
+/** The ISO start time that begins a run file name, colons written as dashes. */
+const TIMESTAMP_PREFIX =
+  /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}(?:[.-]\d+)?(?:Z|[+-]\d{2}-?\d{2})?-?/;
+
+/** A path segment that cannot escape the directory it is joined to. */
+function isSafeSegment(segment: string): boolean {
+  return /^[A-Za-z0-9_.-]+$/.test(segment) && !segment.includes('..');
+}
+
+/** Decode a base64 `contents` response, or null when it is not a plain file. */
+function fileText(file: ContentItem | ContentItem[]): string | null {
+  if (Array.isArray(file) || !file.content || file.encoding !== 'base64') return null;
+  return Buffer.from(file.content, 'base64').toString('utf8');
+}
+
+/**
+ * Training runs published under `runs/<agentId>/` in the training repo, newest
+ * first and capped at 50 files plus the latest file of every scenario in
+ * `keepScenarios` (see `selectRunFiles`). Run file names begin with the ISO
+ * start time, so the listing sorts by name before anything is fetched. A
+ * missing directory in a readable repo means the agent has no runs yet, not a
+ * failure; a file that cannot be read or parsed is warned about and skipped so
+ * one bad run never blanks the tab.
+ */
+export async function listTrainingRuns(
+  repo: string,
+  agentId: string,
+  keepScenarios: string[] = []
+): Promise<TrainingRun[]> {
+  if (!isValidRepo(repo)) throw new Error(`Invalid repo slug: ${repo}`);
+  if (!isSafeSegment(agentId)) throw new Error(`Invalid agent id: ${agentId}`);
+
+  let listing: ContentItem | ContentItem[];
+  try {
+    listing = await ghJson<ContentItem | ContentItem[]>(`/repos/${repo}/contents/runs/${agentId}`);
+  } catch (error) {
+    await absentOrInaccessible(repo, error);
+    return [];
+  }
+  if (!Array.isArray(listing)) return [];
+
+  const files = selectRunFiles(
+    listing.filter((item) => item.type === 'file' && item.name.endsWith('.json')),
+    MAX_TRAINING_RUNS,
+    keepScenarios
+  );
+
+  const runs = await mapWithConcurrency(files, 6, async (item): Promise<TrainingRun | null> => {
+    try {
+      const file = await ghJson<ContentItem>(`/repos/${repo}/contents/${item.path}`);
+      const text = fileText(file);
+      if (text === null) return null;
+      const run = parseTrainingRun(text, item.path);
+      return run ? { ...run, url: file.html_url ?? item.html_url } : null;
+    } catch (error) {
+      console.warn(`listTrainingRuns: failed to read ${item.path} in ${repo}`, error);
+      return null;
+    }
+  });
+
+  return runs.filter((run): run is TrainingRun => run !== null);
+}
+
+/**
+ * `curriculum.yaml` at the root of the training repo. A readable repo without
+ * one has no curriculum, which is not an error; a repo that cannot be read is.
+ */
+export async function getCurriculum(repo: string): Promise<CurriculumScenario[]> {
+  if (!isValidRepo(repo)) throw new Error(`Invalid repo slug: ${repo}`);
+  let file: ContentItem | ContentItem[];
+  try {
+    file = await ghJson<ContentItem | ContentItem[]>(`/repos/${repo}/contents/curriculum.yaml`);
+  } catch (error) {
+    await absentOrInaccessible(repo, error);
+    return [];
+  }
+  const text = fileText(file);
+  return text === null ? [] : parseCurriculum(text);
 }

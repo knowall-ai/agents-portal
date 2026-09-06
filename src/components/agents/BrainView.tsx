@@ -1448,9 +1448,9 @@ export default function BrainView({
                   .filter(([k]) => k !== 'name')
                   .slice(0, 4)
                   .map(([k, v]) => (
-                    <HudRow key={k}>
+                    <HudRow key={k} wrap={2}>
                       <span style={{ color: HUD.dim }}>{k.toUpperCase()} </span>
-                      {String(v).slice(0, 34)}
+                      {String(v).slice(0, 140)}
                     </HudRow>
                   ))}
                 {selectedLinks.map((l) => {
@@ -1458,11 +1458,11 @@ export default function BrainView({
                   const tgt = l.target as SimNode;
                   const other = src.id === selected.id ? tgt : src;
                   return (
-                    <HudRow key={l.id}>
+                    <HudRow key={l.id} wrap={2}>
                       <span style={{ color: HUD.dim }}>
                         {src.id === selected.id ? '→' : '←'} {l.type}{' '}
                       </span>
-                      {other.name.slice(0, 26)}
+                      {other.name.slice(0, 80)}
                     </HudRow>
                   );
                 })}

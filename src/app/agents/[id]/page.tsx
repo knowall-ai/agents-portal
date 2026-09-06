@@ -12,10 +12,11 @@ import {
   ExternalLink,
   Github,
   Globe,
+  GraduationCap,
   Heart,
   LayoutGrid,
   MessageSquare,
-  Phone,
+  Video,
   Receipt,
   RefreshCw,
   Share2,
@@ -52,11 +53,13 @@ import {
   ResourceTable,
   SkillList,
   SoulPanel,
+  TrainingPanel,
 } from '@/components/agents';
 import { Countdown } from '@/components/common';
 import { formatDistanceToNow } from 'date-fns';
 import { useApi } from '@/hooks';
 import { presenceLabel } from '@/lib/presence';
+import { ALL_SOURCES } from '@/lib/skills-filter';
 import { BACKDROPS, type Backdrop } from '@/components/agents/BrainView';
 import type {
   ActivityDay,
@@ -70,6 +73,7 @@ import type {
   AgentLicensing,
   AgentPermissions,
   AgentSoul,
+  AgentTraining,
   FoundryAssistant,
   Skill,
 } from '@/types';
@@ -81,6 +85,7 @@ const TAB_IDS = [
   'licences',
   'permissions',
   'skills',
+  'training',
   'activity',
 ] as const;
 type TabId = (typeof TAB_IDS)[number];
@@ -132,8 +137,28 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
     const query = new URLSearchParams(searchParams.toString());
     if (next === 'overview') query.delete('tab');
     else query.set('tab', next);
+    // the Skills filters belong to that tab only; leaving it drops them
+    if (next !== 'skills') {
+      query.delete('q');
+      query.delete('source');
+    }
     const qs = query.toString();
     router.replace(qs ? `?${qs}` : `/agents/${id}`, { scroll: false });
+  };
+
+  // Skills tab filters live in the URL so a filtered view can be linked
+  const skillQuery = searchParams.get('q') ?? '';
+  const skillSource = searchParams.get('source') ?? ALL_SOURCES;
+  // One navigation for however many filters change at once, so two updates
+  // made from the same snapshot cannot overwrite each other
+  const setSkillParams = (changes: { q?: string; source?: string }) => {
+    const query = new URLSearchParams(searchParams.toString());
+    for (const [key, value] of Object.entries(changes)) {
+      if (!value || (key === 'source' && value === ALL_SOURCES)) query.delete(key);
+      else query.set(key, value);
+    }
+    query.set('tab', 'skills');
+    router.replace(`?${query.toString()}`, { scroll: false });
   };
 
   const detail = useApi<{ agent: AgentDetail; assistants: FoundryAssistant[] }>(
@@ -144,6 +169,7 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
   const soul = useApi<{ soul: AgentSoul | null; configured: boolean }>(
     ready ? `/api/agents/${id}/soul` : null
   );
+  const training = useApi<{ training: AgentTraining }>(ready ? `/api/agents/${id}/training` : null);
   const metrics = useApi<{ metrics: AgentMetrics }>(
     ready ? `/api/agents/${id}/metrics?hours=72` : null,
     120_000
@@ -234,6 +260,12 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
       label: 'Skills',
       icon: <Sparkles size={14} />,
       count: skills.data?.skills.length,
+    },
+    {
+      id: 'training',
+      label: 'Training',
+      icon: <GraduationCap size={14} />,
+      count: training.data?.training.runs.length,
     },
     {
       id: 'activity',
@@ -391,9 +423,9 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
                     target="_blank"
                     rel="noopener noreferrer"
                     className="btn-primary flex items-center gap-2 text-sm"
-                    title="Start a Teams call with this agent"
+                    title="Start a Teams video call with this agent"
                   >
-                    <Phone size={14} /> Call in Teams
+                    <Video size={14} /> Video call in Teams
                   </a>
                 )}
                 {agent.portalUrl && (
@@ -687,6 +719,28 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
                     skills={skills.data?.skills ?? null}
                     isLoading={skills.isLoading}
                     error={skills.error}
+                    query={skillQuery}
+                    source={skillSource}
+                    primaryLabel={agent?.repo}
+                    onQueryChange={(q) => setSkillParams({ q })}
+                    onSourceChange={(next) => setSkillParams({ source: next })}
+                    onClear={() => setSkillParams({ q: '', source: ALL_SOURCES })}
+                  />
+                </section>
+              )}
+
+              {tab === 'training' && (
+                <section className="card">
+                  <h2
+                    className="flex items-center gap-2 border-b p-4 text-lg font-semibold"
+                    style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                  >
+                    <GraduationCap size={18} style={{ color: 'var(--primary)' }} /> Training
+                  </h2>
+                  <TrainingPanel
+                    training={training.data?.training ?? null}
+                    isLoading={training.isLoading}
+                    error={training.error}
                   />
                 </section>
               )}

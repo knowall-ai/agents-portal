@@ -179,10 +179,31 @@ export function HudSparkline({ values, height = 20 }: { values: number[]; height
 export function HudRow({
   children,
   colour = HUD.g,
+  wrap = 0,
 }: {
   children: React.ReactNode;
   colour?: string;
+  /** Let the row wrap onto up to this many lines instead of clipping at the panel edge */
+  wrap?: number;
 }) {
+  if (wrap > 0) {
+    return (
+      <p
+        className="leading-[16px] break-words whitespace-pre-wrap"
+        style={{
+          color: colour,
+          fontFamily: HUD.font,
+          fontSize: 12,
+          display: '-webkit-box',
+          WebkitLineClamp: wrap,
+          WebkitBoxOrient: 'vertical',
+          overflow: 'hidden',
+        }}
+      >
+        {children}
+      </p>
+    );
+  }
   return (
     <p
       className="h-[16px] leading-[16px] whitespace-pre"
