@@ -256,6 +256,11 @@ function QuestionTable({ questions }: { questions: TrainingQuestion[] }) {
                 ) : (
                   <ResultBadge result={question.status} />
                 )}
+                {question.verify?.kind && (
+                  <span className="mt-0.5 block" style={{ color: 'var(--text-muted)' }}>
+                    verified: {question.verify.kind}
+                  </span>
+                )}
               </td>
               <td className="py-1 pr-3 font-mono" style={{ color: 'var(--text-secondary)' }}>
                 {question.lag !== undefined ? `${question.lag.toFixed(1)}s` : '—'}

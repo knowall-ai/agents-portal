@@ -175,7 +175,13 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
   const soul = useApi<{ soul: AgentSoul | null; configured: boolean }>(
     ready ? `/api/agents/${id}/soul` : null
   );
-  const training = useApi<{ training: AgentTraining }>(ready ? `/api/agents/${id}/training` : null);
+  // A manual Refresh re-reads the training repo instead of the server's cache
+  const [trainingRefresh, setTrainingRefresh] = useState(0);
+  const training = useApi<{ training: AgentTraining }>(
+    ready
+      ? `/api/agents/${id}/training${trainingRefresh ? `?refresh=${trainingRefresh}` : ''}`
+      : null
+  );
   const metrics = useApi<{ metrics: AgentMetrics }>(
     ready ? `/api/agents/${id}/metrics?hours=72` : null,
     120_000
@@ -499,6 +505,9 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
                     permissions.refetch();
                     boost.refetch();
                     brain.refetch();
+                    setTrainingRefresh(Date.now());
+                    recordings.refetch();
+                    recordingStatus.refetch();
                   }}
                   className="btn-secondary flex items-center gap-2 text-sm"
                 >
