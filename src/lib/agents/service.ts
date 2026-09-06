@@ -39,7 +39,7 @@ import { fetchBrainSnapshot, isValidBrainUrl } from '@/lib/providers/reverie';
 import { fixtureSnapshot } from '@/lib/brain-fixture';
 import { reverieTokenFor } from '@/lib/reverie-token';
 import { isOnCall } from '@/lib/presence';
-import { outstandingFor, sortRuns } from '@/lib/training';
+import { outstandingFor, scenarioAppliesTo, sortRuns } from '@/lib/training';
 import {
   FOUNDRY_SCOPE,
   GRAPH_DIRECTORY_READ_ALL_SCOPE,
@@ -295,15 +295,21 @@ export async function getTraining(ctx: UserContext, agent: AgentDetail): Promise
     async () => {
       try {
         // The repo is the same for every viewer, so the reads themselves are
-        // cached per repo rather than per user.
-        const [runs, curriculum] = await Promise.all([
-          cached(
-            `training:runs:${repo}:${agent.id}`,
-            () => listTrainingRuns(repo, agent.id),
-            TRAINING_TTL
-          ),
-          cached(`training:curriculum:${repo}`, () => getCurriculum(repo), TRAINING_TTL),
-        ]);
+        // cached per repo rather than per user. The curriculum comes first so
+        // the run listing keeps each of its scenarios' latest result even when
+        // the newest-50 cap would drop it, and outstanding training is judged
+        // on what actually happened rather than on what was truncated.
+        const curriculum = await cached(
+          `training:curriculum:${repo}`,
+          () => getCurriculum(repo),
+          TRAINING_TTL
+        );
+        const keep = curriculum.filter((s) => scenarioAppliesTo(s, agent.id)).map((s) => s.id);
+        const runs = await cached(
+          `training:runs:${repo}:${agent.id}`,
+          () => listTrainingRuns(repo, agent.id, keep),
+          TRAINING_TTL
+        );
         const sorted = sortRuns(runs);
         return {
           runs: sorted,

@@ -245,6 +245,23 @@ describe('parseCurriculum', () => {
     ).toEqual([{ id: 'smoke', title: undefined, agents: [], cadence: 'weekly' }]);
   });
 
+  it('accepts an agents block sequence at the same indent as its key', () => {
+    const yaml = [
+      'scenarios:',
+      '- id: smoke',
+      '  agents:',
+      '  - sallie',
+      '  - poppie',
+      '  cadence: weekly',
+      '- id: lag-repro',
+      '  cadence: monthly',
+    ].join('\n');
+    expect(parseCurriculum(yaml)).toEqual([
+      { id: 'smoke', title: undefined, agents: ['sallie', 'poppie'], cadence: 'weekly' },
+      { id: 'lag-repro', title: undefined, agents: [], cadence: 'monthly' },
+    ]);
+  });
+
   it('skips an item with no id and defaults an absent or unknown cadence to once', () => {
     const yaml = [
       'scenarios:',

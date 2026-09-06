@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getCurriculum, listRepoCommits, listTrainingRuns, parseSkillFrontmatter } from './github';
+import {
+  getCurriculum,
+  listRepoCommits,
+  listTrainingRuns,
+  parseSkillFrontmatter,
+  selectRunFiles,
+} from './github';
 
 function rawCommit(sha: string) {
   return {
@@ -82,14 +88,14 @@ function listingEntry(path: string) {
 const runBody = (scenario: string, result: 'pass' | 'fail') =>
   JSON.stringify({ result, scenario, started_at: '2026-09-01T09:00:00Z' });
 
+const ok = (body: unknown) => ({ ok: true, json: async () => body });
+const notFound = (path: string) => ({ ok: false, status: 404, url: path });
+
 describe('listTrainingRuns', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
-
-  const ok = (body: unknown) => ({ ok: true, json: async () => body });
-  const notFound = (path: string) => ({ ok: false, status: 404, url: path });
 
   it('lists the directory newest first and reads each run', async () => {
     const fetchMock = vi.fn(async (url: string) => {
@@ -117,9 +123,44 @@ describe('listTrainingRuns', () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
-  it('treats a missing runs directory as no runs', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(notFound('/contents/runs/sallie')));
+  it('treats a missing runs directory in a readable repo as no runs', async () => {
+    const fetchMock = vi.fn(async (url: string) =>
+      url.endsWith('/repos/knowall-ai/agent-training')
+        ? ok({ full_name: 'knowall-ai/agent-training' })
+        : notFound(url)
+    );
+    vi.stubGlobal('fetch', fetchMock);
     await expect(listTrainingRuns('knowall-ai/agent-training', 'sallie')).resolves.toEqual([]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('reports a repo the token cannot read instead of pretending it is empty', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(notFound('/repos/knowall-ai/agent-training')));
+    await expect(listTrainingRuns('knowall-ai/agent-training', 'sallie')).rejects.toThrow(
+      'not found or not readable'
+    );
+  });
+
+  it('keeps the latest file of each curriculum scenario past the newest-50 cap', async () => {
+    const day = (n: number) => `2026-08-${String(n).padStart(2, '0')}T09-00-00`;
+    const listing = [
+      listingEntry(`runs/sallie/${day(1)}-induction-quiz.json`),
+      ...Array.from({ length: 55 }, (_, i) =>
+        listingEntry(`runs/sallie/${day(2)}-smoke-r${i}.json`)
+      ),
+    ];
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.endsWith('/contents/runs/sallie')) return ok(listing);
+      const path = url.slice(url.indexOf('runs/'));
+      const scenario = path.includes('induction') ? 'induction-quiz' : 'smoke';
+      return ok(contentsFile(path, runBody(scenario, 'pass')));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const runs = await listTrainingRuns('knowall-ai/agent-training', 'sallie', ['induction-quiz']);
+    expect(runs).toHaveLength(51);
+    expect(runs.filter((r) => r.scenario === 'induction-quiz')).toHaveLength(1);
+    expect(fetchMock).toHaveBeenCalledTimes(52);
   });
 
   it('propagates a failure that is not a 404', async () => {
@@ -182,8 +223,22 @@ describe('getCurriculum', () => {
     ]);
   });
 
-  it('treats a repo with no curriculum as having none', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 404 }));
+  it('reports a repo the token cannot read instead of an empty curriculum', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(notFound('/repos/knowall-ai/agent-training')));
+    await expect(getCurriculum('knowall-ai/agent-training')).rejects.toThrow(
+      'not found or not readable'
+    );
+  });
+
+  it('treats a readable repo with no curriculum as having none', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        url.endsWith('/repos/knowall-ai/agent-training')
+          ? ok({ full_name: 'knowall-ai/agent-training' })
+          : notFound(url)
+      )
+    );
     await expect(getCurriculum('knowall-ai/agent-training')).resolves.toEqual([]);
   });
 
@@ -196,5 +251,49 @@ describe('getCurriculum', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
     await expect(getCurriculum('knowall-ai/agent-training')).rejects.toThrow('GitHub 500');
     await expect(getCurriculum('../../etc')).rejects.toThrow('Invalid repo slug');
+  });
+});
+
+describe('selectRunFiles', () => {
+  const f = (name: string) => ({ name });
+  const files = [
+    f('2026-09-03T10-00-00-smoke.json'),
+    f('2026-09-02T10-00-00-smoke-abc123.json'),
+    f('2026-09-01T10-00-00-lag-repro.json'),
+    f('2026-08-01T10-00-00-lag.json'),
+    f('2026-07-01T10-00-00-induction-quiz.json'),
+    f('2026-06-01T10-00-00-induction-quiz.json'),
+  ];
+
+  it('takes the newest files then the latest of each kept scenario that was cut', () => {
+    expect(
+      selectRunFiles(files, 2, ['induction-quiz', 'lag', 'lag-repro', 'smoke']).map((x) => x.name)
+    ).toEqual([
+      '2026-09-03T10-00-00-smoke.json',
+      '2026-09-02T10-00-00-smoke-abc123.json',
+      '2026-09-01T10-00-00-lag-repro.json',
+      '2026-08-01T10-00-00-lag.json',
+      '2026-07-01T10-00-00-induction-quiz.json',
+    ]);
+  });
+
+  it('attributes a file to the longest scenario id it matches', () => {
+    // With both ids known, lag-repro's file is not a `lag` run with a run id
+    expect(selectRunFiles(files, 1, ['lag', 'lag-repro']).map((x) => x.name)).toEqual([
+      '2026-09-03T10-00-00-smoke.json',
+      '2026-09-01T10-00-00-lag-repro.json',
+      '2026-08-01T10-00-00-lag.json',
+    ]);
+    // With only `lag` known, the dash-suffixed name reads as a run id of it
+    expect(selectRunFiles(files, 1, ['lag']).map((x) => x.name)).toEqual([
+      '2026-09-03T10-00-00-smoke.json',
+      '2026-09-01T10-00-00-lag-repro.json',
+    ]);
+  });
+
+  it('ignores scenarios with no file and is case-insensitive', () => {
+    expect(selectRunFiles(files, 1, ['nothing', 'SMOKE']).map((x) => x.name)).toEqual([
+      '2026-09-03T10-00-00-smoke.json',
+    ]);
   });
 });

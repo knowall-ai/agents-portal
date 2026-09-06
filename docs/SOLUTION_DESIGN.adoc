@@ -256,10 +256,16 @@ about and skipped rather than failing the read.
 === Reading and computing
 
 `listTrainingRuns` and `getCurriculum` in `src/lib/providers/github.ts` list
-`runs/<agent-id>` and fetch each file (newest first by file name, capped at 50,
-per-file failures warned and skipped). `curriculum.yaml` is parsed by a small
-YAML subset parser in `src/lib/training.ts` — the flat shape above only — rather
-than adding a YAML dependency.
+`runs/<agent-id>` and fetch each file (newest first by file name, per-file
+failures warned and skipped). The cap is the newest 50 files plus the latest
+file of each curriculum scenario that applies to the agent (`selectRunFiles`),
+so a one-off induction pass buried under weeks of smoke tests still counts.
+GitHub answers 404 both for a missing path and for a private repo the token
+cannot read, so a 404 is only treated as "nothing there" after `GET /repos/<repo>`
+succeeds; otherwise the tab shows the lookup error. `curriculum.yaml` is parsed
+by a small YAML subset parser in `src/lib/training.ts` — the flat shape above
+only, including indentless block sequences — rather than adding a YAML
+dependency.
 
 `getTraining` in `src/lib/agents/service.ts` composes the two, caches for 10
 minutes (a failed read for 1 minute) and returns `configured: false` without

@@ -233,9 +233,10 @@ export function parseCurriculum(yamlText: string): CurriculumScenario[] {
     }
 
     const isItem = text === '-' || text.startsWith('- ');
-    // A block-sequence entry indented past the current mapping's keys belongs
-    // to the key that opened it; anything else at item level starts a scenario.
-    if (isItem && listKey && indent > keyIndent) {
+    // A block-sequence entry at or past the indent of the current mapping's
+    // keys belongs to the key that opened it (YAML allows `agents:` and its
+    // `- x` entries at the same indent); an item further left starts a scenario.
+    if (isItem && listKey && indent >= keyIndent) {
       const item = unquote(text.slice(1));
       if (item !== '') draft?.agents.push(item);
       continue;
