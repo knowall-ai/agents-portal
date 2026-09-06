@@ -112,11 +112,15 @@
       "soulPath": "hermes/SOUL.md",
       "skillSources": [
         {
-          "repo": "knowall-ai/claude-plugins",
+          "repo": "T-Minus-15/claude-plugins",
           "path": "skills"
         },
         {
-          "repo": "T-Minus-15/claude-plugins",
+          "repo": "knowall-ai/agent-presence",
+          "path": "presence-skills"
+        },
+        {
+          "repo": "knowall-ai/hermes-reverie",
           "path": "skills"
         }
       ]
