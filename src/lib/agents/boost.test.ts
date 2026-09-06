@@ -84,8 +84,8 @@ describe('setBoost', () => {
     id: '1',
     name: 'ka-sallie-vm',
     type: 'microsoft.compute/virtualmachines',
-    resourceGroup: 'ka-agents',
-    // the fixture VM must sit in the subscription the registry pins
+    // the fixture VM must sit in the group and subscription the registry pins
+    resourceGroup: lookupRegistryEntry('sallie')?.resourceGroups?.[0] ?? 'ka-sallie-prod',
     subscriptionId: lookupRegistryEntry('sallie')?.subscriptionIds?.[0] ?? 'sub',
     tenantId: 'tenant-1',
   } as unknown as AzureResource;

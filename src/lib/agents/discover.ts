@@ -4,7 +4,7 @@
 //   1. Resource tag `agent` (or any key in AGENT_TAG_KEYS) names the agent slug.
 //   2. Otherwise a registry entry whose `resourceGroups` contains the resource's
 //      group claims it, but only inside the entry's `subscriptionIds` or the
-//      registry's own tenant; a shared resource group (e.g. ka-agents) can host
+//      registry's own tenant; a shared resource group (e.g. a network group) can host
 //      several agents as long as the newer ones are tagged.
 //   3. Anything else is ignored.
 //
