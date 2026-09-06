@@ -17,6 +17,7 @@ permissions:
 
 env:
   AZURE_WEBAPP_NAME: agent-dashboard-knowallai
+  AZURE_RESOURCE_GROUP: KnowAllAIRG
   APP_URL: https://agents.knowall.ai
   # Smoke test the App Service host directly so the check does not depend on DNS
   SMOKE_URL: https://agent-dashboard-knowallai.azurewebsites.net
@@ -66,7 +67,11 @@ jobs:
         run: |
           cp -r public .next/standalone/
           cp -r .next/static .next/standalone/.next/
-          echo "Standalone deployment package prepared"
+          # Next copies any .env* into the standalone output; secrets live in App
+          # Service settings, never in the package
+          rm -f .next/standalone/.env .next/standalone/.env.*
+          (cd .next/standalone && zip -qr ../../deploy.zip .)
+          echo "Standalone deployment package prepared ($(du -h deploy.zip | cut -f1))"
 
       - name: Login to Azure
         uses: azure/login@v2
@@ -76,11 +81,14 @@ jobs:
       # Runtime settings (NEXTAUTH_SECRET, AZURE_AD_*, GITHUB_TOKEN) are managed
       # in App Service configuration, not here — see docs/DEPLOYMENT.adoc.
       - name: Deploy to Azure App Service
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: ${{ env.AZURE_WEBAPP_NAME }}
-          package: .next/standalone
-          startup-command: 'node server.js'
+        # --clean removes everything in wwwroot that is not in this package, so a
+        # file from an earlier deploy (an .env, an on-server build's leftovers)
+        # can never linger and feed the running app
+        run: |
+          az webapp deploy --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_WEBAPP_NAME" \
+            --type zip --src-path deploy.zip --clean true --restart true
+          az webapp config set --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_WEBAPP_NAME" \
+            --startup-file 'node server.js' --output none
 
       - name: Smoke test
         run: |
