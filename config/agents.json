@@ -106,7 +106,20 @@
       "environment": "prod",
       "brainUrl": "https://poppie.knowall.ai/reverie",
       "resourceGroups": ["ka-agents"],
-      "subscriptionIds": ["a54d50b7-7824-47c2-a115-3cef52d0ab04"]
+      "subscriptionIds": ["a54d50b7-7824-47c2-a115-3cef52d0ab04"],
+      "repo": "knowall-ai/poppie-hermes",
+      "skillsPath": ".claude/skills",
+      "soulPath": "hermes/SOUL.md",
+      "skillSources": [
+        {
+          "repo": "knowall-ai/claude-plugins",
+          "path": "skills"
+        },
+        {
+          "repo": "T-Minus-15/claude-plugins",
+          "path": "skills"
+        }
+      ]
     }
   ]
 }
