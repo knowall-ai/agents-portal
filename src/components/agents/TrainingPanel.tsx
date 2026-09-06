@@ -191,6 +191,8 @@ const MEASUREMENTS: [key: string, label: string, unit?: string][] = [
   ['wrong_answers', 'Wrong answers'],
   ['failed_actions', 'Failed actions'],
   ['actions_verified', 'Actions verified'],
+  ['departure_rows', 'Asked to leave'],
+  ['departures_verified', 'Left the call'],
   ['longest_dead_air_s', 'Longest silence', 's'],
 ];
 
