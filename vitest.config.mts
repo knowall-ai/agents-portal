@@ -30,10 +30,10 @@ export default defineConfig({
       thresholds: {
         // Ratchet: raised automatically as coverage rises, never lowered by hand.
         autoUpdate: true,
-        lines: 55.33,
-        statements: 55.73,
-        functions: 58.26,
-        branches: 55.76,
+        lines: 55.42,
+        statements: 55.81,
+        functions: 58.43,
+        branches: 55.95,
       },
     },
   },
