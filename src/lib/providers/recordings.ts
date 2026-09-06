@@ -31,7 +31,7 @@ function endpoint(baseUrl: string, path: string): string {
 }
 
 async function getJson(baseUrl: string, token: string, path: string): Promise<unknown> {
-  const response = await fetch(endpoint(baseUrl, path), {
+  const response = await bridgeFetch(endpoint(baseUrl, path), {
     headers: headers(token),
     signal: AbortSignal.timeout(TIMEOUT_MS),
     // the token goes to the validated URL only: never follow it somewhere else
@@ -39,6 +39,28 @@ async function getJson(baseUrl: string, token: string, path: string): Promise<un
   });
   if (!response.ok) throw new Error(`Recordings ${response.status} ${path.split('?')[0] || '/'}`);
   return response.json();
+}
+
+/**
+ * `fetch` reports every network-level failure as "fetch failed" with the real
+ * reason in `cause`. Surface that reason, since the tab shows it: a refused
+ * redirect means the reverse proxy is not routing to the bridge yet, which is
+ * a different fix from a VM that is down.
+ */
+async function bridgeFetch(url: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch (error) {
+    const cause = error instanceof Error && error.cause instanceof Error ? error.cause : undefined;
+    const reason = cause?.message ?? (error instanceof Error ? error.message : String(error));
+    if (/redirect/i.test(reason))
+      throw new Error(
+        'Recordings endpoint redirected instead of answering (the reverse proxy is not routing /recordings to the bridge yet)'
+      );
+    if (error instanceof Error && error.name === 'TimeoutError')
+      throw new Error('Recordings endpoint did not answer within 20 s');
+    throw new Error(`Recordings endpoint unreachable: ${reason}`);
+  }
 }
 
 export interface ListOptions {
@@ -104,7 +126,7 @@ export async function resolveVideo(
   id: string
 ): Promise<VideoLocation> {
   if (!isValidRecordingId(id)) throw new Error('Invalid recording id');
-  const response = await fetch(endpoint(baseUrl, `/${id}/video`), {
+  const response = await bridgeFetch(endpoint(baseUrl, `/${id}/video`), {
     headers: headers(token, '*/*'),
     signal: AbortSignal.timeout(TIMEOUT_MS),
     redirect: 'manual',
@@ -135,7 +157,7 @@ export async function getTranscriptVtt(
   id: string
 ): Promise<string | null> {
   if (!isValidRecordingId(id)) throw new Error('Invalid recording id');
-  const response = await fetch(endpoint(baseUrl, `/${id}/transcript.vtt`), {
+  const response = await bridgeFetch(endpoint(baseUrl, `/${id}/transcript.vtt`), {
     headers: headers(token, 'text/vtt'),
     signal: AbortSignal.timeout(TIMEOUT_MS),
     redirect: 'error',
