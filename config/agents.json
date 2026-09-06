@@ -116,6 +116,10 @@
           "path": "skills"
         },
         {
+          "repo": "knowall-ai/claude-plugins",
+          "path": "skills"
+        },
+        {
           "repo": "knowall-ai/agent-presence",
           "path": "presence-skills"
         },
