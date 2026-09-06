@@ -14,3 +14,4 @@ export { default as ResourceTable } from './ResourceTable';
 export { default as SkillList } from './SkillList';
 export { default as SoulPanel } from './SoulPanel';
 export { default as TrainingPanel } from './TrainingPanel';
+export { default as RecordingsPanel } from './RecordingsPanel';

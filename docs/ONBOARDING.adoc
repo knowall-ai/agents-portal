@@ -90,6 +90,7 @@ For richer metadata (skills repo, portal URL, health URL) or for resources you c
 * `skillsPath` is the folder containing `<skill>/SKILL.md`; symlinks (e.g. `workspace/skills → ../.claude/skills`) are followed.
 * `skillSources` lists shared skill packs the agent also loads at runtime (for OpenClaw, the repos in `skills.load.extraDirs`). A skill in the agent's own repo shadows a same-named plugin skill, exactly as it does at runtime. `GITHUB_TOKEN` must be able to read these repos too.
 * `appRegistrations` lists the Entra app registrations the agent runs as (`appId` + `label`). The *Permissions* card shows each one's API permissions with Microsoft's description and whether the tenant has consented, plus the account's directory roles, groups and Azure RBAC roles. Bot Service app IDs are added automatically.
+* `recordingsUrl` enables the *Recordings* tab (admin-only): the base URL of the agent's Presence bridge recordings API behind its reverse proxy (e.g. `https://sallie.knowall.ai/recordings`). The portal sends `RECORDINGS_TOKEN_<AGENT>` (else `RECORDINGS_TOKEN`) to it, so only registry URLs are used, never tags. Playback is a redirect to Teams' own short-lived download link, resolved by the bridge with the agent's identity.
 * `brainUrl` enables the *Brain* tab: the base URL of the agent's `reverie serve` behind its reverse proxy (e.g. `https://sallie.knowall.ai/reverie`). The portal sends `REVERIE_TOKEN` to it, so only registry URLs are used, never tags.
 * `boost` enables the *Boost* card: `script` is the absolute path of the agent's `boost.sh` on its VM (`on <hours>` / `off` / `status`, prints one JSON line), `defaultHours` and `maxHours` bound the duration. The VM reverts on its own via a systemd timer, so a forgotten Boost never outlives its window. Viewers need Virtual Machine Contributor on the VM to use it.
 * `soulPath` points at the agent's `SOUL.md`; leave it out for the OpenClaw default (`workspace/SOUL.md`, then `SOUL.md`). It renders on the agent page.
@@ -182,4 +183,5 @@ See link:CUSTOMER-ACCESS.adoc[Customer access]: invite them as a guest, grant `R
 * [ ] `avatarUrl` set and, for agents with their own account, the `agent-teams-upn` tag on a resource
 * [ ] `agent-openai-project` / `agent-anthropic-workspace` tags (or the registry ids) and `fixedCosts` set so the cost breakdown is complete
 * [ ] `brainUrl` set for agents running `reverie serve`, and `REVERIE_TOKEN` set on the server (never `BRAIN_FIXTURE=1` outside development)
+* [ ] `recordingsUrl` set for agents whose bridge records calls, and `RECORDINGS_TOKEN_<AGENT>` set on the server (never `RECORDINGS_FIXTURE=1` outside development)
 * [ ] Lighthouse delegation in place (customer-hosted agents)

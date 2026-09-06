@@ -141,6 +141,7 @@ interface Bucket {
 export function entryIsPrivileged(entry: AgentRegistryEntry): boolean {
   return Boolean(
     entry.brainUrl ||
+    entry.recordingsUrl ||
     entry.repo ||
     entry.boost ||
     entry.soulPath ||

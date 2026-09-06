@@ -13,6 +13,7 @@ import {
   Github,
   Globe,
   GraduationCap,
+  Disc,
   Heart,
   LayoutGrid,
   MessageSquare,
@@ -54,6 +55,7 @@ import {
   SkillList,
   SoulPanel,
   TrainingPanel,
+  RecordingsPanel,
 } from '@/components/agents';
 import { Countdown } from '@/components/common';
 import { formatDistanceToNow } from 'date-fns';
@@ -74,6 +76,8 @@ import type {
   AgentPermissions,
   AgentSoul,
   AgentTraining,
+  AgentRecordings,
+  RecordingsStatus,
   FoundryAssistant,
   Skill,
 } from '@/types';
@@ -86,6 +90,7 @@ const TAB_IDS = [
   'permissions',
   'skills',
   'training',
+  'recordings',
   'activity',
 ] as const;
 type TabId = (typeof TAB_IDS)[number];
@@ -142,6 +147,7 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
       query.delete('q');
       query.delete('source');
     }
+    if (next !== 'recordings') query.delete('rec');
     const qs = query.toString();
     router.replace(qs ? `?${qs}` : `/agents/${id}`, { scroll: false });
   };
@@ -187,6 +193,24 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
     admin ? `/api/agents/${id}/permissions` : null
   );
   const boost = useApi<{ boost: AgentBoost }>(admin ? `/api/agents/${id}/boost` : null, 60_000);
+  const recordings = useApi<{ recordings: AgentRecordings }>(
+    admin ? `/api/agents/${id}/recordings${demo ? '?demo=1' : ''}` : null,
+    60_000
+  );
+  const recordingStatus = useApi<{ status: RecordingsStatus }>(
+    admin ? `/api/agents/${id}/recordings/status` : null,
+    20_000
+  );
+  const isRecording = Boolean(!recordingStatus.error && recordingStatus.data?.status.active);
+  // The open recording lives in the URL so it can be linked
+  const openRecording = searchParams.get('rec');
+  const setOpenRecording = (rec: string | null) => {
+    const query = new URLSearchParams(searchParams.toString());
+    if (rec) query.set('rec', rec);
+    else query.delete('rec');
+    query.set('tab', 'recordings');
+    router.replace(`?${query.toString()}`, { scroll: false });
+  };
   const brain = useApi<{ brain: AgentBrain }>(
     ready ? `/api/agents/${id}/brain${demo ? '?demo=1' : ''}` : null
   );
@@ -267,6 +291,16 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
       icon: <GraduationCap size={14} />,
       count: training.data?.training.runs.length,
     },
+    ...(isAdmin
+      ? [
+          {
+            id: 'recordings',
+            label: 'Recordings',
+            icon: <Video size={14} />,
+            count: recordings.data?.recordings.items.length,
+          },
+        ]
+      : []),
     {
       id: 'activity',
       label: 'Activity',
@@ -315,6 +349,11 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
                     {onCall && (
                       <span className="on-call" title="The agent's Teams account is in a call">
                         <PhoneCall size={12} /> On a call
+                      </span>
+                    )}
+                    {isRecording && (
+                      <span className="on-call" title="The agent is recording this call">
+                        <Disc size={12} /> Recording
                       </span>
                     )}
                     {presenceNow && !presenceNow.error && !onCall && (
@@ -741,6 +780,29 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
                     training={training.data?.training ?? null}
                     isLoading={training.isLoading}
                     error={training.error}
+                  />
+                </section>
+              )}
+
+              {tab === 'recordings' && isAdmin && (
+                <section className="card">
+                  <h2
+                    className="flex items-center gap-2 border-b p-4 text-lg font-semibold"
+                    style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                  >
+                    <Video size={18} style={{ color: 'var(--primary)' }} /> Recordings
+                    {recordings.data?.recordings.fixture && (
+                      <span className="kind-badge ml-2">Sample data</span>
+                    )}
+                  </h2>
+                  <RecordingsPanel
+                    agentId={id}
+                    recordings={recordings.data?.recordings ?? null}
+                    isLoading={recordings.isLoading}
+                    error={recordings.error}
+                    selected={openRecording}
+                    onSelect={setOpenRecording}
+                    demo={demo || recordings.data?.recordings.fixture}
                   />
                 </section>
               )}
