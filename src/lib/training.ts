@@ -79,11 +79,14 @@ function parseQuestions(value: unknown): TrainingQuestion[] {
     if (!isRecord(raw)) continue;
     const check = isRecord(raw.check) ? raw.check : undefined;
     const status = str(check?.status) ?? str(raw.status);
+    const notes = strList(raw.notes);
     questions.push({
       id: str(raw.id),
-      prompt: str(raw.prompt) ?? str(raw.question) ?? str(raw.text),
+      prompt: str(raw.prompt) ?? str(raw.question) ?? str(raw.q) ?? str(raw.text),
       status: status === 'pass' || status === 'fail' || status === 'skipped' ? status : undefined,
-      lag: num(raw.lag) ?? num(check?.lag),
+      detail: str(check?.detail),
+      lag: num(raw.lag) ?? num(raw.lag_s) ?? num(raw.reply_s) ?? num(check?.lag),
+      notes: notes.length > 0 ? notes : undefined,
     });
   }
   return questions;
@@ -199,6 +202,15 @@ interface Draft {
   title?: string;
   agents: string[];
   cadence?: string;
+  note?: string;
+  requires?: string;
+}
+
+/** A folded (`>`) or literal (`|`) block scalar being collected line by line. */
+interface BlockScalar {
+  key: 'note' | 'requires';
+  folded: boolean;
+  lines: string[];
 }
 
 function finish(draft: Draft | null, into: CurriculumScenario[]): void {
@@ -213,15 +225,18 @@ function finish(draft: Draft | null, into: CurriculumScenario[]): void {
       : // An absent or unrecognised cadence is treated as `once`: a single pass
         // satisfies it, so an unknown value never nags.
         'once',
+    note: draft.note,
+    requires: draft.requires,
   });
 }
 
 /**
  * `curriculum.yaml` at the root of the training repo. Deliberately a subset:
- * a `scenarios:` sequence of flat mappings (`id`, `title`, `agents`, `cadence`)
- * where `agents` is a flow list (`[a, b]`) or a block sequence. Comments, blank
- * lines and quoted scalars are handled; anything else is ignored rather than
- * pulling a YAML library into the bundle.
+ * a `scenarios:` sequence of flat mappings (`id`, `title`, `agents`, `cadence`,
+ * `note`, `requires`) where `agents` is a flow list (`[a, b]`) or a block
+ * sequence and `note`/`requires` may be folded (`>`) or literal (`|`) block
+ * scalars. Comments, blank lines and quoted scalars are handled; anything else
+ * is ignored rather than pulling a YAML library into the bundle.
  */
 export function parseCurriculum(yamlText: string): CurriculumScenario[] {
   const scenarios: CurriculumScenario[] = [];
@@ -229,8 +244,23 @@ export function parseCurriculum(yamlText: string): CurriculumScenario[] {
   let draft: Draft | null = null;
   let keyIndent = Number.MAX_SAFE_INTEGER;
   let listKey: 'agents' | null = null;
+  let block: BlockScalar | null = null;
+  const closeBlock = () => {
+    if (block && draft) {
+      const text = block.folded ? block.lines.join(' ') : block.lines.join('\n');
+      draft[block.key] = text.trim() || undefined;
+    }
+    block = null;
+  };
 
   for (const raw of yamlText.split(/\r?\n/)) {
+    const rawIndent = raw.length - raw.trimStart().length;
+    // Inside a block scalar every deeper-indented line is content, `#` included
+    if (block && (raw.trim() === '' || rawIndent > keyIndent)) {
+      block.lines.push(raw.trim());
+      continue;
+    }
+    closeBlock();
     const line = stripComment(raw);
     if (line.trim() === '') continue;
     const indent = line.length - line.trimStart().length;
@@ -258,7 +288,7 @@ export function parseCurriculum(yamlText: string): CurriculumScenario[] {
       const rest = text.slice(1).trim();
       if (rest === '') continue;
       keyIndent = indent + (line.trimStart().length - rest.length);
-      applyKey(draft, rest, () => (listKey = 'agents'));
+      block = applyKey(draft, rest, () => (listKey = 'agents'));
       continue;
     }
     if (!draft || indent === 0) {
@@ -271,16 +301,21 @@ export function parseCurriculum(yamlText: string): CurriculumScenario[] {
     }
     keyIndent = Math.min(keyIndent, indent);
     listKey = null;
-    applyKey(draft, text, () => (listKey = 'agents'));
+    block = applyKey(draft, text, () => (listKey = 'agents'));
   }
+  closeBlock();
   finish(draft, scenarios);
   return scenarios;
 }
 
-/** Apply one `key: value` line to the scenario being built. */
-function applyKey(draft: Draft, text: string, openAgentsList: () => void): void {
+/**
+ * Apply one `key: value` line to the scenario being built. Returns the block
+ * scalar it opened when the value is a `>`/`|` indicator, for the caller to
+ * fill from the following lines.
+ */
+function applyKey(draft: Draft, text: string, openAgentsList: () => void): BlockScalar | null {
   const match = text.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
-  if (!match) return;
+  if (!match) return null;
   const [, key, rawValue] = match;
   const value = rawValue.trim();
   if (key === 'id') draft.id = unquote(value) || undefined;
@@ -289,7 +324,11 @@ function applyKey(draft: Draft, text: string, openAgentsList: () => void): void 
   else if (key === 'agents') {
     if (value.startsWith('[') && value.endsWith(']')) draft.agents = flowList(value);
     else if (value === '') openAgentsList();
+  } else if (key === 'note' || key === 'requires') {
+    if (/^[>|][+-]?$/.test(value)) return { key, folded: value.startsWith('>'), lines: [] };
+    draft[key] = unquote(value) || undefined;
   }
+  return null;
 }
 
 /** Checks run, passed and failed for one run, plus how many breaches it raised. */

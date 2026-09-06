@@ -777,6 +777,7 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
                     <GraduationCap size={18} style={{ color: 'var(--primary)' }} /> Training
                   </h2>
                   <TrainingPanel
+                    agentId={id}
                     training={training.data?.training ?? null}
                     isLoading={training.isLoading}
                     error={training.error}

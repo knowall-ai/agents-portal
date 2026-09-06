@@ -447,8 +447,12 @@ export interface TrainingQuestion {
   id?: string;
   prompt?: string;
   status?: 'pass' | 'fail' | 'skipped';
+  /** What the check matched or missed, in the harness's words */
+  detail?: string;
   /** Seconds between the question and the agent's answer */
   lag?: number;
+  /** Observations the harness attached to this exchange */
+  notes?: string[];
 }
 
 export interface TrainingGit {
@@ -473,6 +477,10 @@ export interface CurriculumScenario {
   /** Agent ids this scenario is required for */
   agents: string[];
   cadence: TrainingCadence;
+  /** What happens in the scenario, for the person reading the tab */
+  note?: string;
+  /** What must be in place before it can run (e.g. enrolled voice profiles) */
+  requires?: string;
 }
 
 /** Why a curriculum scenario is still due for an agent. */

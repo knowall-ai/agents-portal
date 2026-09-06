@@ -227,10 +227,38 @@ describe('parseTrainingRun', () => {
 describe('parseCurriculum', () => {
   it('reads the published curriculum.yaml, comments and quotes included', () => {
     expect(parseCurriculum(CURRICULUM_YAML)).toEqual([
-      { id: 'smoke', title: 'Smoke test', agents: ['sallie', 'poppie'], cadence: 'weekly' },
-      { id: 'lag-repro', title: 'Lag reproduction', agents: ['sallie'], cadence: 'monthly' },
-      { id: 'induction-quiz', title: 'Induction quiz', agents: ['sallie'], cadence: 'once' },
-      { id: 'meeting-prep', title: 'Meeting prep', agents: ['poppie'], cadence: 'on-change' },
+      {
+        id: 'smoke',
+        title: 'Smoke test',
+        agents: ['sallie', 'poppie'],
+        cadence: 'weekly',
+        note: 'Six short questions, about two minutes. The one to run after every deploy of the agent or the bridge.',
+        requires: undefined,
+      },
+      {
+        id: 'lag-repro',
+        title: 'Lag reproduction',
+        agents: ['sallie'],
+        cadence: 'monthly',
+        note: undefined,
+        requires: undefined,
+      },
+      {
+        id: 'induction-quiz',
+        title: 'Induction quiz',
+        agents: ['sallie'],
+        cadence: 'once',
+        note: 'The full induction: 23 asks.\n# not a comment\nAbout ten minutes.',
+        requires: 'enrolled voice profiles',
+      },
+      {
+        id: 'meeting-prep',
+        title: 'Meeting prep',
+        agents: ['poppie'],
+        cadence: 'on-change',
+        note: undefined,
+        requires: undefined,
+      },
     ]);
   });
 
@@ -242,7 +270,7 @@ describe('parseCurriculum', () => {
   it('accepts sequence items at the same indent as the key', () => {
     expect(
       parseCurriculum(['scenarios:', '- id: smoke', '  cadence: weekly', ''].join('\n'))
-    ).toEqual([{ id: 'smoke', title: undefined, agents: [], cadence: 'weekly' }]);
+    ).toEqual([expect.objectContaining({ id: 'smoke', agents: [], cadence: 'weekly' })]);
   });
 
   it('accepts an agents block sequence at the same indent as its key', () => {
@@ -257,9 +285,56 @@ describe('parseCurriculum', () => {
       '  cadence: monthly',
     ].join('\n');
     expect(parseCurriculum(yaml)).toEqual([
-      { id: 'smoke', title: undefined, agents: ['sallie', 'poppie'], cadence: 'weekly' },
-      { id: 'lag-repro', title: undefined, agents: [], cadence: 'monthly' },
+      expect.objectContaining({ id: 'smoke', agents: ['sallie', 'poppie'], cadence: 'weekly' }),
+      expect.objectContaining({ id: 'lag-repro', agents: [], cadence: 'monthly' }),
     ]);
+  });
+
+  it('reads a folded note that is followed by more keys and another scenario', () => {
+    const yaml = [
+      'scenarios:',
+      '  - id: a',
+      '    note: >-',
+      '      first line',
+      '',
+      '      second line # not a comment',
+      '    cadence: weekly',
+      '  - id: b',
+      '    requires: "a thing"',
+      '    note: plain scalar',
+    ].join('\n');
+    const parsed = parseCurriculum(yaml);
+    expect(parsed[0]).toMatchObject({
+      id: 'a',
+      cadence: 'weekly',
+      note: 'first line  second line # not a comment',
+    });
+    expect(parsed[1]).toMatchObject({ id: 'b', requires: 'a thing', note: 'plain scalar' });
+  });
+
+  it('keeps the check detail, notes and lag_s of a question', () => {
+    const parsed = parseTrainingRun(
+      JSON.stringify({
+        result: 'pass',
+        questions: [
+          {
+            q: 'What is your name?',
+            check: { status: 'pass', detail: "matched ['Poppie']" },
+            lag_s: 2.34,
+            notes: ['hard audio edge'],
+          },
+        ],
+      }),
+      'runs/poppie/x.json'
+    );
+    expect(parsed?.questions[0]).toEqual({
+      id: undefined,
+      prompt: 'What is your name?',
+      status: 'pass',
+      detail: "matched ['Poppie']",
+      lag: 2.34,
+      notes: ['hard audio edge'],
+    });
   });
 
   it('accepts the daily and on-demand cadences the harness publishes', () => {
@@ -283,15 +358,15 @@ describe('parseCurriculum', () => {
       '    cadence: fortnightly',
     ].join('\n');
     expect(parseCurriculum(yaml)).toEqual([
-      { id: 'no-cadence', title: undefined, agents: [], cadence: 'once' },
-      { id: 'odd-cadence', title: undefined, agents: [], cadence: 'once' },
+      expect.objectContaining({ id: 'no-cadence', cadence: 'once' }),
+      expect.objectContaining({ id: 'odd-cadence', cadence: 'once' }),
     ]);
   });
 
   it('handles an empty flow list, a bare item and keys on the following lines', () => {
     const yaml = ['scenarios:', '  -', '    id: smoke', '    agents: []'].join('\n');
     expect(parseCurriculum(yaml)).toEqual([
-      { id: 'smoke', title: undefined, agents: [], cadence: 'once' },
+      expect.objectContaining({ id: 'smoke', agents: [], cadence: 'once' }),
     ]);
   });
 
@@ -305,7 +380,7 @@ describe('parseCurriculum', () => {
       '  - id: ignored',
     ].join('\n');
     expect(parseCurriculum(yaml)).toEqual([
-      { id: 'smoke', title: undefined, agents: ['sallie'], cadence: 'once' },
+      expect.objectContaining({ id: 'smoke', agents: ['sallie'], cadence: 'once' }),
     ]);
   });
 
@@ -319,7 +394,7 @@ describe('parseCurriculum', () => {
   it('opens a block sequence declared on the item line itself', () => {
     const yaml = ['scenarios:', '  - agents:', '      - sallie', '    id: smoke'].join('\n');
     expect(parseCurriculum(yaml)).toEqual([
-      { id: 'smoke', title: undefined, agents: ['sallie'], cadence: 'once' },
+      expect.objectContaining({ id: 'smoke', agents: ['sallie'], cadence: 'once' }),
     ]);
   });
 
