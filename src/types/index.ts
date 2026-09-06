@@ -401,6 +401,110 @@ export interface AgentSoul {
   url?: string;
 }
 
+/**
+ * One training run published by the harness to `knowall-ai/agent-training` as
+ * `runs/<agent-id>/<started_at>-<scenario>[-<run-id>].json`. Every field the
+ * harness writes is optional — it owns the file and may add or omit fields —
+ * so the portal renders what it is given and never assumes a shape. What is
+ * required here the portal itself supplies: `path`, and the list fields, which
+ * are normalised to empty arrays so callers need not guard each one.
+ */
+export interface TrainingRun {
+  /** Repo path of the file this run was read from — unique, so it keys the list */
+  path: string;
+  result?: 'pass' | 'fail';
+  agent?: string;
+  scenario?: string;
+  /** ISO 8601 start time */
+  startedAt?: string;
+  mode?: string;
+  source?: string;
+  runId?: string;
+  /** Who ran it: a name or account, never an email address */
+  operator?: string;
+  job?: TrainingJob;
+  /** Free-form counters from the harness, e.g. `checks_run`, `actions_verified` */
+  totals?: Record<string, number>;
+  breaches: string[];
+  limitations: string[];
+  changeRequests: string[];
+  questions: TrainingQuestion[];
+  git?: TrainingGit;
+  artefacts?: TrainingArtefacts;
+  /** Link to the run file on GitHub */
+  url?: string;
+}
+
+/**
+ * Which harness produced the run. `callquality`, `voiceprints` and `handover`
+ * are the jobs agreed so far; an unknown job is kept and rendered as given.
+ */
+export type TrainingJob = string;
+
+export interface TrainingQuestion {
+  id?: string;
+  prompt?: string;
+  status?: 'pass' | 'fail' | 'skipped';
+  /** Seconds between the question and the agent's answer */
+  lag?: number;
+}
+
+export interface TrainingGit {
+  agentTraining?: string;
+  agentPresence?: string;
+  agentRepo?: string;
+}
+
+export interface TrainingArtefacts {
+  reportMd?: string;
+  recording?: string;
+  transcript?: string;
+}
+
+/** How often a curriculum scenario must be re-run to stay satisfied. */
+export type TrainingCadence = 'once' | 'weekly' | 'monthly' | 'on-change';
+
+/** One entry of `curriculum.yaml` at the root of the agent-training repo. */
+export interface CurriculumScenario {
+  id: string;
+  title?: string;
+  /** Agent ids this scenario is required for */
+  agents: string[];
+  cadence: TrainingCadence;
+}
+
+/** Why a curriculum scenario is still due for an agent. */
+export type OutstandingReason = 'never-run' | 'last-failed' | 'overdue';
+
+export interface OutstandingScenario {
+  scenario: CurriculumScenario;
+  reason: OutstandingReason;
+  /** ISO time of the most recent run, whatever its result */
+  lastRunAt?: string;
+  /** ISO time of the most recent passing run */
+  lastPassAt?: string;
+}
+
+export interface AgentTraining {
+  runs: TrainingRun[];
+  curriculum: CurriculumScenario[];
+  outstanding: OutstandingScenario[];
+  /** False when the agent has no trusted registry entry, so nothing was read */
+  configured: boolean;
+  /** The repo the records were read from, for resolving repo-relative artefact paths */
+  repo?: string;
+  /** Set when the training repo could not be read */
+  error?: string;
+}
+
+/** Pass/fail tallies for one run, for the runs table. */
+export interface TrainingSummary {
+  checksRun: number;
+  passed: number;
+  failed: number;
+  breaches: number;
+}
+
 export interface FoundryAssistant {
   id: string;
   name: string;

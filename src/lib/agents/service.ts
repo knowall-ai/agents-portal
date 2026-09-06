@@ -19,7 +19,14 @@ import {
   listFoundryProjects,
   listRecentRuns,
 } from '@/lib/providers/foundry';
-import { getRepoMarkdown, listRepoCommits, listRepoSkills } from '@/lib/providers/github';
+import {
+  DEFAULT_TRAINING_REPO,
+  getCurriculum,
+  getRepoMarkdown,
+  listRepoCommits,
+  listRepoSkills,
+  listTrainingRuns,
+} from '@/lib/providers/github';
 import { probeUrl } from '@/lib/providers/health';
 import {
   getAppAccess,
@@ -32,6 +39,7 @@ import { fetchBrainSnapshot, isValidBrainUrl } from '@/lib/providers/reverie';
 import { fixtureSnapshot } from '@/lib/brain-fixture';
 import { reverieTokenFor } from '@/lib/reverie-token';
 import { isOnCall } from '@/lib/presence';
+import { outstandingFor, scenarioAppliesTo, sortRuns } from '@/lib/training';
 import {
   FOUNDRY_SCOPE,
   GRAPH_DIRECTORY_READ_ALL_SCOPE,
@@ -51,6 +59,7 @@ import type {
   AgentPermissions,
   AgentPresence,
   AgentSoul,
+  AgentTraining,
   AvatarResult,
   CostSourceStatus,
   CostsSummary,
@@ -257,6 +266,69 @@ export async function getSoul(ctx: UserContext, agent: AgentDetail): Promise<Age
       return null;
     },
     10 * 60 * 1000
+  );
+}
+
+/** The repo the training harness publishes runs and the curriculum to. */
+function trainingRepo(): string {
+  return process.env.TRAINING_REPO?.trim() || DEFAULT_TRAINING_REPO;
+}
+
+const TRAINING_TTL = 10 * 60 * 1000;
+const TRAINING_ERROR_TTL = 60 * 1000;
+
+/**
+ * Training runs and curriculum for the agent, from the training repo
+ * (knowall-ai/agent-training#14). Read with the server's GitHub token, so —
+ * like skills and the soul — only for an agent whose registry entry the caller
+ * can actually see: without one the answer is `configured: false` and no token
+ * is spent. A repo that cannot be read leaves `error` set and is retried a
+ * minute later rather than being cached for the full ten.
+ */
+export async function getTraining(ctx: UserContext, agent: AgentDetail): Promise<AgentTraining> {
+  const empty: AgentTraining = { runs: [], curriculum: [], outstanding: [], configured: false };
+  if (!getRegistryEntry(agent)) return empty;
+  const repo = trainingRepo();
+
+  return cached<AgentTraining>(
+    `training:${scope(ctx)}:${agent.id}`,
+    async () => {
+      try {
+        // The repo is the same for every viewer, so the reads themselves are
+        // cached per repo rather than per user. The curriculum comes first so
+        // the run listing keeps each of its scenarios' latest result even when
+        // the newest-50 cap would drop it, and outstanding training is judged
+        // on what actually happened rather than on what was truncated.
+        const curriculum = await cached(
+          `training:curriculum:${repo}`,
+          () => getCurriculum(repo),
+          TRAINING_TTL
+        );
+        const keep = curriculum.filter((s) => scenarioAppliesTo(s, agent.id)).map((s) => s.id);
+        const runs = await cached(
+          `training:runs:${repo}:${agent.id}`,
+          () => listTrainingRuns(repo, agent.id, keep),
+          TRAINING_TTL
+        );
+        const sorted = sortRuns(runs);
+        return {
+          runs: sorted,
+          curriculum,
+          outstanding: outstandingFor(agent.id, sorted, curriculum),
+          configured: true,
+          repo,
+        };
+      } catch (error) {
+        console.warn(`Training lookup failed for ${agent.id} (${repo}):`, error);
+        return {
+          ...empty,
+          configured: true,
+          repo,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        };
+      }
+    },
+    (value) => (value.error ? TRAINING_ERROR_TTL : TRAINING_TTL)
   );
 }
 

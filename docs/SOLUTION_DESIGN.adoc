@@ -202,6 +202,83 @@ Costs are shown for the current calendar month (month to date) and the previous 
 
 Billing APIs are rate limited and slow-moving, so results are cached for 30 minutes (failures for 2 minutes). Azure Cost Management additionally throttles third-party client apps to about one query every 25–40 seconds per subscription; queries are therefore serialised through one queue and retried according to the `x-ms-ratelimit-microsoft.costmanagement-*-retry-after` headers. Previous months are requested as an explicit `Custom` time period because the `TheLastMonth` timeframe is rejected by the API. Each source reports a status (`ok`, `not-configured`, `no-mapping`, `error`) which the breakdown shows as a footnote rather than silently omitting a figure. Azure Cost Management lags usage by up to 24 hours.
 
+== Training
+
+The Training tab shows what training an agent has had and what it still owes. The
+portal only reads; the training harness owns the records and publishes them to
+`knowall-ai/agent-training` (`TRAINING_REPO`), the contract agreed in
+https://github.com/knowall-ai/agent-training/issues/14[agent-training#14].
+
+=== Record shape
+
+Runs are one JSON file each, at `runs/<agent-id>/<started_at>-<scenario>[-<run-id>].json`:
+
+[cols="1,3"]
+|===
+|Field |Meaning
+
+|`result`
+|`pass` or `fail`
+
+|`agent`, `scenario`, `started_at`, `mode`, `source`, `run_id`
+|Which agent ran which scenario, when, and how
+
+|`operator`
+|Who ran it — a name or account, never an email address
+
+|`job`
+|`callquality`, `voiceprints` or `handover`: which harness produced the run
+
+|`totals`
+|Counters from the harness, e.g. `checks_run`, `actions_verified`
+
+|`questions[]`
+|Per-question `check.status` (`pass`/`fail`/`skipped`) and `lag`
+
+|`breaches[]`, `limitations[]`, `change_requests[]`
+|What went wrong, what could not be tested, and what should change
+
+|`git`
+|Short SHAs of `agent_training`, `agent_presence` and `agent_repo`
+
+|`artefacts`
+|`report_md`, `recording`, `transcript` as repo paths or https URLs
+|===
+
+The curriculum is `curriculum.yaml` at the repo root: a `scenarios` list of
+`id`, `title`, `agents` (the agent ids it is required for) and `cadence`
+(`once`, `weekly`, `monthly` or `on-change`).
+
+Every field is optional and unknown fields are ignored, so the harness can add to
+the shape without breaking the tab. A run file that is not valid JSON is warned
+about and skipped rather than failing the read.
+
+=== Reading and computing
+
+`listTrainingRuns` and `getCurriculum` in `src/lib/providers/github.ts` list
+`runs/<agent-id>` and fetch each file (newest first by file name, per-file
+failures warned and skipped). The cap is the newest 50 files plus the latest
+file of each curriculum scenario that applies to the agent (`selectRunFiles`),
+so a one-off induction pass buried under weeks of smoke tests still counts.
+GitHub answers 404 both for a missing path and for a private repo the token
+cannot read, so a 404 is only treated as "nothing there" after `GET /repos/<repo>`
+succeeds; otherwise the tab shows the lookup error. `curriculum.yaml` is parsed
+by a small YAML subset parser in `src/lib/training.ts` — the flat shape above
+only, including indentless block sequences — rather than adding a YAML
+dependency.
+
+`getTraining` in `src/lib/agents/service.ts` composes the two, caches for 10
+minutes (a failed read for 1 minute) and returns `configured: false` without
+reading anything when the agent has no trusted registry entry: the server's
+`GITHUB_TOKEN` is never spent for an agent the caller cannot see. `error` is set
+when the repo read fails, so the tab explains itself instead of going blank.
+
+`outstandingFor` marks a scenario outstanding when it has never been run, when
+its most recent run failed, or when its last pass is older than the cadence
+allows (7 days for `weekly`, 30 for `monthly`; `once` and `on-change` are
+satisfied by any pass, because the portal cannot observe the change that would
+make an `on-change` scenario due again).
+
 == Pages
 
 [cols="1,3"]
@@ -215,7 +292,7 @@ Billing APIs are rate limited and slow-moving, so results are cached for 30 minu
 |Redirects to `/` preserving query parameters (kept for old links)
 
 |`/agents/:id`
-|Agent detail: header with avatar, status, kind, environment and Lighthouse badge; Chat in Teams, Portal and Repo buttons; subscription / resource group / tenant / reachability tiles; Azure resources table; AI Foundry assistants (model, tools, project); cost breakdown (month to date vs last month by source); skills; recent activity
+|Agent detail: header with avatar, status, kind, environment and Lighthouse badge; Chat in Teams, Portal and Repo buttons; subscription / resource group / tenant / reachability tiles; Azure resources table; AI Foundry assistants (model, tools, project); cost breakdown (month to date vs last month by source); skills; training; recent activity
 
 |`/activity`
 |Merged activity feed across all agents (Azure Activity Log, GitHub commits, Foundry runs), de-duplicated when agents share a repo
@@ -262,6 +339,9 @@ All routes require a session unless noted; they return `401` when unauthenticate
 
 |`GET /api/agents/:id/skills`
 |`{ skills: Skill[] }`
+
+|`GET /api/agents/:id/training`
+|`{ training: AgentTraining }` — runs newest first, the curriculum, and what is outstanding
 
 |`GET /api/agents/:id/activity`
 |`{ events: ActivityEvent[] }` (last 7 days, max 50)

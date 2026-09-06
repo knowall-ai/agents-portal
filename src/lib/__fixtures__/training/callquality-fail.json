@@ -1,0 +1,25 @@
+{
+  "result": "fail",
+  "agent": "sallie",
+  "scenario": "lag-repro",
+  "started_at": "2026-08-24T16:40:00Z",
+  "mode": "replay",
+  "source": "callquality",
+  "run_id": "20260824-164000-lag-repro",
+  "operator": "Poppie",
+  "job": "callquality",
+  "totals": { "checks_run": 3 },
+  "questions": [
+    { "id": "first-answer", "check": { "status": "pass", "lag": 3.1 } },
+    { "id": "interrupt", "check": { "status": "fail", "lag": 11.7 } },
+    { "id": "recovery", "check": { "status": "fail", "lag": 9.2 } }
+  ],
+  "breaches": [
+    "Answer lag 11.7s exceeds the 4.0s threshold",
+    { "message": "Agent talked over the caller twice" }
+  ],
+  "limitations": [],
+  "change_requests": [{ "title": "Shorten the barge-in window" }],
+  "git": { "agent_training": "f0e1d2c" },
+  "artefacts": { "report_md": "reports/sallie/2026-08-24-lag-repro.md" }
+}

@@ -12,6 +12,7 @@ import {
   ExternalLink,
   Github,
   Globe,
+  GraduationCap,
   Heart,
   LayoutGrid,
   MessageSquare,
@@ -52,6 +53,7 @@ import {
   ResourceTable,
   SkillList,
   SoulPanel,
+  TrainingPanel,
 } from '@/components/agents';
 import { Countdown } from '@/components/common';
 import { formatDistanceToNow } from 'date-fns';
@@ -71,6 +73,7 @@ import type {
   AgentLicensing,
   AgentPermissions,
   AgentSoul,
+  AgentTraining,
   FoundryAssistant,
   Skill,
 } from '@/types';
@@ -82,6 +85,7 @@ const TAB_IDS = [
   'licences',
   'permissions',
   'skills',
+  'training',
   'activity',
 ] as const;
 type TabId = (typeof TAB_IDS)[number];
@@ -165,6 +169,7 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
   const soul = useApi<{ soul: AgentSoul | null; configured: boolean }>(
     ready ? `/api/agents/${id}/soul` : null
   );
+  const training = useApi<{ training: AgentTraining }>(ready ? `/api/agents/${id}/training` : null);
   const metrics = useApi<{ metrics: AgentMetrics }>(
     ready ? `/api/agents/${id}/metrics?hours=72` : null,
     120_000
@@ -255,6 +260,12 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
       label: 'Skills',
       icon: <Sparkles size={14} />,
       count: skills.data?.skills.length,
+    },
+    {
+      id: 'training',
+      label: 'Training',
+      icon: <GraduationCap size={14} />,
+      count: training.data?.training.runs.length,
     },
     {
       id: 'activity',
@@ -714,6 +725,22 @@ function AgentPageInner({ params }: { params: Promise<{ id: string }> }) {
                     onQueryChange={(q) => setSkillParams({ q })}
                     onSourceChange={(next) => setSkillParams({ source: next })}
                     onClear={() => setSkillParams({ q: '', source: ALL_SOURCES })}
+                  />
+                </section>
+              )}
+
+              {tab === 'training' && (
+                <section className="card">
+                  <h2
+                    className="flex items-center gap-2 border-b p-4 text-lg font-semibold"
+                    style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                  >
+                    <GraduationCap size={18} style={{ color: 'var(--primary)' }} /> Training
+                  </h2>
+                  <TrainingPanel
+                    training={training.data?.training ?? null}
+                    isLoading={training.isLoading}
+                    error={training.error}
                   />
                 </section>
               )}
