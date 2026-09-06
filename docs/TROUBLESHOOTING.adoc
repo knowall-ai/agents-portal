@@ -53,6 +53,12 @@
 |**Brain shows "stream offline"**
 |The SSE proxy to `<brainUrl>/brain/events` dropped. Check `reverie-serve` on the VM and that the proxy does not buffer event streams.
 
+|**Recordings tab says not available**
+|Set `recordingsUrl` in `config/agents.json` (the entry must pin `subscriptionIds`) and `RECORDINGS_TOKEN_<AGENT>` on the server. The URL must be `https` and route to the agent's Presence bridge `/recordings` (Caddy on the VM). `RECORDINGS_FIXTURE=1` shows sample recordings for development.
+
+|**A recording plays nothing, or the video route answers 409**
+|Teams produces the file and transcript some minutes after the call ends; the item stays `processing` until then. A `failed` item carries the bridge's reason. Playback is a 302 to Teams' short-lived download link, so an old tab left open needs a reload.
+
 |**Boost button says Azure refused (403)**
 |Boost runs a command on the VM as *you*. You need *Virtual Machine Contributor* (or Owner/Contributor) on the agent's VM or resource group.
 

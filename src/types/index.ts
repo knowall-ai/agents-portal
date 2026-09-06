@@ -74,6 +74,8 @@ export interface AgentRegistryEntry {
   boost?: BoostConfig;
   /** Reverie brain API base URL (https://<agent-domain>/reverie); the portal's REVERIE_TOKEN is sent to it */
   brainUrl?: string;
+  /** Recordings API base URL (https://<agent-domain>/recordings); the portal's RECORDINGS_TOKEN is sent to it */
+  recordingsUrl?: string;
   /** Resource groups whose resources belong to this agent (case-insensitive) */
   resourceGroups?: string[];
   /**
@@ -632,4 +634,65 @@ export interface CostsSummary {
   totals: { monthToDate: CurrencyTotals; lastMonth: CurrencyTotals };
   sources: CostSourceStatus[];
   generatedAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// Recordings: Teams-native call recordings the agent started, served by its VM
+// ---------------------------------------------------------------------------
+
+export type RecordingStatus = 'recording' | 'processing' | 'ready' | 'failed';
+
+/** One recording as the agent's bridge lists it (`GET /recordings`). Names only, never addresses. */
+export interface Recording {
+  id: string;
+  agent: string;
+  room?: string;
+  startedAt: string;
+  stoppedAt?: string;
+  durationSeconds?: number;
+  status: RecordingStatus;
+  /** Why the recording or its transcript could not be produced */
+  error?: string;
+  meeting: {
+    subject?: string;
+    joinUrl?: string;
+    meetingId?: string;
+    threadId?: string;
+  };
+  organizer?: string;
+  participants: string[];
+  participantCount?: number;
+  /** Which transcripts exist: the agent's own per-turn one and Teams' VTT */
+  transcript: { turns: boolean; vtt: boolean };
+}
+
+/** One utterance of the agent's per-turn transcript; `speaker` is null until diarisation names it */
+export interface RecordingTurn {
+  /** Seconds from the start of the recording */
+  t: number;
+  speaker: string | null;
+  text: string;
+}
+
+export interface RecordingDetail extends Recording {
+  turns: RecordingTurn[];
+}
+
+/** Whether the agent is recording right now (`GET /recordings/status`) */
+export interface RecordingsStatus {
+  active: boolean;
+  since?: string;
+  room?: string;
+  id?: string;
+  checkedAt: string;
+  error?: string;
+}
+
+/** What the Recordings tab renders: the list, or why it is not available */
+export interface AgentRecordings {
+  available: boolean;
+  /** Built-in sample data (RECORDINGS_FIXTURE=1 or ?demo=1) rather than the agent's VM */
+  fixture?: boolean;
+  items: Recording[];
+  error?: string;
 }

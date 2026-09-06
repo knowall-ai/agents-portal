@@ -283,6 +283,41 @@ allows (1 day for `daily`, 7 for `weekly`, 30 for `monthly`; `once`, `on-change`
 satisfied by any pass, because the portal cannot observe the change that would
 make an `on-change` scenario due again).
 
+== Recordings
+
+The Recordings tab (admin-only: recordings are customer meeting content) lets
+staff watch a call the agent recorded and read its transcript. Recording is
+Teams-native: the agent clicks Teams' own Start/Stop recording, so Teams
+announces it, stores the video in the organiser's OneDrive/SharePoint and
+produces the transcript. The Presence bridge on the agent VM keeps an index and
+serves it at the registry's `recordingsUrl` (contract: agent-presence
+`docs/RECORDINGS.md`):
+
+* `GET /recordings?limit&before` — items newest first; `GET /recordings/status`
+  — `{active, since, room, id}`; `GET /recordings/{id}` — the item plus
+  `turns[{t, speaker|null, text}]`; `GET /recordings/{id}/video` — 302 to
+  Teams' short-lived pre-authenticated download URL (409 `{status}` while Teams
+  is still producing the file); `GET /recordings/{id}/transcript.vtt` — Teams'
+  VTT. Bearer `RECORDINGS_TOKEN` on every route.
+* An item is `{v, id (rec_<startedAtCompactUTC>), agent, room, started_at,
+  stopped_at, duration_s, status recording|processing|ready|failed, error?,
+  meeting{threadId, meetingId, subject, joinUrl}, organizer{name},
+  participants[{name}], participant_count, transcript{turns, vtt}, teams{…}}`.
+  Names only, never addresses; no VM paths.
+
+The portal never holds Graph application permissions and delegated recording
+access only covers meetings the signed-in user organised, so the bridge, which
+runs as the agent, is what resolves the media. `src/lib/recordings.ts` parses
+the wire shape defensively (a peer service, so nothing is assumed) and drops
+any name containing `@`; `src/lib/providers/recordings.ts` talks to the bridge
+with `redirect: 'error'` everywhere except the video route, which reads the
+302 with `redirect: 'manual'` and only passes an https location on. The portal
+routes under `/api/agents/[id]/recordings` sit behind `adminAgentGate`; the
+video route answers its own 302 so the browser's `<video>` element streams
+straight from Teams with Range support, and nothing is cached (`no-store`).
+`recordingsUrl` is a privileged registry field (`entryIsPrivileged`), so the
+entry must pin `subscriptionIds`.
+
 == Pages
 
 [cols="1,3"]
@@ -380,7 +415,7 @@ All routes require a session unless noted; they return `401` when unauthenticate
 
 * The dashboard never holds credentials with more access than the signed-in user; Azure RBAC decides what is visible.
 * Access and refresh tokens stay inside the encrypted NextAuth JWT cookie and are only read server-side (`getUserContext`); the session object sent to the browser carries no tokens.
-* The server-held secrets are the Entra client secret, `GITHUB_TOKEN` (Contents: read only), `REVERIE_TOKEN` (sent only to the registry's `brainUrl`) and the optional provider admin keys `OPENAI_ADMIN_KEY` and `ANTHROPIC_ADMIN_KEY` used for the cost reports. Everything else is read with the signed-in user's own token.
+* The server-held secrets are the Entra client secret, `GITHUB_TOKEN` (Contents: read only), `REVERIE_TOKEN` (sent only to the registry's `brainUrl`), `RECORDINGS_TOKEN` (sent only to the registry's `recordingsUrl`) and the optional provider admin keys `OPENAI_ADMIN_KEY` and `ANTHROPIC_ADMIN_KEY` used for the cost reports. Everything else is read with the signed-in user's own token.
 * Sign-in is refused unless the user's tenant is on the `AZURE_AD_ALLOWED_TENANTS` allow-list, which a production deployment must set: with the multi-tenant authority `common` and no list there is nothing to check against, so no one is admitted.
 * A registry entry only applies to an agent when the caller can see one of its Azure resources inside the scope the entry claims — the subscriptions in its `subscriptionIds`, or the registry's own tenant — so a same-named resource group elsewhere cannot inherit its brain URL, repo or boost script.
 * Values that originate from Azure resource tags are untrusted because anyone with Contributor on a resource can set them:

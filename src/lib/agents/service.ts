@@ -38,6 +38,23 @@ import {
 import { fetchBrainSnapshot, isValidBrainUrl } from '@/lib/providers/reverie';
 import { fixtureSnapshot } from '@/lib/brain-fixture';
 import { reverieTokenFor } from '@/lib/reverie-token';
+import { recordingsTokenFor } from '@/lib/recordings-token';
+import { agentEnvKey } from '@/lib/agent-token';
+import {
+  getRecording as fetchRecording,
+  getRecordingsStatus as fetchRecordingsStatus,
+  getTranscriptVtt,
+  isValidRecordingsUrl,
+  listRecordings,
+  resolveVideo,
+  type ListOptions,
+  type VideoLocation,
+} from '@/lib/providers/recordings';
+import {
+  fixtureRecording,
+  fixtureRecordings,
+  fixtureRecordingsStatus,
+} from '@/lib/recordings-fixture';
 import { isOnCall } from '@/lib/presence';
 import { outstandingFor, scenarioAppliesTo, sortRuns } from '@/lib/training';
 import {
@@ -58,12 +75,15 @@ import type {
   AgentLicensing,
   AgentPermissions,
   AgentPresence,
+  AgentRecordings,
   AgentSoul,
   AgentTraining,
   AvatarResult,
   CostSourceStatus,
   CostsSummary,
   FoundryAssistant,
+  RecordingDetail,
+  RecordingsStatus,
   Skill,
 } from '@/types';
 import {
@@ -942,4 +962,115 @@ export async function getCostsSummary(ctx: UserContext): Promise<CostsSummary> {
     sources: inputs.sources,
     generatedAt: new Date().toISOString(),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Recordings (admin-only): the Presence bridge on the agent's VM
+// ---------------------------------------------------------------------------
+
+export type RecordingsSource = { kind: 'fixture' } | { kind: 'bridge'; url: string; token: string };
+
+/**
+ * Where an agent's recordings are read from. Only the registry's `recordingsUrl`
+ * is honoured (never a tag) because a server-side token (RECORDINGS_TOKEN_<AGENT>,
+ * else RECORDINGS_TOKEN) is sent to it.
+ */
+export function recordingsSource(agent: AgentDetail, demo = false): RecordingsSource | null {
+  if (demo || process.env.RECORDINGS_FIXTURE === '1') return { kind: 'fixture' };
+  const url = getRegistryEntry(agent)?.recordingsUrl;
+  const token = recordingsTokenFor(agent.id);
+  if (!url || !token || !isValidRecordingsUrl(url)) return null;
+  return { kind: 'bridge', url, token };
+}
+
+/** Why `recordingsSource` returned nothing, for the tab to explain itself. */
+function recordingsUnavailable(agent: AgentDetail): string {
+  const entry = getRegistryEntry(agent);
+  if (!entry?.recordingsUrl) return 'No recordingsUrl in the registry for this agent';
+  if (!isValidRecordingsUrl(entry.recordingsUrl))
+    return 'recordingsUrl in the registry is not a valid https URL';
+  return `RECORDINGS_TOKEN_${agentEnvKey(agent.id)} (or RECORDINGS_TOKEN) is not set on the server`;
+}
+
+const RECORDINGS_TTL = 30 * 1000;
+const RECORDINGS_STATUS_TTL = 15 * 1000;
+
+/** The agent's recordings, newest first, or why they cannot be listed. */
+export async function getRecordings(
+  agent: AgentDetail,
+  options: ListOptions = {},
+  demo = false
+): Promise<AgentRecordings> {
+  const source = recordingsSource(agent, demo);
+  if (!source) return { available: false, items: [], error: recordingsUnavailable(agent) };
+  if (source.kind === 'fixture')
+    return { available: true, fixture: true, items: fixtureRecordings(agent.id) };
+  try {
+    const items = await cached(
+      `recordings:${agent.id}:${options.limit ?? ''}:${options.before ?? ''}`,
+      () => listRecordings(source.url, source.token, agent.id, options),
+      RECORDINGS_TTL
+    );
+    return { available: true, items };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`Recordings list failed for ${agent.id}:`, message);
+    return { available: true, items: [], error: message };
+  }
+}
+
+/** Is the agent recording right now. Never throws: the header chip is decoration. */
+export async function getRecordingsStatus(
+  agent: AgentDetail,
+  demo = false
+): Promise<RecordingsStatus> {
+  const source = recordingsSource(agent, demo);
+  const checkedAt = new Date().toISOString();
+  if (!source) return { active: false, checkedAt, error: recordingsUnavailable(agent) };
+  if (source.kind === 'fixture') return fixtureRecordingsStatus();
+  try {
+    return await cached(
+      `recordings-status:${agent.id}`,
+      () => fetchRecordingsStatus(source.url, source.token),
+      RECORDINGS_STATUS_TTL
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { active: false, checkedAt, error: message };
+  }
+}
+
+/** One recording with its transcript; null when the agent has no such recording. Throws when the bridge fails. */
+export async function getRecording(
+  agent: AgentDetail,
+  id: string,
+  demo = false
+): Promise<RecordingDetail | null> {
+  const source = recordingsSource(agent, demo);
+  if (!source) throw new Error(recordingsUnavailable(agent));
+  if (source.kind === 'fixture') return fixtureRecording(agent.id, id);
+  return cached(
+    `recording:${agent.id}:${id}`,
+    () => fetchRecording(source.url, source.token, agent.id, id),
+    RECORDINGS_TTL
+  );
+}
+
+/** Where the browser can fetch the video from: not cached, the location is short-lived. */
+export async function getRecordingVideo(agent: AgentDetail, id: string): Promise<VideoLocation> {
+  const source = recordingsSource(agent);
+  if (!source) throw new Error(recordingsUnavailable(agent));
+  if (source.kind === 'fixture') return { kind: 'missing' };
+  return resolveVideo(source.url, source.token, id);
+}
+
+/** Teams' VTT transcript, or null when the recording has none. */
+export async function getRecordingTranscript(
+  agent: AgentDetail,
+  id: string
+): Promise<string | null> {
+  const source = recordingsSource(agent);
+  if (!source) throw new Error(recordingsUnavailable(agent));
+  if (source.kind === 'fixture') return null;
+  return getTranscriptVtt(source.url, source.token, id);
 }
