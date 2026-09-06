@@ -78,13 +78,18 @@ function parseQuestions(value: unknown): TrainingQuestion[] {
   for (const raw of value) {
     if (!isRecord(raw)) continue;
     const check = isRecord(raw.check) ? raw.check : undefined;
-    const status = str(check?.status) ?? str(raw.status);
+    const verifyRaw = isRecord(raw.verify) ? raw.verify : undefined;
+    const verifyStatus = knownStatus(str(verifyRaw?.status));
+    const verify = verifyStatus ? { kind: str(verifyRaw?.kind), status: verifyStatus } : undefined;
     const notes = strList(raw.notes);
     questions.push({
       id: str(raw.id),
       prompt: str(raw.prompt) ?? str(raw.question) ?? str(raw.q) ?? str(raw.text),
-      status: status === 'pass' || status === 'fail' || status === 'skipped' ? status : undefined,
+      // An action row (leave the call, boost on) has no answer check ("n/a");
+      // its verification is the result
+      status: knownStatus(str(check?.status) ?? str(raw.status)) ?? verify?.status,
       detail: str(check?.detail),
+      verify,
       lag: num(raw.lag) ?? num(raw.lag_s) ?? num(raw.reply_s) ?? num(check?.lag),
       notes: notes.length > 0 ? notes : undefined,
     });
@@ -105,6 +110,10 @@ function withLatencies(questions: TrainingQuestion[], totals: unknown): Training
       ? { ...question, lag: latency }
       : question;
   });
+}
+
+function knownStatus(value: string | undefined): 'pass' | 'fail' | 'skipped' | undefined {
+  return value === 'pass' || value === 'fail' || value === 'skipped' ? value : undefined;
 }
 
 function parseTotals(value: unknown): Record<string, number> | undefined {

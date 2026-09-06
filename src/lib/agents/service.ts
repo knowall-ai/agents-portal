@@ -305,6 +305,15 @@ const TRAINING_ERROR_TTL = 60 * 1000;
  * is spent. A repo that cannot be read leaves `error` set and is retried a
  * minute later rather than being cached for the full ten.
  */
+/** Forget the cached training reads for an agent (and the shared curriculum), for a manual refresh. */
+export function invalidateTraining(agentId: string): void {
+  const repo = trainingRepo();
+  invalidate(`training:runs:${repo}:${agentId}`);
+  invalidate(`training:curriculum:${repo}`);
+  // the composed per-viewer results, whatever the viewer
+  invalidate('training:');
+}
+
 export async function getTraining(ctx: UserContext, agent: AgentDetail): Promise<AgentTraining> {
   const empty: AgentTraining = { runs: [], curriculum: [], outstanding: [], configured: false };
   if (!getRegistryEntry(agent)) return empty;

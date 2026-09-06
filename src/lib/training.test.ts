@@ -337,6 +337,35 @@ describe('parseCurriculum', () => {
     });
   });
 
+  it("uses an action row's verification as its result when the answer check is n/a", () => {
+    const parsed = parseTrainingRun(
+      JSON.stringify({
+        result: 'fail',
+        questions: [
+          {
+            id: 'leave',
+            q: 'Thank you, please leave this meeting now.',
+            check: { status: 'n/a', detail: 'verified separately — left_call: pass' },
+            verify: { kind: 'left_call', status: 'pass' },
+            departs: true,
+          },
+          {
+            id: 'boost-on',
+            check: { status: 'fail' },
+            verify: { kind: 'boost_state', status: 'pass' },
+          },
+          { id: 'x', check: { status: 'n/a' }, verify: { kind: 'odd', status: 'maybe' } },
+        ],
+      }),
+      'runs/poppie/x.json'
+    );
+    expect(parsed?.questions.map((q) => [q.status, q.verify])).toEqual([
+      ['pass', { kind: 'left_call', status: 'pass' }],
+      ['fail', { kind: 'boost_state', status: 'pass' }],
+      [undefined, undefined],
+    ]);
+  });
+
   it('takes per-question lag from totals.latencies_s when the question has none', () => {
     const parsed = parseTrainingRun(
       JSON.stringify({

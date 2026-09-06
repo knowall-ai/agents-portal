@@ -449,6 +449,8 @@ export interface TrainingQuestion {
   status?: 'pass' | 'fail' | 'skipped';
   /** What the check matched or missed, in the harness's words */
   detail?: string;
+  /** An action row's separate verification (left_call, boost_state, …) */
+  verify?: { kind?: string; status: 'pass' | 'fail' | 'skipped' };
   /** Seconds between the question and the agent's answer */
   lag?: number;
   /** Observations the harness attached to this exchange */
