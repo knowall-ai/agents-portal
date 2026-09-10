@@ -70,8 +70,12 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
           ...fixtureHostStats(),
         });
         // every open stream shares one ticker over the one demo graph, so two
-        // tabs see the same events instead of drifting apart
-        unsubscribe = subscribeFixture(({ event, data }) => send(event, data));
+        // tabs see the same events instead of drifting apart. Skip it if that
+        // first write already found the consumer gone: subscribing a dead
+        // listener would keep the shared ticker running with nothing to feed.
+        if (!closed) {
+          unsubscribe = subscribeFixture(({ event, data }) => send(event, data));
+        }
         req.signal.addEventListener('abort', stop);
       },
       cancel() {

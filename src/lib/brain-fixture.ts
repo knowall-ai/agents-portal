@@ -450,7 +450,7 @@ const graph = build();
 // Names for the nodes the demo invents as it runs, so a live graph looks like an
 // agent learning rather than "New idea 1, New idea 2, ...". Longer than
 // MAX_EXTRAS so no two live generated nodes ever share a name.
-const NEW_CONCEPTS = [
+export const NEW_CONCEPTS = [
   'Nightly dreaming',
   'Seat forecasting',
   'Prompt caching',
@@ -601,6 +601,7 @@ export const FIXTURE_INTERVAL_MS = 1250;
 export type FixtureEvent =
   | { event: 'activation'; data: BrainActivation }
   | { event: 'graph'; data: BrainDiff }
+  | { event: 'resync'; data: { nodes: BrainNode[]; rels: BrainRel[] } }
   | { event: 'state'; data: Record<string, unknown> };
 
 const listeners = new Set<(e: FixtureEvent) => void>();
@@ -620,6 +621,13 @@ function emit(e: FixtureEvent): void {
  */
 export function subscribeFixture(listener: (e: FixtureEvent) => void): () => void {
   listeners.add(listener);
+  // The page fetches its snapshot in a separate request, so a tick can land in
+  // the gap before this subscription (or during a reconnect) and be lost for
+  // good. Open with the graph as it stands now and the client reconciles.
+  listener({
+    event: 'resync',
+    data: { nodes: graph.nodes.map((n) => ({ ...n })), rels: graph.rels.map((r) => ({ ...r })) },
+  });
   if (!ticker) {
     beats = 0;
     ticker = setInterval(() => {

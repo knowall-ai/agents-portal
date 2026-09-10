@@ -4,6 +4,7 @@ import {
   FIXTURE_INTERVAL_MS,
   MAX_EXTRAS,
   MAX_EXTRA_RELS,
+  NEW_CONCEPTS,
   type FixtureEvent,
   fixtureSnapshot,
   fixtureTick,
@@ -76,6 +77,12 @@ describe('fixtureTick', () => {
     }
     expect(new Set(after.rels.map((r) => r.id)).size).toBe(after.rels.length);
     expect(new Set(after.nodes.map((n) => n.name)).size).toBe(after.nodes.length);
+
+    // the invented nodes are named like concepts, not `New idea 7` — unique
+    // names alone would not catch a regression here
+    const invented = after.nodes.filter((n) => !before.nodes.some((b) => b.id === n.id));
+    expect(invented.length).toBeGreaterThan(0);
+    for (const n of invented) expect(NEW_CONCEPTS).toContain(n.name);
   });
 });
 
@@ -88,6 +95,18 @@ describe('subscribeFixture', () => {
     const b: FixtureEvent[] = [];
     const stopA = subscribeFixture((e) => a.push(e));
     const stopB = subscribeFixture((e) => b.push(e));
+
+    // a stream opens with the graph as it stands, so a tick landing between the
+    // page's snapshot request and this subscription is not lost for good
+    const live = fixtureSnapshot();
+    for (const seen of [a, b]) {
+      expect(seen[0].event).toBe('resync');
+      const g = seen[0].data as { nodes: { id: string }[]; rels: { id: string }[] };
+      expect(g.nodes.map((n) => n.id).sort()).toEqual(live.nodes.map((n) => n.id).sort());
+      expect(g.rels.map((r) => r.id).sort()).toEqual(live.rels.map((r) => r.id).sort());
+    }
+    a.length = 0;
+    b.length = 0;
 
     // long enough for the graph to invent and then forget things
     vi.advanceTimersByTime(FIXTURE_INTERVAL_MS * 400);
