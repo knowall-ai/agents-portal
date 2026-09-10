@@ -465,8 +465,8 @@ const NEW_CONCEPTS = [
   'Latency budget',
 ];
 /** How many invented nodes and edges the demo keeps before forgetting the oldest. */
-const MAX_EXTRAS = 6;
-const MAX_EXTRA_RELS = 12;
+export const MAX_EXTRAS = 6;
+export const MAX_EXTRA_RELS = 12;
 const extraNodeIds: string[] = [];
 const extraRelIds: string[] = [];
 let extra = 0;

@@ -4,7 +4,9 @@
 
 == Unit tests (Vitest)
 
-Pure logic in `src/lib/agents/discover.ts` — grouping, status derivation, Lighthouse detection, Teams deep links and the URL / repo guards for tag-sourced values — is covered by `src/lib/agents/discover.test.ts`.
+Pure logic under `src/lib` and `src/app/api` is covered by `*.test.ts` files sitting beside the code they test. For example `src/lib/agents/discover.test.ts` covers grouping, status derivation, Lighthouse detection, Teams deep links and the URL / repo guards for tag-sourced values.
+
+`src/lib/brain-fixture.test.ts` is the exception to "pure logic": the demo brain graph is long-lived state, so the test drives 5,000 ticks — hours of a demo tab being open — and asserts the graph stays bounded, curated nodes survive, no edge is left dangling, and every removal is announced in the diff so an already-open `BrainView` stays in step.
 
 [source,bash]
 ----
