@@ -595,6 +595,54 @@ export function fixtureSnapshot(): BrainSnapshot {
   };
 }
 
+/** How often the demo stream emits; a tick of the graph every other beat. */
+export const FIXTURE_INTERVAL_MS = 1250;
+
+export type FixtureEvent =
+  | { event: 'activation'; data: BrainActivation }
+  | { event: 'graph'; data: BrainDiff }
+  | { event: 'state'; data: Record<string, unknown> };
+
+const listeners = new Set<(e: FixtureEvent) => void>();
+let ticker: ReturnType<typeof setInterval> | undefined;
+let beats = 0;
+
+function emit(e: FixtureEvent): void {
+  for (const listener of [...listeners]) listener(e);
+}
+
+/**
+ * Subscribes a stream to the demo. There is one ticker for the whole process,
+ * fanned out to every open stream, because the graph is shared state: a ticker
+ * per connection would mutate the graph for everyone while telling only its own
+ * client, so a second tab would keep drawing nodes that had been forgotten.
+ * Returns an unsubscribe; the ticker stops with the last listener.
+ */
+export function subscribeFixture(listener: (e: FixtureEvent) => void): () => void {
+  listeners.add(listener);
+  if (!ticker) {
+    beats = 0;
+    ticker = setInterval(() => {
+      beats += 1;
+      if (beats % 2 === 0) {
+        const { activation, diff } = fixtureTick();
+        if (activation) emit({ event: 'activation', data: activation });
+        if (diff) emit({ event: 'graph', data: diff });
+      }
+      emit({ event: 'state', data: { lastActivityAt: Date.now() / 1000, ...fixtureHostStats() } });
+    }, FIXTURE_INTERVAL_MS);
+    // a demo timer should never hold the process open
+    (ticker as { unref?: () => void }).unref?.();
+  }
+  return () => {
+    listeners.delete(listener);
+    if (listeners.size === 0 && ticker) {
+      clearInterval(ticker);
+      ticker = undefined;
+    }
+  };
+}
+
 /** One synthetic activation: mostly recalls, sometimes a write, rarely a new node. */
 export function fixtureTick(): { activation?: BrainActivation; diff?: BrainDiff } {
   const now = Date.now() / 1000;

@@ -1,6 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BrainNode, BrainRel } from '@/types';
-import { MAX_EXTRAS, MAX_EXTRA_RELS, fixtureSnapshot, fixtureTick } from './brain-fixture';
+import {
+  FIXTURE_INTERVAL_MS,
+  MAX_EXTRAS,
+  MAX_EXTRA_RELS,
+  type FixtureEvent,
+  fixtureSnapshot,
+  fixtureTick,
+  subscribeFixture,
+} from './brain-fixture';
 
 /** Applies a diff the way BrainView does, so the test sees what a live tab sees. */
 function client(nodes: BrainNode[], rels: BrainRel[]) {
@@ -68,5 +76,42 @@ describe('fixtureTick', () => {
     }
     expect(new Set(after.rels.map((r) => r.id)).size).toBe(after.rels.length);
     expect(new Set(after.nodes.map((n) => n.name)).size).toBe(after.nodes.length);
+  });
+});
+
+describe('subscribeFixture', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('gives every open stream the same events, so two tabs cannot drift apart', () => {
+    const a: FixtureEvent[] = [];
+    const b: FixtureEvent[] = [];
+    const stopA = subscribeFixture((e) => a.push(e));
+    const stopB = subscribeFixture((e) => b.push(e));
+
+    // long enough for the graph to invent and then forget things
+    vi.advanceTimersByTime(FIXTURE_INTERVAL_MS * 400);
+
+    const graphs = (events: FixtureEvent[]) => events.filter((e) => e.event === 'graph');
+    expect(graphs(a).length).toBeGreaterThan(0);
+    // one shared ticker, not one per subscriber
+    expect(b).toEqual(a);
+
+    // and the removals a forgetting graph emits reach both, not just the tab
+    // whose tick happened to trigger them
+    const removed = graphs(a).flatMap((e) => (e.data as { nodesRemoved: string[] }).nodesRemoved);
+    expect(removed.length).toBeGreaterThan(0);
+
+    stopA();
+    const seen = a.length;
+    vi.advanceTimersByTime(FIXTURE_INTERVAL_MS * 10);
+    expect(a.length).toBe(seen);
+    expect(b.length).toBeGreaterThan(seen);
+
+    // the ticker stops with the last listener rather than running for ever
+    stopB();
+    const settled = b.length;
+    vi.advanceTimersByTime(FIXTURE_INTERVAL_MS * 10);
+    expect(b.length).toBe(settled);
   });
 });
