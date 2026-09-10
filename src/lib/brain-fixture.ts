@@ -447,8 +447,91 @@ function build(): { nodes: BrainNode[]; rels: BrainRel[] } {
 }
 
 const graph = build();
+// Names for the nodes the demo invents as it runs, so a live graph looks like an
+// agent learning rather than "New idea 1, New idea 2, ...". Longer than
+// MAX_EXTRAS so no two live generated nodes ever share a name.
+const NEW_CONCEPTS = [
+  'Nightly dreaming',
+  'Seat forecasting',
+  'Prompt caching',
+  'Voice print',
+  'Handover notes',
+  'Tenant onboarding',
+  'Skill routing',
+  'Cost per agent',
+  'Meeting recall',
+  'Warm handover',
+  'Quota headroom',
+  'Latency budget',
+];
+/** How many invented nodes and edges the demo keeps before forgetting the oldest. */
+const MAX_EXTRAS = 6;
+const MAX_EXTRA_RELS = 12;
+const extraNodeIds: string[] = [];
+const extraRelIds: string[] = [];
 let extra = 0;
+// Rel ids must not be derived from graph.rels.length: the array shrinks as the
+// demo forgets, and a reused id would collide with a live edge.
+let relSeq = graph.rels.length;
 let cpu = 23;
+
+type Forgotten = { nodesRemoved: string[]; relsRemoved: string[]; nodesUpdated: BrainNode[] };
+const FORGOT_NOTHING: Forgotten = { nodesRemoved: [], relsRemoved: [], nodesUpdated: [] };
+
+function dropRel(index: number, updated: Map<string, BrainNode>): string {
+  const [rel] = graph.rels.splice(index, 1);
+  for (const id of [rel.source, rel.target]) {
+    const n = graph.nodes.find((x) => x.id === id);
+    if (!n) continue;
+    n.degree = Math.max(0, n.degree - 1);
+    updated.set(n.id, n);
+  }
+  const i = extraRelIds.indexOf(rel.id);
+  if (i !== -1) extraRelIds.splice(i, 1);
+  return rel.id;
+}
+
+/**
+ * A demo tab can be left open for hours, so the invented nodes and edges are a
+ * rolling window: past the cap the oldest is forgotten and the diff says so.
+ * Only generated items are ever dropped — the curated graph stays put.
+ */
+function forget(): Forgotten {
+  const nodesRemoved: string[] = [];
+  const relsRemoved: string[] = [];
+  const updated = new Map<string, BrainNode>();
+
+  while (extraNodeIds.length > MAX_EXTRAS) {
+    const id = extraNodeIds.shift() as string;
+    const at = graph.nodes.findIndex((n) => n.id === id);
+    if (at === -1) continue;
+    graph.nodes.splice(at, 1);
+    for (let i = graph.rels.length - 1; i >= 0; i--) {
+      const r = graph.rels[i];
+      if (r.source === id || r.target === id) relsRemoved.push(dropRel(i, updated));
+    }
+    updated.delete(id);
+    nodesRemoved.push(id);
+  }
+  while (extraRelIds.length > MAX_EXTRA_RELS) {
+    const id = extraRelIds[0];
+    const at = graph.rels.findIndex((r) => r.id === id);
+    if (at === -1) {
+      extraRelIds.shift();
+      continue;
+    }
+    relsRemoved.push(dropRel(at, updated));
+  }
+
+  if (!nodesRemoved.length && !relsRemoved.length) return FORGOT_NOTHING;
+  return {
+    nodesRemoved,
+    relsRemoved,
+    nodesUpdated: [...updated.values()]
+      .filter((n) => !nodesRemoved.includes(n.id))
+      .map((n) => ({ ...n })),
+  };
+}
 
 /** A CPU figure that wanders like a real box, with the odd spike. */
 export function fixtureHostStats(): {
@@ -553,33 +636,42 @@ export function fixtureTick(): { activation?: BrainActivation; diff?: BrainDiff 
     const b = pick();
     if (a.id === b.id) return {};
     const rel: BrainRel = {
-      id: `r${graph.rels.length}`,
+      id: `r${relSeq++}`,
       type: 'DISCUSSED',
       source: a.id,
       target: b.id,
       updatedAt: Math.floor(now),
     };
     graph.rels.push(rel);
+    extraRelIds.push(rel.id);
     a.degree++;
     b.degree++;
+    const forgotten = forget();
     return {
       activation: { ts: now, kind: 'connect', names: [a.name, b.name], type: rel.type },
       diff: {
         nodesAdded: [],
-        nodesUpdated: [{ ...a }, { ...b }],
-        nodesRemoved: [],
+        nodesUpdated: [...forgotten.nodesUpdated, { ...a }, { ...b }],
+        nodesRemoved: forgotten.nodesRemoved,
         relsAdded: [rel],
-        relsRemoved: [],
+        relsRemoved: forgotten.relsRemoved,
         stats: stats(),
       },
     };
   }
   extra += 1;
-  const fresh = node('Concept', `New idea ${extra}`, graph.nodes.length + extra);
+  const name = NEW_CONCEPTS[extra % NEW_CONCEPTS.length];
+  const fresh = node('Concept', name, graph.nodes.length + extra);
+  // the name repeats once the list wraps, so keep the id unique
+  fresh.id = `${fresh.id}-${extra}`;
   fresh.updatedAt = Math.floor(now);
+  // forget before choosing the anchor, so the new node is never hung off one
+  // that this same tick is about to drop
+  extraNodeIds.push(fresh.id);
+  const forgotten = forget();
   const anchor = pick();
   const rel: BrainRel = {
-    id: `r${graph.rels.length}`,
+    id: `r${relSeq++}`,
     type: 'DISCUSSED',
     source: anchor.id,
     target: fresh.id,
@@ -593,10 +685,10 @@ export function fixtureTick(): { activation?: BrainActivation; diff?: BrainDiff 
     activation: { ts: now, kind: 'remember', id: fresh.id, label: fresh.label, name: fresh.name },
     diff: {
       nodesAdded: [{ ...fresh }],
-      nodesUpdated: [{ ...anchor }],
-      nodesRemoved: [],
+      nodesUpdated: [...forgotten.nodesUpdated, { ...anchor }],
+      nodesRemoved: forgotten.nodesRemoved,
       relsAdded: [rel],
-      relsRemoved: [],
+      relsRemoved: forgotten.relsRemoved,
       stats: stats(),
     },
   };
