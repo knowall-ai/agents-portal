@@ -74,7 +74,11 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
         // first write already found the consumer gone: subscribing a dead
         // listener would keep the shared ticker running with nothing to feed.
         if (!closed) {
-          unsubscribe = subscribeFixture(({ event, data }) => send(event, data));
+          // subscribeFixture replays the graph synchronously, so the consumer
+          // can turn out to be gone before it returns the cleanup handle
+          const stopFeed = subscribeFixture(({ event, data }) => send(event, data));
+          if (closed) stopFeed();
+          else unsubscribe = stopFeed;
         }
         req.signal.addEventListener('abort', stop);
       },

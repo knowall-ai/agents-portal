@@ -20,16 +20,23 @@ function client(nodes: BrainNode[], rels: BrainRel[]) {
     links,
     apply(diff: {
       nodesAdded?: BrainNode[];
+      nodesUpdated?: BrainNode[];
       nodesRemoved?: string[];
       relsAdded?: BrainRel[];
       relsRemoved?: string[];
     }) {
+      // the order BrainView.applyDiff uses
       for (const id of diff.nodesRemoved ?? []) {
         byId.delete(id);
         // BrainView drops every edge that touched it, listed or not
         for (const [rid, r] of links) if (r.source === id || r.target === id) links.delete(rid);
       }
       for (const rid of diff.relsRemoved ?? []) links.delete(rid);
+      for (const n of diff.nodesUpdated ?? []) {
+        const existing = byId.get(n.id);
+        if (existing)
+          Object.assign(existing, { degree: n.degree, updatedAt: n.updatedAt, props: n.props });
+      }
       for (const n of diff.nodesAdded ?? []) byId.set(n.id, { ...n });
       for (const r of diff.relsAdded ?? []) links.set(r.id, { ...r });
     },
@@ -65,6 +72,10 @@ describe('fixtureTick', () => {
     expect(removedRels).toBeGreaterThan(0);
     expect([...view.byId.keys()].sort()).toEqual(after.nodes.map((n) => n.id).sort());
     expect([...view.links.keys()].sort()).toEqual(after.rels.map((r) => r.id).sort());
+
+    // degree drives the drawn node size, so a missed update shows as a stale
+    // connection count in an open view even though the ids all line up
+    for (const n of after.nodes) expect(view.byId.get(n.id)?.degree).toBe(n.degree);
 
     // every curated node survives; only generated ones are forgotten
     for (const n of before.nodes) expect(after.nodes.some((x) => x.id === n.id)).toBe(true);

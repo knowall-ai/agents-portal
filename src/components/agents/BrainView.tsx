@@ -532,7 +532,7 @@ export default function BrainView({
    * and never learns about ones it missed.
    */
   const resync = useCallback(
-    (graph: { nodes: BrainNode[]; rels: BrainRel[] }) => {
+    (graph: { nodes: BrainNode[]; rels: BrainRel[]; stats?: BrainStats }) => {
       const byId = byIdRef.current;
       const links = linksRef.current;
       const here = new Set(graph.nodes.map((n) => n.id));
@@ -543,6 +543,7 @@ export default function BrainView({
         nodesRemoved: [...byId.keys()].filter((id) => !here.has(id)),
         relsAdded: graph.rels.filter((r) => !links.some((l) => l.id === r.id)),
         relsRemoved: links.filter((l) => !hereRels.has(l.id)).map((l) => l.id),
+        stats: graph.stats,
       });
     },
     [applyDiff]
@@ -585,7 +586,13 @@ export default function BrainView({
       });
       source.addEventListener('resync', (e) => {
         try {
-          resync(JSON.parse((e as MessageEvent).data) as { nodes: BrainNode[]; rels: BrainRel[] });
+          resync(
+            JSON.parse((e as MessageEvent).data) as {
+              nodes: BrainNode[];
+              rels: BrainRel[];
+              stats?: BrainStats;
+            }
+          );
         } catch {
           // ignore malformed
         }

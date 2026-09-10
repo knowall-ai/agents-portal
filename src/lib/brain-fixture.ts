@@ -601,7 +601,10 @@ export const FIXTURE_INTERVAL_MS = 1250;
 export type FixtureEvent =
   | { event: 'activation'; data: BrainActivation }
   | { event: 'graph'; data: BrainDiff }
-  | { event: 'resync'; data: { nodes: BrainNode[]; rels: BrainRel[] } }
+  | {
+      event: 'resync';
+      data: { nodes: BrainNode[]; rels: BrainRel[]; stats: BrainSnapshot['stats'] };
+    }
   | { event: 'state'; data: Record<string, unknown> };
 
 const listeners = new Set<(e: FixtureEvent) => void>();
@@ -626,7 +629,12 @@ export function subscribeFixture(listener: (e: FixtureEvent) => void): () => voi
   // good. Open with the graph as it stands now and the client reconciles.
   listener({
     event: 'resync',
-    data: { nodes: graph.nodes.map((n) => ({ ...n })), rels: graph.rels.map((r) => ({ ...r })) },
+    data: {
+      nodes: graph.nodes.map((n) => ({ ...n })),
+      rels: graph.rels.map((r) => ({ ...r })),
+      // the HUD counts come from the diff, so a repair must carry them too
+      stats: stats(),
+    },
   });
   if (!ticker) {
     beats = 0;
