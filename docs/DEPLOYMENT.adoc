@@ -116,6 +116,9 @@ bun pm version patch    # or minor / major — updates package.json and tags
 git push --follow-tags  # tag triggers the deploy workflow
 ----
 
+
+NOTE: The deploy is a clean zip deploy (`az webapp deploy --clean true`): anything in `wwwroot` that is not in the package is removed on every release, and the workflow strips any `.env` from the standalone output before packaging. Runtime settings, including `GITHUB_TOKEN`, must therefore live in App Service settings; a file on the server cannot stand in for them.
+
 The version appears in the sidebar footer.
 
 == Manual first deployment
