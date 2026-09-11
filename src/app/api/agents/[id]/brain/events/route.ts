@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { getUserContext } from '@/lib/tokens';
 import { brainSource, getAgent } from '@/lib/agents/service';
 import { openBrainEvents } from '@/lib/providers/reverie';
-import { fixtureHostStats, fixtureTick } from '@/lib/brain-fixture';
+import { fixtureHostStats, subscribeFixture } from '@/lib/brain-fixture';
 import { parseDemoQuery } from '@/lib/brain-query';
 
 export const dynamic = 'force-dynamic';
@@ -42,13 +42,13 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
   if (source.kind === 'fixture') {
     const encoder = new TextEncoder();
     let closed = false;
-    let timer: ReturnType<typeof setInterval> | undefined;
+    let unsubscribe: (() => void) | undefined;
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
         const stop = () => {
           if (closed) return;
           closed = true;
-          clearInterval(timer);
+          unsubscribe?.();
           try {
             controller.close();
           } catch {
@@ -56,29 +56,36 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
           }
         };
         const send = (event: string, data: unknown) => {
-          if (!closed) controller.enqueue(encoder.encode(line(event, data)));
+          if (closed) return;
+          try {
+            controller.enqueue(encoder.encode(line(event, data)));
+          } catch {
+            // the consumer went away mid-write
+            stop();
+          }
         };
         send('state', {
           dreaming: false,
           lastActivityAt: Date.now() / 1000,
           ...fixtureHostStats(),
         });
-        let n = 0;
-        timer = setInterval(() => {
-          n += 1;
-          if (n % 2 === 0) {
-            const { activation, diff } = fixtureTick();
-            if (activation) send('activation', activation);
-            if (diff) send('graph', diff);
-          }
-          send('state', { lastActivityAt: Date.now() / 1000, ...fixtureHostStats() });
-        }, 1250);
+        // every open stream shares one ticker over the one demo graph, so two
+        // tabs see the same events instead of drifting apart. Skip it if that
+        // first write already found the consumer gone: subscribing a dead
+        // listener would keep the shared ticker running with nothing to feed.
+        if (!closed) {
+          // subscribeFixture replays the graph synchronously, so the consumer
+          // can turn out to be gone before it returns the cleanup handle
+          const stopFeed = subscribeFixture(({ event, data }) => send(event, data));
+          if (closed) stopFeed();
+          else unsubscribe = stopFeed;
+        }
         req.signal.addEventListener('abort', stop);
       },
       cancel() {
         // the consumer went away without the request aborting
         closed = true;
-        clearInterval(timer);
+        unsubscribe?.();
       },
     });
     return new Response(stream, { headers: SSE_HEADERS });

@@ -525,6 +525,30 @@ export default function BrainView({
     }
   }, []);
 
+  /**
+   * Reconciles against the graph as the server has it. The snapshot arrives in
+   * its own request and the stream reconnects on its own, so diffs can be
+   * missed in between; without this the view keeps drawing nodes that are gone
+   * and never learns about ones it missed.
+   */
+  const resync = useCallback(
+    (graph: { nodes: BrainNode[]; rels: BrainRel[]; stats?: BrainStats }) => {
+      const byId = byIdRef.current;
+      const links = linksRef.current;
+      const here = new Set(graph.nodes.map((n) => n.id));
+      const hereRels = new Set(graph.rels.map((r) => r.id));
+      applyDiff({
+        nodesAdded: graph.nodes.filter((n) => !byId.has(n.id)),
+        nodesUpdated: graph.nodes.filter((n) => byId.has(n.id)),
+        nodesRemoved: [...byId.keys()].filter((id) => !here.has(id)),
+        relsAdded: graph.rels.filter((r) => !links.some((l) => l.id === r.id)),
+        relsRemoved: links.filter((l) => !hereRels.has(l.id)).map((l) => l.id),
+        stats: graph.stats,
+      });
+    },
+    [applyDiff]
+  );
+
   // ---- live stream ------------------------------------------------------------
   useEffect(() => {
     if (!brain?.available || !snapshot) return;
@@ -560,6 +584,19 @@ export default function BrainView({
           // ignore malformed
         }
       });
+      source.addEventListener('resync', (e) => {
+        try {
+          resync(
+            JSON.parse((e as MessageEvent).data) as {
+              nodes: BrainNode[];
+              rels: BrainRel[];
+              stats?: BrainStats;
+            }
+          );
+        } catch {
+          // ignore malformed
+        }
+      });
       source.addEventListener('graph', (e) => {
         try {
           applyDiff(JSON.parse((e as MessageEvent).data) as BrainDiff);
@@ -588,7 +625,7 @@ export default function BrainView({
       clearTimeout(retry);
       source?.close();
     };
-  }, [agentId, demo, brain?.available, snapshot, applyActivation, applyDiff]);
+  }, [agentId, demo, brain?.available, snapshot, applyActivation, applyDiff, resync]);
 
   // ---- render loop -------------------------------------------------------------
   // The canvas only mounts once a snapshot has arrived, so start the loop then
