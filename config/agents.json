@@ -128,6 +128,18 @@
           "path": "skills"
         }
       ]
+    },
+    {
+      "id": "sammie",
+      "name": "Sgt Sammie",
+      "kind": "botframework",
+      "customer": "KnowAll AI",
+      "environment": "prod",
+      "description": "Sergeant Sammie — an instrument that measures other agents on a Teams call: twelve drills, scored to an after-action report and a public leaderboard on Nostr.",
+      "portalUrl": "https://black-flower-0aad17003.6.azurestaticapps.net",
+      "repo": "knowall-ai/sammie-bot",
+      "resourceGroups": ["ka-sammie-prod"],
+      "subscriptionIds": ["a54d50b7-7824-47c2-a115-3cef52d0ab04"]
     }
   ]
 }
