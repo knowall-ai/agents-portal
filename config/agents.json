@@ -72,8 +72,19 @@
       "name": "Winnie",
       "kind": "foundry",
       "customer": "Irish FA",
+      "environment": "test",
+      "description": "Irish FA ticketing assistant — drafts replies to tickets@irishfa.com enquiries for human review. Shadow mode in the Irish FA tenant since 18 Sep 2026.",
+      "resourceGroups": ["rg-winnie-uat"],
+      "subscriptionIds": ["d3c9ef3a-508b-4f0d-a9e3-947b25a3ef90"],
+      "avatarUrl": "https://white-tree-033e38a03.7.azurestaticapps.net/winnie.png"
+    },
+    {
+      "id": "winnie-dev",
+      "name": "Winnie (Dev)",
+      "kind": "foundry",
+      "customer": "KnowAll AI",
       "environment": "dev",
-      "description": "Irish FA ticketing assistant — drafts replies to ticket enquiries for human review. In development on the KnowAll tenant.",
+      "description": "Development build of Winnie against the tickets-test mailbox in the KnowAll tenant.",
       "resourceGroups": ["rg-winnie-dev"],
       "subscriptionIds": ["a54d50b7-7824-47c2-a115-3cef52d0ab04"]
     },
